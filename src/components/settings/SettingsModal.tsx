@@ -2,10 +2,18 @@ import { useEffect, useState } from "react";
 import { Check, Plus, X } from "lucide-react";
 import { useSettings } from "../../stores/settings";
 import { ProviderProfile } from "../../lib/tauri";
+import { AppearancePane } from "./AppearancePane";
 
 const EMPTY: ProviderProfile = {
   id: 0, name: "", base_url: "", api_key: "", model: "", max_tokens: 4096, temperature: 0.7,
 };
+
+// 顶部 tab：外观（主题/明暗/缩放）+ AI 服务商
+const TABS = [
+  { id: "appearance", label: "外观" },
+  { id: "provider", label: "AI 服务商" },
+] as const;
+type SettingsTab = (typeof TABS)[number]["id"];
 
 interface FormErrors { name?: string; base_url?: string; model?: string }
 
@@ -50,13 +58,15 @@ function Field(props: {
 
 export function SettingsModal() {
   const { providers, activeProviderId, modalOpen, error, load, save, remove, activate, close } = useSettings();
+  const [tab, setTab] = useState<SettingsTab>("appearance");
   const [form, setForm] = useState<ProviderProfile>(EMPTY);
   const [errors, setErrors] = useState<FormErrors>({});
   const [busy, setBusy] = useState(false);
 
-  // 打开时刷新列表并回到「新增」表单；Esc 关闭
+  // 打开时刷新列表并回到「外观」tab + 「新增」表单；Esc 关闭
   useEffect(() => {
     if (!modalOpen) return;
+    setTab("appearance");
     setForm(EMPTY);
     setErrors({});
     load();
@@ -114,7 +124,7 @@ export function SettingsModal() {
       >
         {/* 标题栏 */}
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-[color:var(--border-subtle)] pl-4 pr-2">
-          <div className="text-sm font-semibold text-[color:var(--text-primary)]">设置 · AI 服务商</div>
+          <div className="text-sm font-semibold text-[color:var(--text-primary)]">设置</div>
           <button
             onClick={close}
             title="关闭"
@@ -124,7 +134,27 @@ export function SettingsModal() {
           </button>
         </div>
 
+        {/* 顶部 tab */}
+        <div className="flex shrink-0 gap-1 border-b border-[color:var(--border-subtle)] px-3">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors duration-150 ${
+                tab === t.id
+                  ? "border-[color:var(--accent)] text-[color:var(--text-primary)]"
+                  : "border-transparent text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)]"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex-1 overflow-y-auto p-4">
+          {tab === "appearance" && <AppearancePane />}
+          {tab === "provider" && (
+            <>
           {/* 服务商列表：点击编辑，激活项 accent 边 + 「使用中」徽章 */}
           <div className="mb-1.5 text-xs text-[color:var(--text-faint)]">服务商</div>
           <div className="mb-3 flex flex-col gap-1.5">
@@ -190,9 +220,12 @@ export function SettingsModal() {
               <Field label="温度" type="number" step="0.1" value={String(form.temperature)} onChange={(v) => setForm({ ...form, temperature: Number(v) || 0 })} />
             </div>
           </div>
+            </>
+          )}
         </div>
 
-        {/* 底部操作 */}
+        {/* 底部操作：仅服务商 tab（外观 tab 实时生效，无保存按钮） */}
+        {tab === "provider" && (
         <div className="flex shrink-0 items-center gap-2 border-t border-[color:var(--border-subtle)] p-3">
           <button
             onClick={handleSave}
@@ -223,6 +256,7 @@ export function SettingsModal() {
             </button>
           )}
         </div>
+        )}
       </div>
     </div>
   );

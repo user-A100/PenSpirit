@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* :root 变量 = 默认主题 bixian-dark 的值（与 src/themes/defs.ts 保持一致）。
+   其余主题由 ThemeProvider 注入 <style id="bixian-theme"> 覆盖；
+   UI 缩放通过改写 html font-size（rem 基准）实现。 */
 :root {
   /* 底色 */
   --bg-base: #17171a;
@@ -13,6 +16,8 @@
   --text-primary: #e8e8ea;
   --text-secondary: #a0a0a8;
   --text-faint: #6b6b74;
+  /* 编辑器正文（衬线区，随主题） */
+  --prose-fg: #e4e4e8;
   /* 强调与状态 */
   --accent: #7c6ff0;
   --accent-hover: #8f83f5;
@@ -43,11 +48,13 @@ body {
   transition: flex-grow 200ms ease;
 }
 
-/* 编辑器正文：书卷气衬线排版，与 UI 的无衬线区分 */
+/* 编辑器正文：书卷气衬线排版，与 UI 的无衬线区分。
+   颜色走 --prose-fg 随主题；字号用 rem 跟随 UI 缩放 */
 .prose-serif {
   font-family: Georgia, "Noto Serif SC", "Source Han Serif SC", serif;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.9;
+  color: var(--prose-fg);
 }
 
 /* TipTap 编辑区：无边框融入背景 */

@@ -5,6 +5,7 @@ import { WriteView } from "./views/WriteView";
 import { BumpView } from "./views/BumpView";
 import { getViews } from "./lib/nav/registry";
 import { useUiNav } from "./lib/nav/uiStore";
+import { ThemeProvider } from "./themes/ThemeProvider";
 
 export default function App() {
   const activeView = useUiNav((s) => s.activeView);
@@ -26,7 +27,7 @@ export default function App() {
   }, [toggleSidebar]);
 
   return (
-    <>
+    <ThemeProvider>
       <div className="flex h-full w-full bg-[var(--bg-base)]">
         <Ribbon />
         <main className="min-w-0 flex-1">
@@ -38,6 +39,6 @@ export default function App() {
         </main>
       </div>
       <SettingsModal />
-    </>
+    </ThemeProvider>
   );
 }
