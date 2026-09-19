@@ -3,8 +3,10 @@ import { ChevronDown, ChevronUp, Eye, MessageSquare, RefreshCw, SendHorizontal, 
 import { useWorkspace } from "../../stores/workspace";
 import { useChat } from "../../stores/chat";
 import { api, AssemblyLog } from "../../lib/tauri";
+import { BackendSelector } from "./BackendSelector";
 import { ContextPreview } from "./ContextPreview";
 import { MessageBubble } from "./MessageBubble";
+import { PermissionCard } from "./PermissionCard";
 
 interface AiDockProps {
   // 折叠态由 EditorPane 持有（Panel collapsible + collapsedSize 36px），这里只负责渲染
@@ -108,6 +110,8 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
         </button>
         <MessageSquare size={14} className="shrink-0 text-[color:var(--accent)]" />
         <span className="shrink-0 text-xs font-medium text-[color:var(--text-primary)]">AI 续写</span>
+        {/* 双后端选择：本机 agent / API 直连 */}
+        <BackendSelector />
         <div className="min-w-0 flex-1" />
         <button
           onClick={togglePreview}
@@ -175,6 +179,8 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
         <>
           {/* 消息列表 */}
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+            {/* ACP 权限弹卡：agent 请求工具授权时置顶（一次一张） */}
+            <PermissionCard />
             {messages.length === 0 && !streaming && error == null && (
               <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
                 <MessageSquare size={28} strokeWidth={1.5} className="text-[color:var(--text-faint)]" />

@@ -12,6 +12,20 @@ export interface ChatMessage { id: number; session_id: number; role: string; con
 export interface SlotLog { name: string; source: string; chars: number; est_tokens: number; preview_head: string }
 export interface AssemblyLog { slots: SlotLog[]; total_est_tokens: number }
 
+// ---- M2：ACP agent（字段 snake_case 与 Rust models.rs 对齐） ----
+export interface ProbeResult {
+  ok: boolean; agent_name: string | null; protocol_version: string | null; can_resume: boolean; detail: string | null;
+}
+export interface AgentDescriptor {
+  id: string; name: string; command: string; args: string[]; enabled: boolean; is_default: boolean;
+  last_probe: ProbeResult | null;
+}
+// agent:// 事件 payload（src-tauri/src/models.rs Acp*Event）
+export interface AcpStreamEvent { session_id: number; text: string }
+export interface AcpPermissionOption { option_id: string; name: string; kind: string } // kind: allow_* | reject_*
+export interface AcpPermissionEvent { session_id: number; request_id: string; title: string; options: AcpPermissionOption[] }
+export interface AcpTurnEvent { session_id: number; ok: boolean; content: string | null; error: string | null }
+
 export const api = {
   listBooks: () => invoke<Book[]>("list_books"),
   createBook: (title: string) => invoke<Book>("create_book", { title }),
@@ -45,4 +59,15 @@ export const api = {
   cancelGeneration: (sessionId: number) => invoke<void>("cancel_generation", { sessionId }),
   previewContext: (sessionId: number, instruction: string) =>
     invoke<AssemblyLog>("preview_context", { sessionId, instruction }),
+  // ---- M2：ACP agent 注册表与会话 ----
+  agentsList: () => invoke<AgentDescriptor[]>("agents_list"),
+  agentsProbe: (id: string) => invoke<ProbeResult>("agents_probe", { id }),
+  agentsUpsert: (desc: AgentDescriptor) => invoke<void>("agents_upsert", { desc }),
+  agentsRemove: (id: string) => invoke<void>("agents_remove", { id }),
+  agentsSetDefault: (id: string) => invoke<void>("agents_set_default", { id }),
+  sendMessageAcp: (sessionId: number, instruction: string) =>
+    invoke<ChatMessage>("send_message_acp", { sessionId, instruction }),
+  cancelGenerationAcp: (sessionId: number) => invoke<void>("cancel_generation_acp", { sessionId }),
+  agentsRespondPermission: (sessionId: number, requestId: string, optionId: string) =>
+    invoke<void>("agents_respond_permission", { sessionId, requestId, optionId }),
 };

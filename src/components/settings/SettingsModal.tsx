@@ -2,14 +2,16 @@ import { useEffect, useState } from "react";
 import { Check, Plus, X } from "lucide-react";
 import { useSettings } from "../../stores/settings";
 import { ProviderProfile } from "../../lib/tauri";
+import { AgentsPane } from "./AgentsPane";
 import { AppearancePane } from "./AppearancePane";
 
 const EMPTY: ProviderProfile = {
   id: 0, name: "", base_url: "", api_key: "", model: "", max_tokens: 4096, temperature: 0.7,
 };
 
-// 顶部 tab：外观（主题/明暗/缩放）+ AI 服务商
+// 顶部 tab：Agent（ACP 直连，免配置推荐路径）+ 外观 + AI 服务商（高级）
 const TABS = [
+  { id: "agent", label: "Agent" },
   { id: "appearance", label: "外观" },
   { id: "provider", label: "AI 服务商" },
 ] as const;
@@ -58,15 +60,15 @@ function Field(props: {
 
 export function SettingsModal() {
   const { providers, activeProviderId, modalOpen, error, load, save, remove, activate, close } = useSettings();
-  const [tab, setTab] = useState<SettingsTab>("appearance");
+  const [tab, setTab] = useState<SettingsTab>("agent");
   const [form, setForm] = useState<ProviderProfile>(EMPTY);
   const [errors, setErrors] = useState<FormErrors>({});
   const [busy, setBusy] = useState(false);
 
-  // 打开时刷新列表并回到「外观」tab + 「新增」表单；Esc 关闭
+  // 打开时刷新列表并回到首个 tab + 「新增」表单；Esc 关闭
   useEffect(() => {
     if (!modalOpen) return;
-    setTab("appearance");
+    setTab("agent");
     setForm(EMPTY);
     setErrors({});
     load();
@@ -152,6 +154,7 @@ export function SettingsModal() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
+          {tab === "agent" && <AgentsPane />}
           {tab === "appearance" && <AppearancePane />}
           {tab === "provider" && (
             <>
