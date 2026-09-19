@@ -46,3 +46,7 @@
 - 数据库（书 / 章节索引 / 服务商 / 文风卡 / 会话与消息 / 词库 / 灵感卡 / 写作统计）：`%APPDATA%/com.bixian.app/bixian.db`。
 
 设计文档：`docs/specs/2026-09-19-bixian-spec.md`；当前里程碑计划：`docs/superpowers/plans/`。
+
+## 许可
+
+[GPL-3.0](LICENSE)
