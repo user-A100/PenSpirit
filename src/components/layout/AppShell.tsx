@@ -6,16 +6,26 @@ import { PanelDock } from "./PanelDock";
 // react-resizable-panels v4：Group/Panel/Separator；尺寸无单位字符串=百分比（数字=像素）
 export function AppShell() {
   return (
-    <Group orientation="horizontal" className="h-full">
-      <Panel defaultSize="18" minSize="12" maxSize="30" className="border-r" style={{ borderRightColor: "var(--border)" }}>
+    <Group orientation="horizontal" className="h-full bg-[var(--bg-base)]">
+      <Panel
+        defaultSize="20"
+        minSize={240}
+        maxSize={320}
+        className="border-r border-[color:var(--border-subtle)]"
+      >
         <Sidebar />
       </Panel>
-      <Separator className="w-1 bg-transparent hover:bg-[var(--accent)] transition-colors" />
-      <Panel defaultSize="58" minSize="30">
+      <Separator className="w-1 bg-transparent transition-colors duration-150 hover:bg-[var(--accent-dim)]" />
+      <Panel defaultSize="56" minSize="30">
         <EditorPane />
       </Panel>
-      <Separator className="w-1 bg-transparent hover:bg-[var(--accent)] transition-colors" />
-      <Panel defaultSize="24" minSize="16" maxSize="40" className="border-l" style={{ borderLeftColor: "var(--border)" }}>
+      <Separator className="w-1 bg-transparent transition-colors duration-150 hover:bg-[var(--accent-dim)]" />
+      <Panel
+        defaultSize="24"
+        minSize={220}
+        maxSize={380}
+        className="border-l border-[color:var(--border-subtle)]"
+      >
         <PanelDock />
       </Panel>
     </Group>
