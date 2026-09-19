@@ -19,9 +19,12 @@ interface UiNavState {
   sidebarCollapsed: boolean;
   /** 右侧 dock 折叠态（会话内状态，不持久化——重启始终展开） */
   dockCollapsed: boolean;
+  /** 阅读模式返回目标视图 id（进入 read 时由 App 记录上一视图，ReadView 退出时消费；会话内状态） */
+  readReturn: string | null;
   setView: (id: string) => void;
   toggleSidebar: () => void;
   toggleDock: () => void;
+  setReadReturn: (id: string | null) => void;
 }
 
 function readStoredView(): string {
@@ -38,6 +41,7 @@ export const useUiNav = create<UiNavState>((set) => ({
   activeView: readStoredView(),
   sidebarCollapsed: false,
   dockCollapsed: false,
+  readReturn: null,
   setView: (id) => {
     try {
       localStorage.setItem(VIEW_STORAGE_KEY, id);
@@ -48,6 +52,7 @@ export const useUiNav = create<UiNavState>((set) => ({
   },
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   toggleDock: () => set((s) => ({ dockCollapsed: !s.dockCollapsed })),
+  setReadReturn: (id) => set({ readReturn: id }),
 }));
 
 /** 读取用户拖定的侧栏宽度百分比；无记忆/非法值/折叠态 0 返回 null */
