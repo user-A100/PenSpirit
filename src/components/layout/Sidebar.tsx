@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BookOpen, FileText, Plus, RotateCcw, Settings } from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
+import { useSettings } from "../../stores/settings";
 import { api } from "../../lib/tauri";
 
 // 列表行选中态：accent-dim 底 + 左侧 2px accent 竖条（无动画跳变，仅颜色过渡）
@@ -51,6 +52,7 @@ function InlineInput(props: {
 
 export function Sidebar() {
   const { books, chapters, currentBookId, currentChapterId, loadBooks, selectBook, createBook, createChapter, selectChapter } = useWorkspace();
+  const openSettings = useSettings((s) => s.open);
   const [newBook, setNewBook] = useState("");
   const [newChapter, setNewChapter] = useState("");
 
@@ -58,11 +60,12 @@ export function Sidebar() {
 
   return (
     <div className="flex h-full flex-col bg-[var(--bg-panel)] text-sm">
-      {/* 顶部：应用标题 + 设置占位（M1 提供） */}
+      {/* 顶部：应用标题 + 设置入口 */}
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-[color:var(--border-subtle)] pl-4 pr-2">
         <div className="text-[15px] font-semibold tracking-wide text-[color:var(--text-primary)]">笔仙</div>
         <button
-          title="设置（M1 里程碑提供）"
+          onClick={openSettings}
+          title="设置"
           className="rounded-md p-1.5 text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
         >
           <Settings size={15} />
