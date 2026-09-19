@@ -185,3 +185,145 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
   background-repeat: repeat;
   will-change: opacity;
 }
+
+/* ---------- 阅读四边面板（M3-T5，books-reader 热区/滑入机制移植） ---------- */
+/* 几何与动画在此；配色走主题变量、布局微调用 Tailwind。
+   --read-panel-w 同时被 ReadingShell 的锁定让位 padding 与 ReadView 右下悬浮钮引用。 */
+:root {
+  --read-panel-w: 299px;
+}
+
+/* 四边热区：40px 宽/高、40% 居中长；平时透明，hover（或延迟唤出判定中）显 0.5 */
+.read-hotzone {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(75, 75, 75, 0.3);
+  color: rgba(255, 255, 255, 0.85);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+.read-hotzone:hover,
+.read-hotzone[data-hover="true"] {
+  opacity: 0.5;
+}
+.read-hotzone-left {
+  left: 0;
+  top: 30%;
+  width: 40px;
+  height: 40%;
+  border-top-right-radius: 20px;
+  border-bottom-right-radius: 20px;
+}
+.read-hotzone-right {
+  right: 0;
+  top: 30%;
+  width: 40px;
+  height: 40%;
+  border-top-left-radius: 20px;
+  border-bottom-left-radius: 20px;
+}
+.read-hotzone-top {
+  top: 0;
+  left: 30%;
+  width: 40%;
+  height: 40px;
+  border-bottom-left-radius: 20px;
+  border-bottom-right-radius: 20px;
+}
+.read-hotzone-bottom {
+  bottom: 0;
+  left: 30%;
+  width: 40%;
+  height: 40px;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+}
+
+/* 面板容器：left/right 299px 全高、top/bottom 450×60；
+   隐藏位移 = 面板尺寸 + 10px 缝隙（309/110px，books 同参数） */
+.read-panel {
+  position: absolute;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  transition: transform 0.5s ease;
+}
+.read-panel-left {
+  top: 0;
+  left: 0;
+  width: var(--read-panel-w);
+  height: 100%;
+  border-left: none;
+  transform: translateX(calc(-1 * (var(--read-panel-w) + 10px)));
+}
+.read-panel-right {
+  top: 0;
+  right: 0;
+  width: var(--read-panel-w);
+  height: 100%;
+  border-right: none;
+  transform: translateX(calc(var(--read-panel-w) + 10px));
+}
+.read-panel-top {
+  top: 0;
+  left: calc(50% - 225px);
+  width: 450px;
+  height: 60px;
+  border-top: none;
+  transform: translateY(-110px);
+}
+.read-panel-bottom {
+  bottom: 0;
+  left: calc(50% - 225px);
+  width: 450px;
+  height: 60px;
+  border-bottom: none;
+  transform: translateY(110px);
+}
+.read-panel[data-open="true"] {
+  transform: translate(0, 0);
+}
+
+/* 面板内容入场 fade（0.2s，方向随面板）；class 常驻、data-open 挂上才播，重开重播 */
+@keyframes read-fade-in-left {
+  from { transform: translateX(-200px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes read-fade-in-right {
+  from { transform: translateX(200px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes read-fade-in-top {
+  from { transform: translateY(-60px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes read-fade-in-bottom {
+  from { transform: translateY(60px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.read-panel-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.read-panel-left[data-open="true"] > .read-panel-content { animation: read-fade-in-left 0.2s ease; }
+.read-panel-right[data-open="true"] > .read-panel-content { animation: read-fade-in-right 0.2s ease; }
+.read-panel-top[data-open="true"] > .read-panel-content { animation: read-fade-in-top 0.2s ease; }
+.read-panel-bottom[data-open="true"] > .read-panel-content { animation: read-fade-in-bottom 0.2s ease; }
+
+/* 目录列表（NavPanel）：hover 反馈 + 当前章 accent */
+.read-nav-list li { color: var(--text-secondary); }
+.read-nav-list li:hover { background: var(--bg-hover); color: var(--text-primary); }
+.read-nav-list li[data-current="true"] { color: var(--accent); background: var(--accent-dim); }
+
+/* 底栏进度滑条 */
+.read-progress-slider { accent-color: var(--accent); }

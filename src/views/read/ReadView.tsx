@@ -10,6 +10,8 @@ import { useSettings } from "../../stores/settings";
 import { useUiNav } from "../../lib/nav/uiStore";
 import { kvGet, kvSet } from "../../lib/kv";
 import { READING_FONT_STACKS, useReadingPrefs } from "./readingPrefs";
+import { useReadingPanels, type PanelPos } from "./readingPanels";
+import { ReadingShell } from "./ReadingShell";
 
 // 阅读模式：全屏只读正文（TipTap editable:false，与写作视图同源同渲染管线）。
 // 排版由 readingPrefs 注入；滚动进度防抖落 KV，进入时恢复；Esc 退出回到进入前视图。
@@ -30,6 +32,14 @@ export function readingStartedAt(): number {
   return enteredAt;
 }
 
+/** F6/F7/F8/F9 → 左/右/上/下面板开合 */
+const PANEL_HOTKEYS: Record<string, PanelPos> = {
+  F6: "left",
+  F7: "right",
+  F8: "top",
+  F9: "bottom",
+};
+
 const NAV_BTN =
   "flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white/90 " +
   "backdrop-blur-sm transition-colors duration-150 hover:bg-black/65 hover:text-white " +
@@ -37,10 +47,12 @@ const NAV_BTN =
 
 export function ReadView() {
   const chapters = useWorkspace((s) => s.chapters);
+  const books = useWorkspace((s) => s.books);
   const currentBookId = useWorkspace((s) => s.currentBookId);
   const currentChapterId = useWorkspace((s) => s.currentChapterId);
   const chapterContent = useWorkspace((s) => s.chapterContent);
   const prefs = useReadingPrefs();
+  const settingLocked = useReadingPanels((s) => s.settingLocked);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   /** 待恢复进度（章 id + 比例），消费后清空，避免后续切章误跳 */
@@ -56,10 +68,16 @@ export function ReadView() {
   const chapterIdRef = useRef<number | null>(null);
   chapterIdRef.current = currentChapterId;
   const [navShown, setNavShown] = useState(true);
+  /** 最新滚动比例 0-1（TopPanel 百分比轮询；ref 旁路避免滚动路径重渲染） */
+  const progressRef = useRef(0);
+  /** 滚到底 → 章末「下一章」提示 */
+  const [atBottom, setAtBottom] = useState(false);
 
-  useEffect(() => {
+  // 惰性初始化即写入模块变量（挂载即“本次阅读”起点）
+  const [startedAt] = useState(() => {
     enteredAt = Date.now();
-  }, []);
+    return enteredAt;
+  });
 
   // ---- 退出：回到进入前视图（App 在切进 read 时记录；无记录回 write） ----
   const exitRead = useCallback(() => {
@@ -102,6 +120,19 @@ export function ReadView() {
     }
   }, [currentChapterId, chapterContent, editor, applyRestore]);
 
+  // 章末提示基准：内容就位后重算（短章无滚动条时 onScroll 不会触发）
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const denom = el.scrollHeight - el.clientHeight;
+    if (denom <= 0) {
+      progressRef.current = 1;
+      setAtBottom(true);
+    } else {
+      setAtBottom(el.scrollTop / denom >= 0.995);
+    }
+  }, [currentChapterId, chapterContent]);
+
   // 进入时恢复上次进度：有记录且章存在 → 切到该章，内容就位后回到比例位置
   useEffect(() => {
     if (currentBookId == null) return;
@@ -127,8 +158,15 @@ export function ReadView() {
     };
   }, [currentBookId, applyRestore]);
 
-  // ---- 进度记忆：滚动 300ms 防抖落 KV ----
+  // ---- 进度记忆：滚动 300ms 防抖落 KV；比例同步进 ref / 章末态 ----
   const onScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (el) {
+      const denom = el.scrollHeight - el.clientHeight;
+      const ratio = denom > 0 ? Math.min(1, Math.max(0, el.scrollTop / denom)) : 1;
+      progressRef.current = ratio;
+      setAtBottom(ratio >= 0.995); // 同值 setState 由 React bail，不额外渲染
+    }
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       const bookId = bookIdRef.current;
@@ -152,11 +190,17 @@ export function ReadView() {
   const prevChapter = idx > 0 ? chapters[idx - 1] : null;
   const nextChapter = idx >= 0 && idx + 1 < chapters.length ? chapters[idx + 1] : null;
 
-  // ---- 键盘：Esc 退出 / Ctrl+←→ 换章；↑↓/PageUp/Down 走容器原生滚动 ----
+  // ---- 键盘：Esc 退出 / Ctrl+←→ 换章 / F6-9 面板开合；↑↓/PageUp/Down 走容器原生滚动 ----
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // 设置/搜索弹层开着时让给它处理
       if (useSettings.getState().modalOpen || useSearch.getState().open) return;
+      const panelKey = PANEL_HOTKEYS[e.key];
+      if (panelKey) {
+        e.preventDefault();
+        useReadingPanels.getState().toggle(panelKey);
+        return;
+      }
       if (e.key === "Escape") {
         e.preventDefault();
         exitRead();
@@ -220,46 +264,80 @@ export function ReadView() {
   const gotoChapter = (id: number) => {
     if (id !== chapterIdRef.current) void useWorkspace.getState().selectChapter(id);
   };
+  const bookTitle = books.find((b) => b.id === currentBookId)?.title ?? "未命名书";
+  const chapterTitle = idx >= 0 ? chapters[idx].title : "";
 
   return (
     <div className="relative h-full w-full overflow-hidden" style={{ backgroundColor: prefs.bgColor }}>
-      <div
-        ref={scrollRef}
-        tabIndex={0}
-        onScroll={onScroll}
-        className="h-full w-full overflow-y-auto outline-none"
-        style={{ paddingLeft: prefs.margin, paddingRight: prefs.margin }}
+      <ReadingShell
+        bookTitle={bookTitle}
+        chapterTitle={chapterTitle}
+        startedAt={startedAt}
+        progressRef={progressRef}
+        chapters={chapters}
+        currentChapterId={currentChapterId}
+        onSelectChapter={gotoChapter}
+        onExit={exitRead}
+        onPrevChapter={() => prevChapter && gotoChapter(prevChapter.id)}
+        onNextChapter={() => nextChapter && gotoChapter(nextChapter.id)}
+        prevDisabled={!prevChapter}
+        nextDisabled={!nextChapter}
       >
         <div
-          className={`prose-serif mx-auto w-full px-8 py-10 ${
-            // 强制覆盖 html[data-prose-indent]（写作视图的全局缩进设置），阅读态自成一体
-            prefs.indent ? "[&_p]:[text-indent:2em]!" : "[&_p]:[text-indent:0em]!"
-          }`}
-          style={{
-            maxWidth: prefs.pageWidth,
-            fontSize: prefs.fontSize,
-            lineHeight: prefs.lineHeight,
-            letterSpacing: `${prefs.letterSpacing}em`,
-            textAlign: prefs.textAlign,
-            color: prefs.textColor,
-            ...(fontStack ? { fontFamily: fontStack } : null),
-            ...({ "--prose-para-spacing": `${prefs.paraSpacing}em` } as unknown as CSSProperties),
-          }}
+          ref={scrollRef}
+          tabIndex={0}
+          onScroll={onScroll}
+          className="h-full w-full overflow-y-auto outline-none"
+          style={{ paddingLeft: prefs.margin, paddingRight: prefs.margin }}
         >
-          <EditorContent editor={editor} />
+          <div
+            className={`prose-serif mx-auto w-full px-8 py-10 ${
+              // 强制覆盖 html[data-prose-indent]（写作视图的全局缩进设置），阅读态自成一体
+              prefs.indent ? "[&_p]:[text-indent:2em]!" : "[&_p]:[text-indent:0em]!"
+            }`}
+            style={{
+              maxWidth: prefs.pageWidth,
+              fontSize: prefs.fontSize,
+              lineHeight: prefs.lineHeight,
+              letterSpacing: `${prefs.letterSpacing}em`,
+              textAlign: prefs.textAlign,
+              color: prefs.textColor,
+              ...(fontStack ? { fontFamily: fontStack } : null),
+              ...({ "--prose-para-spacing": `${prefs.paraSpacing}em` } as unknown as CSSProperties),
+            }}
+          >
+            <EditorContent editor={editor} />
+            {/* 章末提示：滚到底出现（books scrollChapter 语义） */}
+            {atBottom &&
+              (nextChapter ? (
+                <button
+                  onClick={() => gotoChapter(nextChapter.id)}
+                  className="mx-auto mt-10 mb-2 flex max-w-full items-center gap-1.5 rounded-full border border-current/30 px-5 py-2 text-sm opacity-70 transition-opacity duration-300 hover:opacity-100"
+                >
+                  <span className="truncate">下一章：{nextChapter.title}</span>
+                  <span aria-hidden>→</span>
+                </button>
+              ) : (
+                <div className="mt-10 mb-2 text-center text-xs opacity-40">已是最后一章</div>
+              ))}
+          </div>
         </div>
-      </div>
+      </ReadingShell>
 
-      {/* 右下角悬浮圆钮：上一章 / 下一章 / 退出 */}
+      {/* 右下角悬浮圆钮：上一章 / 下一章 / 退出（右侧锁定时让位） */}
       <div
         onMouseEnter={() => {
           window.clearTimeout(hideTimer.current);
           setNavShown(true);
         }}
         onMouseLeave={armHide}
-        className={`fixed bottom-6 right-6 z-10 flex flex-col gap-2 transition-opacity duration-500 ${
+        className={`fixed bottom-6 z-10 flex flex-col gap-2 ${
           navShown ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
+        style={{
+          right: settingLocked ? "calc(var(--read-panel-w) + 24px)" : 24,
+          transition: "opacity 0.5s ease, right 0.5s ease",
+        }}
       >
         <button
           onClick={() => prevChapter && gotoChapter(prevChapter.id)}
