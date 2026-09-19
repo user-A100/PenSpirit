@@ -1,8 +1,9 @@
-// 外观设置面板：主题卡片网格（mini 预览随主题变量渲染）/ 明暗三选 / UI 缩放滑条 / 正文排版。
+// 外观设置面板：主题卡片网格（mini 预览随主题变量渲染）/ 明暗三选 / UI 缩放滑条 / 正文排版 / 纸张纹理。
 // 所有改动即时生效（主题与明暗立即落盘，缩放防抖落盘）。
 import { CSSProperties } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { THEMES } from "../../themes/defs";
+import { TEXTURES } from "../../themes/textures";
 import {
   AppearanceMode,
   PROSE_LETTER_SPACING_MAX,
@@ -14,6 +15,13 @@ import {
   PROSE_PARA_SPACING_MAX,
   PROSE_PARA_SPACING_MIN,
   PROSE_PARA_SPACING_STEP,
+  TEXTURE_OPACITY_MAX,
+  TEXTURE_OPACITY_MIN,
+  TEXTURE_OPACITY_STEP,
+  TEXTURE_SCALE_MAX,
+  TEXTURE_SCALE_MIN,
+  TEXTURE_SCALE_STEP,
+  TextureBlend,
   UI_SCALE_MAX,
   UI_SCALE_MIN,
   UI_SCALE_STEP,
@@ -26,6 +34,13 @@ const MODES: { id: AppearanceMode; label: string; icon: typeof Monitor }[] = [
   { id: "dark", label: "深色", icon: Moon },
 ];
 
+const TEXTURE_BLENDS: { id: TextureBlend; label: string }[] = [
+  { id: "soft-light", label: "柔光" },
+  { id: "normal", label: "正常" },
+  { id: "multiply", label: "正片叠底" },
+  { id: "overlay", label: "叠加" },
+];
+
 function SectionTitle(props: { children: React.ReactNode }) {
   return <div className="mb-1.5 text-xs text-[color:var(--text-faint)]">{props.children}</div>;
 }
@@ -35,10 +50,12 @@ export function AppearancePane() {
   const mode = useAppearance((s) => s.mode);
   const uiScale = useAppearance((s) => s.uiScale);
   const prose = useAppearance((s) => s.prose);
+  const texture = useAppearance((s) => s.texture);
   const setColorTheme = useAppearance((s) => s.setColorTheme);
   const setMode = useAppearance((s) => s.setMode);
   const setUiScale = useAppearance((s) => s.setUiScale);
   const setProse = useAppearance((s) => s.setProse);
+  const setTexture = useAppearance((s) => s.setTexture);
 
   return (
     <div className="flex flex-col gap-5">
@@ -214,6 +231,81 @@ export function AppearancePane() {
         </div>
         <p className="mt-1.5 text-xs text-[color:var(--text-faint)]">
           仅作用于编辑器正文；分场线显示为居中 ❖ 符号。
+        </p>
+      </section>
+
+      {/* 纸张纹理（M3-T3）：整页覆盖底纹；选「无」时参数区隐藏（Maple 条件显隐约定） */}
+      <section>
+        <SectionTitle>纸张纹理</SectionTitle>
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {TEXTURES.map((t) => {
+            const active = texture.preset === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTexture({ preset: t.id })}
+                className={`rounded-full border px-3 py-1 text-sm transition-colors duration-150 ${
+                  active
+                    ? "border-[color:var(--accent)] bg-[var(--accent-dim)] text-[color:var(--accent)]"
+                    : "border-[color:var(--border-subtle)] text-[color:var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+                }`}
+              >
+                {t.name}
+              </button>
+            );
+          })}
+        </div>
+        {texture.preset !== "none" && (
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-3">
+              <span className="w-14 shrink-0 text-sm text-[color:var(--text-secondary)]">强度</span>
+              <input
+                type="range"
+                aria-label="纹理强度"
+                min={TEXTURE_OPACITY_MIN}
+                max={TEXTURE_OPACITY_MAX}
+                step={TEXTURE_OPACITY_STEP}
+                value={texture.opacity}
+                onChange={(e) => setTexture({ opacity: Number(e.target.value) })}
+                className="h-1 flex-1 accent-[var(--accent)]"
+              />
+              <span className="w-12 shrink-0 text-right text-sm tabular-nums text-[color:var(--text-primary)]">
+                {texture.opacity.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="w-14 shrink-0 text-sm text-[color:var(--text-secondary)]">缩放</span>
+              <input
+                type="range"
+                aria-label="纹理缩放"
+                min={TEXTURE_SCALE_MIN}
+                max={TEXTURE_SCALE_MAX}
+                step={TEXTURE_SCALE_STEP}
+                value={texture.scale}
+                onChange={(e) => setTexture({ scale: Number(e.target.value) })}
+                className="h-1 flex-1 accent-[var(--accent)]"
+              />
+              <span className="w-12 shrink-0 text-right text-sm tabular-nums text-[color:var(--text-primary)]">
+                {texture.scale.toFixed(1)}×
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="w-14 shrink-0 text-sm text-[color:var(--text-secondary)]">混合</span>
+              <select
+                aria-label="混合模式"
+                value={texture.blend}
+                onChange={(e) => setTexture({ blend: e.target.value as TextureBlend })}
+                className="h-8 flex-1 rounded border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 text-sm text-[color:var(--text-primary)] outline-none focus:border-[color:var(--accent)]"
+              >
+                {TEXTURE_BLENDS.map((b) => (
+                  <option key={b.id} value={b.id}>{b.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+        <p className="mt-1.5 text-xs text-[color:var(--text-faint)]">
+          铺满整个界面的纸感底纹；强度建议 0.06–0.25，柔光模式深浅主题皆宜。
         </p>
       </section>
     </div>

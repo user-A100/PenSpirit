@@ -14,9 +14,11 @@ import {
   applyColorTheme,
   applyMode,
   applyProse,
+  applyTexture,
   applyUiScale,
   DEFAULT_APPEARANCE,
   DEFAULT_PROSE,
+  DEFAULT_TEXTURE,
   loadAppearance,
   normalizeAppearance,
   PROSE_STYLE_ID,
@@ -24,6 +26,7 @@ import {
   ThemeProvider,
   useAppearance,
 } from "./ThemeProvider";
+import { findTexture, TEXTURES } from "./textures";
 
 import { AppearancePane } from "../components/settings/AppearancePane";
 
@@ -32,14 +35,17 @@ beforeEach(() => {
   localStorage.clear();
   document.getElementById(THEME_STYLE_ID)?.remove();
   document.getElementById(PROSE_STYLE_ID)?.remove();
+  document.getElementById("texture-layer")?.remove();
   document.documentElement.className = "";
   document.documentElement.style.fontSize = "";
   document.documentElement.removeAttribute("data-prose-indent");
+  document.documentElement.removeAttribute("data-texture");
   useAppearance.setState({
     colorTheme: DEFAULT_THEME_ID,
     mode: "system",
     uiScale: 1,
     prose: { ...DEFAULT_PROSE },
+    texture: { ...DEFAULT_TEXTURE },
   });
 });
 
@@ -167,6 +173,7 @@ describe("外观持久化（localStorage 缓存）", () => {
       mode: "dark" as const,
       uiScale: 1.15,
       prose: { indent: false, lineHeight: 2.1, paraSpacing: 1.3, letterSpacing: 0.04 },
+      texture: { preset: "paper" as const, opacity: 0.2, scale: 1.5, blend: "multiply" as const },
     };
     saveAppearance(a);
     expect(loadAppearance()).toEqual(a);
@@ -215,6 +222,73 @@ describe("prose 排版设置（normalize）", () => {
       prose: { indent: "yes", lineHeight: Number.NaN, paraSpacing: "big", letterSpacing: null },
     });
     expect(a.prose).toEqual(DEFAULT_PROSE);
+  });
+});
+
+describe("texture 纹理设置（normalize）", () => {
+  it("旧数据无 texture 字段回默认", () => {
+    const a = normalizeAppearance({ colorTheme: "ink", mode: "light", uiScale: 1 });
+    expect(a.texture).toEqual(DEFAULT_TEXTURE);
+  });
+
+  it("非法 preset 回 none，其余合法字段保留", () => {
+    const a = normalizeAppearance({
+      texture: { preset: "glitter", opacity: 0.2, scale: 1.5, blend: "multiply" },
+    });
+    expect(a.texture).toEqual({ preset: "none", opacity: 0.2, scale: 1.5, blend: "multiply" });
+  });
+
+  it("opacity/scale 越界夹紧到有效域", () => {
+    const over = normalizeAppearance({
+      texture: { preset: "paper", opacity: 5, scale: 9, blend: "overlay" },
+    });
+    expect(over.texture).toEqual({ preset: "paper", opacity: 0.4, scale: 3, blend: "overlay" });
+
+    const under = normalizeAppearance({
+      texture: { preset: "dots", opacity: -1, scale: 0.1, blend: "normal" },
+    });
+    expect(under.texture).toEqual({ preset: "dots", opacity: 0, scale: 0.5, blend: "normal" });
+  });
+
+  it("非法 blend 与非数值 opacity/scale 回默认", () => {
+    const a = normalizeAppearance({
+      texture: { preset: "grid", opacity: "thick", scale: null, blend: "vivid-light" },
+    });
+    expect(a.texture).toEqual({ preset: "grid", opacity: 0.12, scale: 1, blend: "soft-light" });
+  });
+});
+
+describe("applyTexture 属性与覆盖层", () => {
+  it("preset=none 时移除 html[data-texture]，其余写入 preset id", () => {
+    applyTexture({ preset: "paper", opacity: 0.12, scale: 1, blend: "soft-light" });
+    expect(document.documentElement.getAttribute("data-texture")).toBe("paper");
+    applyTexture({ preset: "none", opacity: 0.12, scale: 1, blend: "soft-light" });
+    expect(document.documentElement.hasAttribute("data-texture")).toBe(false);
+  });
+
+  it("覆盖层存在时写入背景图/尺寸/透明度/混合模式；非法值经 normalize 收敛", () => {
+    const layer = document.createElement("div");
+    layer.id = "texture-layer";
+    document.body.appendChild(layer);
+
+    // 以 gradient 型纹理断言（happy-dom 的 CSSOM 会拒收带引号空格的 data URI，
+    // 浏览器/WebView2 均接受——data URI 串本身在 textures.test.ts 直接断言）
+    applyTexture({ preset: "grid", opacity: 9, scale: 1.5, blend: "multiply" });
+    expect(layer.style.backgroundImage).toBe(findTexture("grid")!.css);
+    expect(layer.style.backgroundSize).toBe("360px"); // 240 * 1.5
+    expect(layer.style.opacity).toBe("0.4"); // 越界经 clamp
+    expect(layer.style.mixBlendMode).toBe("multiply");
+
+    applyTexture({ preset: "none", opacity: 0.2, scale: 2, blend: "normal" });
+    expect(layer.style.backgroundImage).toBe("");
+    expect(layer.style.backgroundSize).toBe(""); // none 不留旧样式
+  });
+
+  it("覆盖层不存在时只切 html 属性，不抛错", () => {
+    expect(() =>
+      applyTexture({ preset: "ruled", opacity: 0.1, scale: 1, blend: "normal" }),
+    ).not.toThrow();
+    expect(document.documentElement.getAttribute("data-texture")).toBe("ruled");
   });
 });
 
@@ -328,6 +402,20 @@ describe("appearance store", () => {
     expect(loadAppearance().prose).toEqual({ indent: false, lineHeight: 2.1, paraSpacing: 0.9, letterSpacing: 0 });
   });
 
+  it("setTexture 合并部分字段、即时应用并立即持久化", () => {
+    useAppearance.getState().setTexture({ preset: "paper" });
+    let s = useAppearance.getState();
+    expect(s.texture.preset).toBe("paper");
+    expect(s.texture.opacity).toBe(0.12); // 未提供的字段保留原值
+    expect(document.documentElement.getAttribute("data-texture")).toBe("paper");
+    expect(loadAppearance().texture.preset).toBe("paper");
+
+    useAppearance.getState().setTexture({ opacity: 0.3, scale: 2, blend: "multiply" });
+    s = useAppearance.getState();
+    expect(s.texture).toEqual({ preset: "paper", opacity: 0.3, scale: 2, blend: "multiply" });
+    expect(loadAppearance().texture).toEqual({ preset: "paper", opacity: 0.3, scale: 2, blend: "multiply" });
+  });
+
   it("防抖落盘不回滚期间的即时落盘字段（缩放挂起时切明暗不被旧快照覆盖）", () => {
     vi.useFakeTimers();
     try {
@@ -410,6 +498,44 @@ describe("AppearancePane", () => {
     fireEvent.change(letterSpacing, { target: { value: "0.03" } });
     expect(useAppearance.getState().prose.letterSpacing).toBe(0.03);
     expect(document.getElementById(PROSE_STYLE_ID)?.textContent).toContain("--prose-letter-spacing:0.03em;");
+  });
+
+  it("纸张纹理：六预设 chips；「无」时参数区隐藏，选择后滑条/下拉参数正确", () => {
+    render(createElement(AppearancePane));
+    // 六个预设 chips（含「无」）全部渲染；默认「无」→ 参数区隐藏
+    for (const t of TEXTURES) expect(screen.getByRole("button", { name: t.name })).toBeInTheDocument();
+    expect(screen.queryByRole("slider", { name: "纹理强度" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "纸张" }));
+    expect(useAppearance.getState().texture.preset).toBe("paper");
+    expect(document.documentElement.getAttribute("data-texture")).toBe("paper");
+
+    const opacity = screen.getByRole("slider", { name: "纹理强度" }) as HTMLInputElement;
+    expect(opacity.min).toBe("0");
+    expect(opacity.max).toBe("0.4");
+    expect(opacity.step).toBe("0.02");
+    const scale = screen.getByRole("slider", { name: "纹理缩放" }) as HTMLInputElement;
+    expect(scale.min).toBe("0.5");
+    expect(scale.max).toBe("3");
+    expect(scale.step).toBe("0.1");
+
+    fireEvent.change(opacity, { target: { value: "0.26" } });
+    expect(useAppearance.getState().texture.opacity).toBe(0.26);
+    fireEvent.change(scale, { target: { value: "1.6" } });
+    expect(useAppearance.getState().texture.scale).toBe(1.6);
+
+    const blend = screen.getByRole("combobox", { name: "混合模式" }) as HTMLSelectElement;
+    expect(blend.options).toHaveLength(4);
+    fireEvent.change(blend, { target: { value: "multiply" } });
+    expect(useAppearance.getState().texture.blend).toBe("multiply");
+    expect(loadAppearance().texture).toEqual({ preset: "paper", opacity: 0.26, scale: 1.6, blend: "multiply" });
+
+    // 切回「无」：参数区再次隐藏、html 属性移除并落盘
+    fireEvent.click(screen.getByRole("button", { name: "无" }));
+    expect(useAppearance.getState().texture.preset).toBe("none");
+    expect(screen.queryByRole("slider", { name: "纹理强度" })).toBeNull();
+    expect(document.documentElement.hasAttribute("data-texture")).toBe(false);
+    expect(loadAppearance().texture.preset).toBe("none");
   });
 });
 

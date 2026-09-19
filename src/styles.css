@@ -176,3 +176,12 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
 .outline-list li.lv2 { padding-left: 36px; }
 .outline-list li.lv2::after { left: 20px; }
 .outline-list li.lv2::before { left: 19px; width: 5px; height: 5px; }
+
+/* ---------- 纸张纹理（M3-T3，Maple 整页纸感） ---------- */
+/* 覆盖层定位/层级由 App 内联 Tailwind 类承担（fixed inset-0 z-200 pointer-events-none）；
+   图案/尺寸/透明度/混合模式由 React 内联 style + applyTexture 注入。这里只补
+   平铺方式与创建合成层提示（mixBlendMode 参与合成，提前提升减少大屏重绘）。 */
+#texture-layer {
+  background-repeat: repeat;
+  will-change: opacity;
+}

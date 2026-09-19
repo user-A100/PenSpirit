@@ -9,7 +9,8 @@ import { getViews } from "./lib/nav/registry";
 import { useUiNav } from "./lib/nav/uiStore";
 import { useOutline } from "./stores/outline";
 import { useSearch } from "./stores/search";
-import { ThemeProvider } from "./themes/ThemeProvider";
+import { ThemeProvider, useAppearance } from "./themes/ThemeProvider";
+import { findTexture, TEXTURE_TILE_PX } from "./themes/textures";
 
 export default function App() {
   const activeView = useUiNav((s) => s.activeView);
@@ -17,6 +18,7 @@ export default function App() {
   const toggleDock = useUiNav((s) => s.toggleDock);
   const setReadReturn = useUiNav((s) => s.setReadReturn);
   const openSearch = useSearch((s) => s.openPanel);
+  const texture = useAppearance((s) => s.texture);
 
   // 双保险：registry 加载时已自愈无效视图 id，这里防御运行期脏值
   const current = getViews().some((v) => v.id === activeView) ? activeView : "write";
@@ -91,6 +93,21 @@ export default function App() {
           {/* 阅读模式全屏覆盖（不常挂：进入时重建以重置进度恢复/计时） */}
           {current === "read" && <ReadView />}
         </main>
+        {/* 纸张纹理覆盖层（M3-T3）：z-200 高于全部面板/弹窗，均匀铺满整页（Maple 整页纸感）；
+            preset="none" 时不渲染。定位样式见 styles.css #texture-layer 分区 */}
+        {texture.preset !== "none" && (
+          <div
+            id="texture-layer"
+            aria-hidden
+            className="pointer-events-none fixed inset-0 z-[200]"
+            style={{
+              backgroundImage: findTexture(texture.preset)?.css,
+              backgroundSize: `${TEXTURE_TILE_PX * texture.scale}px`,
+              opacity: texture.opacity,
+              mixBlendMode: texture.blend,
+            }}
+          />
+        )}
       </div>
       <SettingsModal />
       <SearchPanel />
