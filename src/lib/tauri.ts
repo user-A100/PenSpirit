@@ -33,6 +33,8 @@ export const api = {
     invoke<StyleCard>("save_style", { id, name, promptMd, sampleMd, tags }),
   deleteStyle: (id: number) => invoke<void>("delete_style", { id }),
   setActiveStyle: (bookId: number, styleId: number) => invoke<void>("set_active_style", { bookId, styleId }),
+  // 当前书的激活文风位；null / 0 均为「无文风」
+  getActiveStyle: (bookId: number) => invoke<number | null>("get_active_style", { bookId }),
   listSessions: (chapterId: number) => invoke<ChatSession[]>("list_sessions", { chapterId }),
   getOrCreateSession: (chapterId: number) => invoke<ChatSession>("get_or_create_session", { chapterId }),
   listMessages: (sessionId: number) => invoke<ChatMessage[]>("list_messages", { sessionId }),

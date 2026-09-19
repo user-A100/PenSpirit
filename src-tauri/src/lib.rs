@@ -48,6 +48,7 @@ pub fn run() {
             commands_ai::save_style,
             commands_ai::delete_style,
             commands_ai::set_active_style,
+            commands_ai::get_active_style,
             commands_ai::list_sessions,
             commands_ai::get_or_create_session,
             commands_ai::list_messages,

@@ -250,6 +250,12 @@ pub fn set_active_style_inner(s: &AppState, book_id: i64, style_id: i64) -> AppR
     repo::settings::set_active_style(&conn, book_id, style_id)
 }
 
+/// 当前书的激活文风位（未设置或为 0 均表示「无文风」）。
+pub fn get_active_style_inner(s: &AppState, book_id: i64) -> AppResult<Option<i64>> {
+    let conn = lock(s)?;
+    repo::settings::active_style_id(&conn, book_id)
+}
+
 // ---------- Sessions & messages ----------
 
 pub fn list_sessions_inner(s: &AppState, chapter_id: i64) -> AppResult<Vec<ChatSession>> {
@@ -326,6 +332,11 @@ pub fn delete_style(s: State<AppState>, id: i64) -> AppResult<()> {
 #[tauri::command]
 pub fn set_active_style(s: State<AppState>, book_id: i64, style_id: i64) -> AppResult<()> {
     set_active_style_inner(&s, book_id, style_id)
+}
+
+#[tauri::command]
+pub fn get_active_style(s: State<AppState>, book_id: i64) -> AppResult<Option<i64>> {
+    get_active_style_inner(&s, book_id)
 }
 
 #[tauri::command]
