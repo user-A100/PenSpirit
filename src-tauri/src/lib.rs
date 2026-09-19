@@ -1,9 +1,13 @@
+pub mod commands;
 pub mod db;
 pub mod error;
 pub mod fs_service;
 pub mod models;
 pub mod repo;
+pub mod state;
 pub mod util;
+
+use tauri::Manager;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -15,7 +19,23 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .setup(|app| {
+            let dir = app.path().app_data_dir()?;
+            app.manage(state::AppState::init(&dir)?);
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            commands::list_books,
+            commands::create_book,
+            commands::delete_book,
+            commands::list_chapters,
+            commands::create_chapter,
+            commands::rename_chapter,
+            commands::delete_chapter,
+            commands::read_chapter,
+            commands::write_chapter,
+        ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .expect("error while running bixian application");
 }
