@@ -1,7 +1,8 @@
 import type { ComponentType } from "react";
-import { CircleDot, Flag, ListTree, PenLine, Sparkles, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, BookOpen, CircleDot, Flag, ListTree, PenLine, Sparkles, Users, type LucideIcon } from "lucide-react";
 import { BumpView } from "../../views/BumpView";
 import { WriteView } from "../../views/WriteView";
+import { ReadView } from "../../views/read/ReadView";
 import { useUiNav } from "./uiStore";
 
 // 一级视图注册表（仿 Agentero 命令式注册）：Ribbon/App/PanelDock 均从此读取导航结构，
@@ -47,6 +48,7 @@ registerView({
     { id: "outline", label: "大纲", icon: ListTree },
     { id: "characters", label: "人物", icon: Users },
     { id: "foreshadow", label: "伏笔", icon: Flag },
+    { id: "stats", label: "统计", icon: BarChart3 },
     { id: "styles", label: "文风", icon: Sparkles },
   ],
 });
@@ -57,6 +59,14 @@ registerView({
   icon: CircleDot,
   Component: BumpView,
   dockPanels: [], // T10 填充
+});
+
+registerView({
+  id: "read",
+  label: "阅读",
+  icon: BookOpen,
+  Component: ReadView,
+  dockPanels: [], // 全屏阅读无 dock 面板；四边热区面板在 T5 以覆盖层实现
 });
 
 // 启动自愈：持久化的视图 id 未注册（旧版本残留/手改 localStorage）时回退 write 并写回

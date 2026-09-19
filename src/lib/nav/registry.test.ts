@@ -19,13 +19,13 @@ describe("navRegistry", () => {
   it("内置注册 write 与 bump 两个一级视图", async () => {
     const { registry, useUiNav } = await freshNav();
     const ids = registry.getViews().map((v) => v.id);
-    expect(ids).toEqual(["write", "bump"]);
+    expect(ids).toEqual(["write", "bump", "read"]);
 
     const write = registry.getView("write")!;
     expect(write.label).toBe("写作");
     expect(write.icon).toBeDefined();
     expect(write.Component).toBeDefined();
-    expect(write.dockPanels.map((p) => p.label)).toEqual(["大纲", "人物", "伏笔", "文风"]);
+    expect(write.dockPanels.map((p) => p.label)).toEqual(["大纲", "人物", "伏笔", "统计", "文风"]);
 
     const bump = registry.getView("bump")!;
     expect(bump.label).toBe("碰碰车");
@@ -52,7 +52,7 @@ describe("navRegistry", () => {
     const { registry } = await freshNav();
     const snapshot = registry.getViews() as mutableViews;
     snapshot.pop();
-    expect(registry.getViews()).toHaveLength(2);
+    expect(registry.getViews()).toHaveLength(3);
   });
 
   it("持久化了未注册的视图 id 时回退 write 并写回存储", async () => {

@@ -1,11 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Ribbon } from "./components/layout/Ribbon";
 import { SettingsModal } from "./components/settings/SettingsModal";
 import { SearchPanel } from "./components/search/SearchPanel";
 import { WriteView } from "./views/WriteView";
 import { BumpView } from "./views/BumpView";
+import { ReadView } from "./views/read/ReadView";
 import { getViews } from "./lib/nav/registry";
 import { useUiNav } from "./lib/nav/uiStore";
+import { useOutline } from "./stores/outline";
 import { useSearch } from "./stores/search";
 import { ThemeProvider } from "./themes/ThemeProvider";
 
@@ -13,10 +15,20 @@ export default function App() {
   const activeView = useUiNav((s) => s.activeView);
   const toggleSidebar = useUiNav((s) => s.toggleSidebar);
   const toggleDock = useUiNav((s) => s.toggleDock);
+  const setReadReturn = useUiNav((s) => s.setReadReturn);
   const openSearch = useSearch((s) => s.openPanel);
 
   // 双保险：registry 加载时已自愈无效视图 id，这里防御运行期脏值
   const current = getViews().some((v) => v.id === activeView) ? activeView : "write";
+
+  // 进入阅读模式时记录来源视图，ReadView 的 Esc 退出据此回去（readReturn 消费在 ReadView）
+  const prevViewRef = useRef(activeView);
+  useEffect(() => {
+    if (activeView === "read" && prevViewRef.current !== "read") {
+      setReadReturn(prevViewRef.current);
+    }
+    prevViewRef.current = activeView;
+  }, [activeView, setReadReturn]);
 
   // Ctrl+B 折叠/展开侧栏
   useEffect(() => {
@@ -42,6 +54,18 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleDock]);
 
+  // Alt+O 悬浮大纲（写作模式下的章节导航浮窗）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        useOutline.getState().toggle();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Ctrl+Shift+F 全书搜索（与 Ribbon 无关的全局快捷键）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -64,6 +88,8 @@ export default function App() {
             <WriteView />
           </div>
           {current === "bump" && <BumpView />}
+          {/* 阅读模式全屏覆盖（不常挂：进入时重建以重置进度恢复/计时） */}
+          {current === "read" && <ReadView />}
         </main>
       </div>
       <SettingsModal />
