@@ -2,17 +2,32 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef, useState } from "react";
+import type { Node as PMNode } from "@tiptap/pm/model";
 import { History, PenLine } from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
 import { useChat } from "../../stores/chat";
+import { useSearch } from "../../stores/search";
 import { api } from "../../lib/tauri";
 import { useAutosave } from "../../hooks/useAutosave";
 import { countWords } from "../../lib/words";
 import { HistoryPanel } from "./HistoryPanel";
 
+/** 在文档里找首个包含 needle 的文本区间（不跨文本节点，作为「跳到此行」的近似定位足够） */
+function findTextPos(doc: PMNode, needle: string): { from: number; to: number } | null {
+  const target = needle.toLowerCase();
+  let found: { from: number; to: number } | null = null;
+  doc.descendants((node, pos) => {
+    if (found || !node.isText || !node.text) return;
+    const idx = node.text.toLowerCase().indexOf(target);
+    if (idx >= 0) found = { from: pos + idx, to: pos + idx + needle.length };
+  });
+  return found;
+}
+
 export function ChapterEditor() {
   const { books, currentBookId, currentChapterId, chapterContent, chapters } = useWorkspace();
   const pendingAppend = useChat((s) => s.pendingAppend);
+  const jumpText = useSearch((s) => s.jumpText);
   const dirty = useRef<string | null>(null);
   const chapterIdRef = useRef<number | null>(null);
   chapterIdRef.current = currentChapterId;
@@ -33,6 +48,18 @@ export function ChapterEditor() {
       dirty.current = null;
     }
   }, [currentChapterId, chapterContent, editor]);
+
+  // 搜索结果跳转：正文就位后定位到首个匹配并滚动到可见（本 effect 声明在灌内容之后，
+  // 故同一次提交里 chapterContent 先落地）。消费后清空，避免重复定位。
+  useEffect(() => {
+    if (!editor || jumpText == null) return;
+    const pos = findTextPos(editor.state.doc, jumpText);
+    if (pos) {
+      editor.commands.setTextSelection(pos);
+      editor.commands.scrollIntoView();
+    }
+    useSearch.getState().clearJump();
+  }, [editor, chapterContent, jumpText]);
 
   // 消费 AI 采纳：把文本以空行分隔追加到文档末尾（文档为空时不加前导空行），
   // 显式置 dirty 交给自动保存，然后清空通道。清空本身触发重渲染，驱动 autosave effect。

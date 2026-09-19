@@ -6,6 +6,7 @@ use crate::history;
 use crate::models::{Book, ChapterContent, ChapterMeta};
 use crate::porting;
 use crate::repo;
+use crate::search;
 use crate::state::AppState;
 use crate::trash;
 use crate::util::count_words;
@@ -365,4 +366,16 @@ pub fn export_docx(
         &porting::export::ExportRange { chapter_ids },
         std::path::Path::new(&dest),
     )
+}
+
+// ---- M2-T9 全书搜索（实现在 search.rs） ----
+
+#[tauri::command]
+pub fn search_book(
+    s: State<AppState>,
+    book_id: i64,
+    query: String,
+    whole_word: bool,
+) -> AppResult<search::SearchResult> {
+    search::search_book_inner(&s, book_id, &query, whole_word)
 }

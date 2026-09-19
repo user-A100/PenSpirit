@@ -33,6 +33,13 @@ export interface SnapshotInfo { file: string; ts: string; words: number; title: 
 export interface ParsedChapter { title: string; content: string; volume: string | null } // volume 仅用于预览分组，不落库
 export interface ImportReport { chapters: number; words: number }
 
+// ---- M2-T9：全书搜索（match_* 为字符索引，非字节） ----
+export interface SearchHit {
+  chapter_id: number; chapter_title: string; line_no: number;
+  line_text: string; match_start: number; match_end: number;
+}
+export interface SearchResult { hits: SearchHit[]; truncated: boolean }
+
 export const api = {
   listBooks: () => invoke<Book[]>("list_books"),
   createBook: (title: string) => invoke<Book>("create_book", { title }),
@@ -91,4 +98,7 @@ export const api = {
     invoke<void>("export_txt", { bookId, chapterIds, indent, dest }),
   exportDocx: (bookId: number, chapterIds: number[], dest: string) =>
     invoke<void>("export_docx", { bookId, chapterIds, dest }),
+  // ---- M2-T9：全书搜索 ----
+  searchBook: (bookId: number, query: string, wholeWord: boolean) =>
+    invoke<SearchResult>("search_book", { bookId, query, wholeWord }),
 };

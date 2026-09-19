@@ -10,6 +10,7 @@ pub mod llm;
 pub mod models;
 pub mod porting;
 pub mod repo;
+pub mod search;
 pub mod state;
 pub mod trash;
 pub mod util;
@@ -58,6 +59,7 @@ pub fn run() {
             commands::import_chapters,
             commands::export_txt,
             commands::export_docx,
+            commands::search_book,
             commands_ai::list_providers,
             commands_ai::save_provider,
             commands_ai::delete_provider,

@@ -1,15 +1,18 @@
 import { useEffect } from "react";
 import { Ribbon } from "./components/layout/Ribbon";
 import { SettingsModal } from "./components/settings/SettingsModal";
+import { SearchPanel } from "./components/search/SearchPanel";
 import { WriteView } from "./views/WriteView";
 import { BumpView } from "./views/BumpView";
 import { getViews } from "./lib/nav/registry";
 import { useUiNav } from "./lib/nav/uiStore";
+import { useSearch } from "./stores/search";
 import { ThemeProvider } from "./themes/ThemeProvider";
 
 export default function App() {
   const activeView = useUiNav((s) => s.activeView);
   const toggleSidebar = useUiNav((s) => s.toggleSidebar);
+  const openSearch = useSearch((s) => s.openPanel);
 
   // 双保险：registry 加载时已自愈无效视图 id，这里防御运行期脏值
   const current = getViews().some((v) => v.id === activeView) ? activeView : "write";
@@ -26,6 +29,18 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleSidebar]);
 
+  // Ctrl+Shift+F 全书搜索（与 Ribbon 无关的全局快捷键）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        openSearch();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openSearch]);
+
   return (
     <ThemeProvider>
       <div className="flex h-full w-full bg-[var(--bg-base)]">
@@ -39,6 +54,7 @@ export default function App() {
         </main>
       </div>
       <SettingsModal />
+      <SearchPanel />
     </ThemeProvider>
   );
 }
