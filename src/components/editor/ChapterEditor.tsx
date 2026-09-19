@@ -4,12 +4,14 @@ import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef } from "react";
 import { PenLine } from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
+import { useChat } from "../../stores/chat";
 import { api } from "../../lib/tauri";
 import { useAutosave } from "../../hooks/useAutosave";
 import { countWords } from "../../lib/words";
 
 export function ChapterEditor() {
   const { books, currentBookId, currentChapterId, chapterContent, chapters } = useWorkspace();
+  const pendingAppend = useChat((s) => s.pendingAppend);
   const dirty = useRef<string | null>(null);
   const chapterIdRef = useRef<number | null>(null);
   chapterIdRef.current = currentChapterId;
@@ -29,6 +31,19 @@ export function ChapterEditor() {
       dirty.current = null;
     }
   }, [currentChapterId, chapterContent, editor]);
+
+  // 消费 AI 采纳：把文本以空行分隔追加到文档末尾（文档为空时不加前导空行），
+  // 显式置 dirty 交给自动保存，然后清空通道。清空本身触发重渲染，驱动 autosave effect。
+  useEffect(() => {
+    if (!editor || pendingAppend == null) return;
+    const docEmpty = editor.state.doc.textContent.trim() === "";
+    editor.commands.insertContentAt(
+      editor.state.doc.content.size,
+      docEmpty ? pendingAppend : `\n\n${pendingAppend}`,
+    );
+    dirty.current = (editor.storage.markdown as { getMarkdown(): string }).getMarkdown();
+    useChat.getState().clearPendingAppend();
+  }, [pendingAppend, editor]);
 
   const { status } = useAutosave(
     () => dirty.current,
