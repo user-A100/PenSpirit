@@ -2,6 +2,7 @@ import { useState, type ComponentType } from "react";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { StylePanel } from "../styles/StylePanel";
 import { StatsPanel } from "../stats/StatsPanel";
+import { ForeshadowPanel } from "../foreshadow/ForeshadowPanel";
 import { getView } from "../../lib/nav/registry";
 import { useUiNav } from "../../lib/nav/uiStore";
 
@@ -11,13 +12,13 @@ import { useUiNav } from "../../lib/nav/uiStore";
 const PANEL_EMPTY_TEXT: Record<string, string> = {
   outline: "章节结构与排序，M3 里程碑提供",
   characters: "人物图谱与关系网络，M2 里程碑提供",
-  foreshadow: "伏笔登记与回收追踪，M3 里程碑提供",
   styles: "",
 };
 
 const PANEL_COMPONENTS: Record<string, ComponentType> = {
   styles: StylePanel,
   stats: StatsPanel,
+  foreshadow: ForeshadowPanel,
 };
 
 export function PanelDock() {
