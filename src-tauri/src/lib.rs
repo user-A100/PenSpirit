@@ -5,6 +5,7 @@ pub mod context;
 pub mod db;
 pub mod error;
 pub mod fs_service;
+pub mod history;
 pub mod llm;
 pub mod models;
 pub mod repo;
@@ -48,6 +49,9 @@ pub fn run() {
             commands::list_trash_books,
             commands::restore_book,
             commands::purge_book,
+            commands::list_history,
+            commands::read_history,
+            commands::snapshot_now,
             commands_ai::list_providers,
             commands_ai::save_provider,
             commands_ai::delete_provider,

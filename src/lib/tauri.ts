@@ -26,6 +26,9 @@ export interface AcpPermissionOption { option_id: string; name: string; kind: st
 export interface AcpPermissionEvent { session_id: number; request_id: string; title: string; options: AcpPermissionOption[] }
 export interface AcpTurnEvent { session_id: number; ok: boolean; content: string | null; error: string | null }
 
+// ---- M2-T7：章节快照版本历史 ----
+export interface SnapshotInfo { file: string; ts: string; words: number; title: string }
+
 export const api = {
   listBooks: () => invoke<Book[]>("list_books"),
   createBook: (title: string) => invoke<Book>("create_book", { title }),
@@ -70,4 +73,9 @@ export const api = {
   cancelGenerationAcp: (sessionId: number) => invoke<void>("cancel_generation_acp", { sessionId }),
   agentsRespondPermission: (sessionId: number, requestId: string, optionId: string) =>
     invoke<void>("agents_respond_permission", { sessionId, requestId, optionId }),
+  // ---- M2-T7：章节快照版本历史 ----
+  listHistory: (chapterId: number) => invoke<SnapshotInfo[]>("list_history", { chapterId }),
+  readHistory: (chapterId: number, file: string) => invoke<string>("read_history", { chapterId, file }),
+  // 恢复旧版前先补存当前编辑器内容（运行时传入，故防抖窗口内的输入也不丢）
+  snapshotNow: (chapterId: number, content: string) => invoke<boolean>("snapshot_now", { chapterId, content }),
 };

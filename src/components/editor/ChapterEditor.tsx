@@ -1,13 +1,14 @@
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
-import { useEffect, useRef } from "react";
-import { PenLine } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { History, PenLine } from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
 import { useChat } from "../../stores/chat";
 import { api } from "../../lib/tauri";
 import { useAutosave } from "../../hooks/useAutosave";
 import { countWords } from "../../lib/words";
+import { HistoryPanel } from "./HistoryPanel";
 
 export function ChapterEditor() {
   const { books, currentBookId, currentChapterId, chapterContent, chapters } = useWorkspace();
@@ -15,6 +16,7 @@ export function ChapterEditor() {
   const dirty = useRef<string | null>(null);
   const chapterIdRef = useRef<number | null>(null);
   chapterIdRef.current = currentChapterId;
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const editor = useEditor({
     extensions: [StarterKit, Markdown],
@@ -54,6 +56,17 @@ export function ChapterEditor() {
     },
   );
 
+  const currentMarkdown = () =>
+    editor ? (editor.storage.markdown as { getMarkdown(): string }).getMarkdown() : "";
+
+  // 版本恢复：把快照文本灌进编辑器并显式置 dirty（TipTap 的 setContent 不触发 onUpdate），
+  // 落盘交给上面的自动保存——与 AI 采纳路径同构。
+  const restoreFromHistory = (content: string) => {
+    if (!editor) return;
+    editor.commands.setContent(content);
+    dirty.current = (editor.storage.markdown as { getMarkdown(): string }).getMarkdown();
+  };
+
   const book = books.find((b) => b.id === currentBookId);
   const meta = chapters.find((c) => c.id === currentChapterId);
 
@@ -70,7 +83,7 @@ export function ChapterEditor() {
   const text = editor?.state.doc.textBetween(0, editor.state.doc.content.size, "\n", " ") ?? "";
 
   return (
-    <div className="flex h-full flex-col bg-[var(--bg-base)]">
+    <div className="relative flex h-full flex-col bg-[var(--bg-base)]">
       {/* 顶部栏 40px：面包屑 + 保存状态 + 字数 */}
       <div className="flex h-10 shrink-0 items-center justify-between gap-4 border-b border-[color:var(--border-subtle)] pl-4 pr-5">
         <div className="flex min-w-0 items-center gap-1.5 text-sm">
@@ -79,6 +92,15 @@ export function ChapterEditor() {
           <span className="truncate text-[color:var(--text-primary)]">{meta?.title ?? ""}</span>
         </div>
         <div className="flex shrink-0 items-center gap-3 text-xs text-[color:var(--text-faint)]">
+          <button
+            onClick={() => setHistoryOpen((v) => !v)}
+            title="版本历史"
+            className={`rounded p-1 transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] ${
+              historyOpen ? "text-[color:var(--accent)]" : ""
+            }`}
+          >
+            <History size={14} />
+          </button>
           {status !== "idle" && (
             <span className="flex items-center gap-1.5">
               <span
@@ -97,6 +119,15 @@ export function ChapterEditor() {
       <div className="flex-1 overflow-y-auto">
         <EditorContent editor={editor} className="prose-serif mx-auto max-w-[720px] px-8 py-10" />
       </div>
+
+      {historyOpen && (
+        <HistoryPanel
+          chapterId={currentChapterId}
+          getCurrentContent={currentMarkdown}
+          onRestore={restoreFromHistory}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
     </div>
   );
 }

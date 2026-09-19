@@ -2,6 +2,7 @@ use tauri::State;
 
 use crate::error::{AppError, AppResult};
 use crate::fs_service;
+use crate::history;
 use crate::models::{Book, ChapterContent, ChapterMeta};
 use crate::repo;
 use crate::state::AppState;
@@ -103,9 +104,12 @@ pub fn read_chapter_inner(s: &AppState, id: i64) -> AppResult<ChapterContent> {
 }
 
 pub fn write_chapter_inner(s: &AppState, id: i64, content: &str) -> AppResult<ChapterMeta> {
-    let rel = lock(s).and_then(|conn| repo::chapters::get(&*conn, id))?.file_path;
-    fs_service::write_chapter(&s.root, &rel, content)?;
+    let ctx = history_ctx(s, id)?;
+    fs_service::write_chapter(&s.root, &ctx.rel, content)?;
     let wc = count_words(content);
+    // M2-T7 快照钩子：落盘成功后记录本版本（内容为空或与最近快照实质相同则内部跳过）。
+    // snapshot 吞掉 IO 错误并返回 bool——历史写入失败绝不阻断正文保存。
+    history::snapshot(&s.root.join(&ctx.book_slug), &ctx.slug, &ctx.title, content, &ctx.ts);
     lock(s).and_then(|conn| repo::chapters::touch_content(&*conn, id, wc))
 }
 
@@ -232,4 +236,66 @@ pub fn restore_book(s: State<AppState>, id: i64) -> AppResult<()> {
 #[tauri::command]
 pub fn purge_book(s: State<AppState>, id: i64) -> AppResult<()> {
     trash::purge_book_inner(&s, id)
+}
+
+// ---- M2-T7 章节快照版本历史（实现在 history.rs） ----
+
+/// 章节 → 快照落点上下文。章节 slug 取 md 文件名主干（如 `0001-yi`）：
+/// 重命名章节会另起一份历史，换取 DB 重建后按文件名仍能对上（md 是唯一真源）。
+struct HistoryCtx {
+    /// md 相对路径（正文写入用）
+    rel: String,
+    /// 书目录 slug（软删书时指向 .trash_books/ 内位置）
+    book_slug: String,
+    slug: String,
+    title: String,
+    /// 本地时间戳，与章节行读取共用一次锁
+    ts: String,
+}
+
+fn history_ctx(s: &AppState, id: i64) -> AppResult<HistoryCtx> {
+    let conn = lock(s)?;
+    let ch = repo::chapters::get(&*conn, id)?;
+    let book = repo::books::get(&*conn, ch.book_id)?;
+    let file_name = ch.file_path.rsplit('/').next().unwrap_or(&ch.file_path);
+    let slug = file_name.strip_suffix(".md").unwrap_or(file_name).to_string();
+    Ok(HistoryCtx {
+        rel: ch.file_path.clone(),
+        book_slug: book.slug,
+        slug,
+        title: ch.title,
+        ts: history::local_now(&*conn)?,
+    })
+}
+
+pub fn list_history_inner(s: &AppState, chapter_id: i64) -> AppResult<Vec<history::SnapshotInfo>> {
+    let ctx = history_ctx(s, chapter_id)?;
+    Ok(history::list_snapshots(&s.root.join(&ctx.book_slug), &ctx.slug))
+}
+
+pub fn read_history_inner(s: &AppState, chapter_id: i64, file: &str) -> AppResult<String> {
+    let ctx = history_ctx(s, chapter_id)?;
+    history::read_snapshot(&s.root.join(&ctx.book_slug), &ctx.slug, file)
+}
+
+/// 把给定内容存为该章的一次快照。前端在恢复旧版前用它做保险——传入的是编辑器**实时**内容，
+/// 故自动保存防抖窗口（800ms）内尚未落盘的输入也不会丢；内容空或与最近快照实质相同则为 no-op。
+pub fn snapshot_now_inner(s: &AppState, chapter_id: i64, content: &str) -> AppResult<bool> {
+    let ctx = history_ctx(s, chapter_id)?;
+    Ok(history::snapshot(&s.root.join(&ctx.book_slug), &ctx.slug, &ctx.title, content, &ctx.ts))
+}
+
+#[tauri::command]
+pub fn list_history(s: State<AppState>, chapter_id: i64) -> AppResult<Vec<history::SnapshotInfo>> {
+    list_history_inner(&s, chapter_id)
+}
+
+#[tauri::command]
+pub fn read_history(s: State<AppState>, chapter_id: i64, file: String) -> AppResult<String> {
+    read_history_inner(&s, chapter_id, &file)
+}
+
+#[tauri::command]
+pub fn snapshot_now(s: State<AppState>, chapter_id: i64, content: String) -> AppResult<bool> {
+    snapshot_now_inner(&s, chapter_id, &content)
 }
