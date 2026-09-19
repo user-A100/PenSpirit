@@ -11,6 +11,7 @@ vi.mock("../lib/tauri", () => {
       createBook: vi.fn().mockResolvedValue(books[0]),
       listChapters: vi.fn().mockResolvedValue(chapters),
       createChapter: vi.fn().mockResolvedValue(chapters[0]),
+      readChapter: vi.fn().mockResolvedValue({ meta: chapters[0], content: "" }),
     },
   };
 });
@@ -18,7 +19,7 @@ vi.mock("../lib/tauri", () => {
 import { useWorkspace } from "./workspace";
 
 describe("workspace store", () => {
-  beforeEach(() => useWorkspace.setState({ books: [], chapters: [], currentBookId: null, currentChapterId: null }));
+  beforeEach(() => useWorkspace.setState({ books: [], chapters: [], currentBookId: null, currentChapterId: null, chapterContent: null }));
 
   it("loadBooks 填充书籍", async () => {
     await useWorkspace.getState().loadBooks();
@@ -35,5 +36,11 @@ describe("workspace store", () => {
     await useWorkspace.getState().selectBook(1);
     await useWorkspace.getState().createChapter("二");
     expect(useWorkspace.getState().chapters).toHaveLength(1); // mock 返回同列表
+  });
+
+  it("selectChapter 异步读取章节内容", async () => {
+    await useWorkspace.getState().selectChapter(11);
+    expect(useWorkspace.getState().currentChapterId).toBe(11);
+    expect(useWorkspace.getState().chapterContent).toBe("");
   });
 });

@@ -14,10 +14,15 @@
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-opener": "^2",
+    "@tiptap/core": "^2.27.3",
+    "@tiptap/pm": "^2.27.3",
+    "@tiptap/react": "^2.27.3",
+    "@tiptap/starter-kit": "^2.27.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-resizable-panels": "^4.12.4",
     "tailwindcss": "^4.3.3",
+    "tiptap-markdown": "^0.9.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

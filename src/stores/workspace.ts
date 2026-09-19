@@ -4,16 +4,17 @@ import { api, Book, ChapterMeta } from "../lib/tauri";
 interface WorkspaceState {
   books: Book[]; chapters: ChapterMeta[];
   currentBookId: number | null; currentChapterId: number | null;
+  chapterContent: string | null;
   loading: boolean; error: string | null;
   loadBooks: () => Promise<void>;
   selectBook: (id: number) => Promise<void>;
   createBook: (title: string) => Promise<void>;
   createChapter: (title: string) => Promise<void>;
-  selectChapter: (id: number) => void;
+  selectChapter: (id: number) => Promise<void>;
 }
 
 export const useWorkspace = create<WorkspaceState>((set, get) => ({
-  books: [], chapters: [], currentBookId: null, currentChapterId: null, loading: false, error: null,
+  books: [], chapters: [], currentBookId: null, currentChapterId: null, chapterContent: null, loading: false, error: null,
   loadBooks: async () => {
     set({ loading: true, error: null });
     try { set({ books: await api.listBooks(), loading: false }); }
@@ -34,5 +35,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     await api.createChapter(bookId, title);
     set({ chapters: await api.listChapters(bookId) });
   },
-  selectChapter: (id) => set({ currentChapterId: id }),
+  selectChapter: async (id) => {
+    set({ currentChapterId: id });
+    const full = await api.readChapter(id);
+    set({ chapterContent: full.content });
+  },
 }));
