@@ -1,6 +1,7 @@
 import { useState, type ComponentType } from "react";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { StylePanel } from "../styles/StylePanel";
+import { StatsPanel } from "../stats/StatsPanel";
 import { getView } from "../../lib/nav/registry";
 import { useUiNav } from "../../lib/nav/uiStore";
 
@@ -16,6 +17,7 @@ const PANEL_EMPTY_TEXT: Record<string, string> = {
 
 const PANEL_COMPONENTS: Record<string, ComponentType> = {
   styles: StylePanel,
+  stats: StatsPanel,
 };
 
 export function PanelDock() {
