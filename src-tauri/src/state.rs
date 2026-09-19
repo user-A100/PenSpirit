@@ -37,4 +37,14 @@ impl AppState {
     pub fn test_state(app_data: &Path) -> Self {
         Self::init(app_data).expect("测试状态初始化失败")
     }
+
+    /// 配置目录（%APPDATA%/com.bixian.app 本体）：agents.json 等
+    /// 与 library 平级的配置文件存放处。root = app_data/library，
+    /// 故取其父目录。
+    pub fn config_dir(&self) -> PathBuf {
+        self.root
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| self.root.clone())
+    }
 }

@@ -1,3 +1,4 @@
+pub mod agents;
 pub mod commands;
 pub mod commands_ai;
 pub mod context;
@@ -56,6 +57,11 @@ pub fn run() {
             commands_ai::send_message,
             commands_ai::cancel_generation,
             commands_ai::preview_context,
+            agents::agents_list,
+            agents::agents_probe,
+            agents::agents_upsert,
+            agents::agents_remove,
+            agents::agents_set_default,
         ])
         .run(tauri::generate_context!())
         .expect("error while running bixian application");

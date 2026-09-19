@@ -66,3 +66,37 @@ pub struct StyleCard {
     pub created_at: String,
     pub updated_at: String,
 }
+
+/// ACP agent 描述（agents.json 的条目）。
+/// id 形如 "claude" | "codex" | "gemini" | "custom:xxx"。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AgentDescriptor {
+    pub id: String,
+    pub name: String,
+    /// 可执行命令名（或绝对路径），如 "claude-agent-acp"
+    pub command: String,
+    /// 命令参数，如 gemini: ["--acp", "--skip-trust"]
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub is_default: bool,
+    /// 最近一次短连接探测结果（None = 未探测）
+    #[serde(default)]
+    pub last_probe: Option<ProbeResult>,
+}
+
+/// 一次性短连接探测结果。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProbeResult {
+    pub ok: bool,
+    /// agent_info.name
+    pub agent_name: Option<String>,
+    /// 协议版本（如 "v1"）
+    pub protocol_version: Option<String>,
+    /// session capabilities 是否支持 resume
+    pub can_resume: bool,
+    /// 失败原因（ok=false 时给出；成功时为 None）
+    pub detail: Option<String>,
+}
