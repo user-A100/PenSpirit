@@ -10,13 +10,17 @@ fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Book> {
         title: row.get(2)?,
         created_at: row.get(3)?,
         updated_at: row.get(4)?,
+        deleted_at: row.get(5)?,
+        orig_dir_name: row.get(6)?,
     })
 }
 
-const COLS: &str = "id, slug, title, created_at, updated_at";
+const COLS: &str = "id, slug, title, created_at, updated_at, deleted_at, orig_dir_name";
 
 pub fn list(conn: &Connection) -> AppResult<Vec<Book>> {
-    let mut stmt = conn.prepare(&format!("SELECT {COLS} FROM books ORDER BY id"))?;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {COLS} FROM books WHERE deleted_at IS NULL ORDER BY id"
+    ))?;
     let rows = stmt.query_map([], from_row)?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
@@ -41,5 +45,33 @@ pub fn create(conn: &Connection, title: &str, slug: &str) -> AppResult<Book> {
 
 pub fn delete(conn: &Connection, id: i64) -> AppResult<()> {
     conn.execute("DELETE FROM books WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+// ---- M2-T6 回收站 ----
+
+/// 回收站中的书（删除时间倒序）
+pub fn list_deleted(conn: &Connection) -> AppResult<Vec<Book>> {
+    let mut stmt =
+        conn.prepare(&format!("SELECT {COLS} FROM books WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id DESC"))?;
+    let rows = stmt.query_map([], from_row)?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+/// 软删：目录已移至 trash_slug（如 ".trash_books/shu"），记录原目录名
+pub fn soft_delete(conn: &Connection, id: i64, trash_slug: &str, orig_dir_name: &str) -> AppResult<()> {
+    conn.execute(
+        "UPDATE books SET slug = ?2, orig_dir_name = ?3, deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1",
+        params![id, trash_slug, orig_dir_name],
+    )?;
+    Ok(())
+}
+
+/// 恢复：目录已移回 restore_slug（通常为原目录名；冲突时为 -N 新名）
+pub fn restore(conn: &Connection, id: i64, restore_slug: &str) -> AppResult<()> {
+    conn.execute(
+        "UPDATE books SET slug = ?2, orig_dir_name = NULL, deleted_at = NULL, updated_at = datetime('now') WHERE id = ?1",
+        params![id, restore_slug],
+    )?;
     Ok(())
 }

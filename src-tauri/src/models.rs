@@ -7,6 +7,12 @@ pub struct Book {
     pub title: String,
     pub created_at: String,
     pub updated_at: String,
+    /// 软删时间（None = 未删除；Some 时 slug 指向 .trash_books/ 内位置）
+    #[serde(default)]
+    pub deleted_at: Option<String>,
+    /// 软删前的原目录名（恢复时移回 root/{orig_dir_name}）
+    #[serde(default)]
+    pub orig_dir_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,6 +25,12 @@ pub struct ChapterMeta {
     pub word_count: i64,
     pub created_at: String,
     pub updated_at: String,
+    /// 软删时间（None = 未删除；Some 时 file_path 指向 {book}/.trash/ 内位置）
+    #[serde(default)]
+    pub deleted_at: Option<String>,
+    /// 软删前的原相对路径（恢复时移回）
+    #[serde(default)]
+    pub orig_file_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

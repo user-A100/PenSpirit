@@ -90,6 +90,8 @@ pub fn scan_library(root: &Path) -> AppResult<Vec<ScannedBook>> {
         let dir = entry.path();
         if !dir.is_dir() { continue; }
         let slug = entry.file_name().to_string_lossy().to_string();
+        // 隐藏目录一律排除：.trash_books（书级回收站）等库内工作目录不参与扫描
+        if slug.starts_with('.') { continue; }
         let title = fs::read_to_string(dir.join("book.json"))
             .ok()
             .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())

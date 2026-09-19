@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { BookOpen, FileText, PanelLeftClose, Plus, RotateCcw } from "lucide-react";
+import { BookOpen, FileText, PanelLeftClose, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
+import { TrashPanel } from "../sidebar/TrashPanel";
 import { useUiNav } from "../../lib/nav/uiStore";
 import { api } from "../../lib/tauri";
 
@@ -55,6 +56,7 @@ export function Sidebar() {
   const toggleSidebar = useUiNav((s) => s.toggleSidebar);
   const [newBook, setNewBook] = useState("");
   const [newChapter, setNewChapter] = useState("");
+  const [trashOpen, setTrashOpen] = useState(false);
 
   useEffect(() => { loadBooks(); }, [loadBooks]);
 
@@ -74,7 +76,20 @@ export function Sidebar() {
 
       {/* 书籍列表 */}
       <div className="shrink-0 border-b border-[color:var(--border-subtle)] px-2 py-3">
-        <div className="mb-1.5 px-2 text-xs text-[color:var(--text-faint)]">书籍</div>
+        {/* 头部行兼作回收站面板定位锚点（面板 absolute top-full）；按钮带 data-trash-toggle
+            供 TrashPanel 的点击外部关闭逻辑豁免，避免「开→关→再开」抖动 */}
+        <div className="relative mb-1.5 flex items-center px-2">
+          <span className="flex-1 text-xs text-[color:var(--text-faint)]">书籍</span>
+          <button
+            data-trash-toggle
+            onClick={() => setTrashOpen((v) => !v)}
+            title="回收站"
+            className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+          >
+            <Trash2 size={13} />
+          </button>
+          {trashOpen && <TrashPanel bookId={currentBookId} onClose={() => setTrashOpen(false)} />}
+        </div>
         {books.map((b) => {
           const active = currentBookId === b.id;
           return (

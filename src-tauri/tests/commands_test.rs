@@ -35,13 +35,17 @@ fn rename_moves_file() {
 }
 
 #[test]
-fn delete_removes_file_and_row() {
+fn delete_chapter_is_soft_delete_to_trash() {
     let (_tmp, s) = setup();
     let book = cmd::create_book_inner(&s, "书").unwrap();
     let ch = cmd::create_chapter_inner(&s, book.id, "一").unwrap();
     cmd::delete_chapter_inner(&s, ch.id).unwrap();
+    // M2-T6：删除 = 软删，原文件移入 {book}/.trash/，章节列表过滤
     assert!(!s.root.join(&ch.file_path).exists());
+    let file_name = ch.file_path.rsplit('/').next().unwrap();
+    assert!(s.root.join(format!("{}/.trash/{}", book.slug, file_name)).exists());
     assert!(cmd::list_chapters_inner(&s, book.id).unwrap().is_empty());
+    assert!(cmd::read_chapter_inner(&s, ch.id).is_ok(), "行保留，回收站可读");
 }
 
 #[test]

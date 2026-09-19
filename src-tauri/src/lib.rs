@@ -9,6 +9,7 @@ pub mod llm;
 pub mod models;
 pub mod repo;
 pub mod state;
+pub mod trash;
 pub mod util;
 
 use tauri::Manager;
@@ -40,6 +41,13 @@ pub fn run() {
             commands::read_chapter,
             commands::write_chapter,
             commands::rescan_library,
+            commands::list_trash,
+            commands::restore_chapter,
+            commands::purge_chapter,
+            commands::empty_trash,
+            commands::list_trash_books,
+            commands::restore_book,
+            commands::purge_book,
             commands_ai::list_providers,
             commands_ai::save_provider,
             commands_ai::delete_provider,

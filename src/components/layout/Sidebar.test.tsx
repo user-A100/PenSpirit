@@ -1,7 +1,20 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { Sidebar } from "./Sidebar";
 import { useWorkspace } from "../../stores/workspace";
+
+vi.mock("../../lib/tauri", () => ({
+  api: { listBooks: vi.fn().mockResolvedValue([]), rescanLibrary: vi.fn().mockResolvedValue(0) },
+}));
+
+vi.mock("../../lib/tauri_trash", () => ({
+  trashApi: {
+    listTrash: vi.fn().mockResolvedValue([]),
+    restoreChapter: vi.fn().mockResolvedValue(undefined),
+    purgeChapter: vi.fn().mockResolvedValue(undefined),
+    emptyTrash: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 
 describe("Sidebar", () => {
   it("显示书籍与章节", () => {
@@ -13,5 +26,18 @@ describe("Sidebar", () => {
     render(<Sidebar />);
     expect(screen.getByText("红楼梦")).toBeInTheDocument();
     expect(screen.getByText("初见")).toBeInTheDocument();
+  });
+
+  it("回收站按钮开关 TrashPanel（M2-T6 入口接线）", async () => {
+    useWorkspace.setState({ books: [], chapters: [], currentBookId: 1, currentChapterId: null, chapterContent: null });
+    render(<Sidebar />);
+    expect(screen.queryByText("回收站是空的")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle("回收站"));
+    expect(await screen.findByText("回收站是空的")).toBeInTheDocument();
+
+    // 再次点击收起（按钮带 data-trash-toggle，面板的点击外部关闭不会抢跑）
+    fireEvent.click(screen.getByTitle("回收站"));
+    expect(screen.queryByText("回收站是空的")).not.toBeInTheDocument();
   });
 });

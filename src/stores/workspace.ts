@@ -11,6 +11,8 @@ interface WorkspaceState {
   createBook: (title: string) => Promise<void>;
   createChapter: (title: string) => Promise<void>;
   selectChapter: (id: number) => Promise<void>;
+  /** 重取当前书章节列表（不动选中章），回收站恢复后刷新用 */
+  reloadChapters: () => Promise<void>;
 }
 
 export const useWorkspace = create<WorkspaceState>((set, get) => ({
@@ -39,5 +41,10 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     set({ currentChapterId: id });
     const full = await api.readChapter(id);
     set({ chapterContent: full.content });
+  },
+  reloadChapters: async () => {
+    const bookId = get().currentBookId;
+    if (bookId == null) return;
+    set({ chapters: await api.listChapters(bookId) });
   },
 }));

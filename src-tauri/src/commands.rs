@@ -5,9 +5,10 @@ use crate::fs_service;
 use crate::models::{Book, ChapterContent, ChapterMeta};
 use crate::repo;
 use crate::state::AppState;
+use crate::trash;
 use crate::util::count_words;
 
-fn lock(s: &AppState) -> AppResult<std::sync::MutexGuard<'_, rusqlite::Connection>> {
+pub(crate) fn lock(s: &AppState) -> AppResult<std::sync::MutexGuard<'_, rusqlite::Connection>> {
     s.db.lock().map_err(|_| AppError::LockPoisoned)
 }
 
@@ -30,10 +31,9 @@ pub fn create_book_inner(s: &AppState, title: &str) -> AppResult<Book> {
     Ok(book)
 }
 
+/// 删除书 = 软删：目录移入 .trash_books/，行标 deleted_at（M2-T6）
 pub fn delete_book_inner(s: &AppState, id: i64) -> AppResult<()> {
-    let book = lock(s).and_then(|conn| repo::books::get(&*conn, id))?;
-    fs_service::delete_rel(&s.root, &book.slug)?;
-    lock(s).and_then(|conn| repo::books::delete(&*conn, id))
+    trash::soft_delete_book_inner(s, id)
 }
 
 pub fn list_chapters_inner(s: &AppState, book_id: i64) -> AppResult<Vec<ChapterMeta>> {
@@ -88,10 +88,9 @@ pub fn rename_chapter_inner(s: &AppState, id: i64, new_title: &str) -> AppResult
     lock(s).and_then(|conn| repo::chapters::rename(&*conn, id, new_title, &new_rel))
 }
 
+/// 删除章 = 软删：md 移入 {book}/.trash/，行标 deleted_at（M2-T6）
 pub fn delete_chapter_inner(s: &AppState, id: i64) -> AppResult<()> {
-    let rel = lock(s).and_then(|conn| repo::chapters::get(&*conn, id))?.file_path;
-    fs_service::delete_rel(&s.root, &rel)?;
-    lock(s).and_then(|conn| repo::chapters::delete(&*conn, id))
+    trash::soft_delete_chapter_inner(s, id)
 }
 
 pub fn read_chapter_inner(s: &AppState, id: i64) -> AppResult<ChapterContent> {
@@ -196,4 +195,41 @@ pub fn write_chapter(s: State<AppState>, id: i64, content: String) -> AppResult<
 #[tauri::command]
 pub fn rescan_library(s: State<AppState>) -> AppResult<i64> {
     rescan_library_inner(&s)
+}
+
+// ---- M2-T6 回收站（inner 实现在 trash.rs） ----
+
+#[tauri::command]
+pub fn list_trash(s: State<AppState>, book_id: i64) -> AppResult<Vec<ChapterMeta>> {
+    trash::list_trash_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn restore_chapter(s: State<AppState>, id: i64) -> AppResult<()> {
+    trash::restore_chapter_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn purge_chapter(s: State<AppState>, id: i64) -> AppResult<()> {
+    trash::purge_chapter_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn empty_trash(s: State<AppState>, book_id: i64) -> AppResult<()> {
+    trash::empty_trash_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn list_trash_books(s: State<AppState>) -> AppResult<Vec<Book>> {
+    trash::list_trash_books_inner(&s)
+}
+
+#[tauri::command]
+pub fn restore_book(s: State<AppState>, id: i64) -> AppResult<()> {
+    trash::restore_book_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn purge_book(s: State<AppState>, id: i64) -> AppResult<()> {
+    trash::purge_book_inner(&s, id)
 }
