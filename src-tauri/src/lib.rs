@@ -1,7 +1,9 @@
 pub mod db;
 pub mod error;
+pub mod fs_service;
 pub mod models;
 pub mod repo;
+pub mod util;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
