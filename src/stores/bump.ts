@@ -35,6 +35,8 @@ interface BumpState {
   error: string | null;
   load: () => Promise<void>;
   addWord: (word: string) => Promise<void>;
+  /** M3-T8 批量加词：过滤词库已有后逐条入库，最后一次 load 刷新 */
+  addWords: (list: string[]) => Promise<void>;
   removeWord: (id: number) => Promise<void>;
   clearWords: () => Promise<void>;
   draw: () => Promise<void>;
@@ -68,6 +70,19 @@ export const useBump = create<BumpState>((set, get) => ({
     try {
       await api.bumpAddWord(word);
       set({ words: await api.bumpListWords(), error: null });
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  addWords: async (list) => {
+    if (list.length === 0) return;
+    const existing = new Set(get().words.map((w) => w.word));
+    const fresh = list.filter((w) => !existing.has(w));
+    if (fresh.length === 0) return;
+    try {
+      await Promise.all(fresh.map((w) => api.bumpAddWord(w)));
+      await get().load();
     } catch (e) {
       set({ error: String(e) });
     }
