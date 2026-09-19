@@ -3,7 +3,7 @@ import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { Sidebar } from "../components/layout/Sidebar";
 import { EditorPane } from "../components/editor/EditorPane";
 import { PanelDock } from "../components/layout/PanelDock";
-import { loadSidebarPct, saveSidebarPct, useUiNav } from "../lib/nav/uiStore";
+import { loadDockPct, loadSidebarPct, saveDockPct, saveSidebarPct, useUiNav } from "../lib/nav/uiStore";
 
 // 写作视图：三栏（侧栏/编辑器/右侧 dock）。原 AppShell 的 Group 迁入于此。
 // react-resizable-panels v4 用法约束（实测得出，必须保留）：
@@ -15,6 +15,10 @@ import { loadSidebarPct, saveSidebarPct, useUiNav } from "../lib/nav/uiStore";
 //    勿硬改 defaultLayout——折叠态布局归一化由库处理。
 const SIDEBAR_MIN = 14;
 const SIDEBAR_MAX = 28;
+const DOCK_MIN = 17;
+const DOCK_MAX = 34;
+/** 无记忆时的恢复宽度：sidebar 默认 20 时 rest*0.3 = 24 */
+const DOCK_DEFAULT_PCT = 24;
 const ANIM_MS = 200;
 
 function clampSidebarPct(pct: number | null): number {
@@ -22,11 +26,18 @@ function clampSidebarPct(pct: number | null): number {
   return Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, pct));
 }
 
+function clampDockPct(pct: number | null): number {
+  if (pct == null) return DOCK_DEFAULT_PCT;
+  return Math.min(DOCK_MAX, Math.max(DOCK_MIN, pct));
+}
+
 export function WriteView() {
   const collapsed = useUiNav((s) => s.sidebarCollapsed);
+  const dockCollapsed = useUiNav((s) => s.dockCollapsed);
   // WriteView 常挂保状态，但只在可见时同步面板命令式状态（display:none 下测量不可靠）
   const viewActive = useUiNav((s) => s.activeView === "write");
   const sidebarRef = usePanelRef();
+  const dockRef = usePanelRef();
   const groupElRef = useRef<HTMLDivElement | null>(null);
   const animTimer = useRef<number | undefined>(undefined);
 
@@ -50,7 +61,7 @@ export function WriteView() {
 
   useEffect(() => () => window.clearTimeout(animTimer.current), []);
 
-  // 命令式折叠/展开（含隐藏期间切过状态、回到本视图时的补同步）
+  // 命令式折叠/展开（含隐藏期间切过状态、回到本视图时的补同步）——dock 与 sidebar 同手法
   useEffect(() => {
     if (!viewActive) return;
     const panel = sidebarRef.current;
@@ -59,6 +70,15 @@ export function WriteView() {
     if (collapsed) panel.collapse();
     else panel.resize(clampSidebarPct(loadSidebarPct()));
   }, [collapsed, viewActive, animateRail, sidebarRef]);
+
+  useEffect(() => {
+    if (!viewActive) return;
+    const panel = dockRef.current;
+    if (!panel || panel.isCollapsed() === dockCollapsed) return;
+    animateRail();
+    if (dockCollapsed) panel.collapse();
+    else panel.resize(clampDockPct(loadDockPct()));
+  }, [dockCollapsed, viewActive, animateRail, dockRef]);
 
   return (
     <Group
@@ -103,15 +123,38 @@ export function WriteView() {
       <Panel id="editor" defaultSize={String(initialLayout.editor)} minSize="30">
         <EditorPane />
       </Panel>
-      <Separator className="w-1 bg-transparent transition-colors duration-150 hover:bg-[var(--accent-dim)]" />
+      {!dockCollapsed && (
+        <Separator className="w-1 bg-transparent transition-colors duration-150 hover:bg-[var(--accent-dim)]" />
+      )}
       <Panel
         id="dock"
+        panelRef={dockRef}
         defaultSize={String(initialLayout.dock)}
-        minSize="17"
-        maxSize="34"
-        className="border-l border-[color:var(--border-subtle)]"
+        minSize={String(DOCK_MIN)}
+        maxSize={String(DOCK_MAX)}
+        collapsible
+        collapsedSize="0"
+        onResize={(size, _id, prev) => {
+          if (prev === undefined) return; // 首帧不记忆
+          const pct = size.asPercentage;
+          if (pct <= 1) {
+            // 拖过 minSize 被 v4 吸附折叠：单向同步 store（宽度 0 不记忆）
+            if (!useUiNav.getState().dockCollapsed) {
+              useUiNav.setState({ dockCollapsed: true });
+            }
+            return;
+          }
+          // 从折叠拖出：单向同步 store 为展开
+          if (useUiNav.getState().dockCollapsed) {
+            useUiNav.setState({ dockCollapsed: false });
+          }
+          // 程序性恢复宽度（补间中）不重复记忆；用户拖动的宽度落 localStorage
+          if (groupElRef.current?.hasAttribute("data-rail-animating")) return;
+          saveDockPct(pct);
+        }}
+        className={dockCollapsed ? "" : "border-l border-[color:var(--border-subtle)]"}
       >
-        <PanelDock />
+        {!dockCollapsed && <PanelDock />}
       </Panel>
     </Group>
   );

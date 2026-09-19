@@ -12,6 +12,7 @@ import { ThemeProvider } from "./themes/ThemeProvider";
 export default function App() {
   const activeView = useUiNav((s) => s.activeView);
   const toggleSidebar = useUiNav((s) => s.toggleSidebar);
+  const toggleDock = useUiNav((s) => s.toggleDock);
   const openSearch = useSearch((s) => s.openPanel);
 
   // 双保险：registry 加载时已自愈无效视图 id，这里防御运行期脏值
@@ -28,6 +29,18 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleSidebar]);
+
+  // Ctrl+\ 折叠/展开右侧 dock（与 Ctrl+B 侧栏并排）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key === "\\") {
+        e.preventDefault();
+        toggleDock();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleDock]);
 
   // Ctrl+Shift+F 全书搜索（与 Ribbon 无关的全局快捷键）
   useEffect(() => {

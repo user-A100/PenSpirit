@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  loadDockPct,
   loadSidebarPct,
+  saveDockPct,
   saveSidebarPct,
+  DOCK_PCT_KEY,
   SIDEBAR_PCT_KEY,
   useUiNav,
   VIEW_STORAGE_KEY,
@@ -16,13 +19,14 @@ async function freshStore() {
 describe("uiNav store", () => {
   beforeEach(() => {
     localStorage.clear();
-    useUiNav.setState({ activeView: "write", sidebarCollapsed: false });
+    useUiNav.setState({ activeView: "write", sidebarCollapsed: false, dockCollapsed: false });
   });
 
-  it("无持久化时初值为写作视图、侧栏展开", async () => {
+  it("无持久化时初值为写作视图、侧栏与 dock 展开", async () => {
     const { useUiNav: fresh } = await freshStore();
     expect(fresh.getState().activeView).toBe("write");
     expect(fresh.getState().sidebarCollapsed).toBe(false);
+    expect(fresh.getState().dockCollapsed).toBe(false);
   });
 
   it("存储值为空串（无效）时回退 write", async () => {
@@ -62,6 +66,34 @@ describe("uiNav store", () => {
     expect(useUiNav.getState().sidebarCollapsed).toBe(true);
     useUiNav.getState().toggleSidebar();
     expect(useUiNav.getState().sidebarCollapsed).toBe(false);
+  });
+
+  it("toggleDock 翻转 dock 折叠状态", () => {
+    expect(useUiNav.getState().dockCollapsed).toBe(false);
+    useUiNav.getState().toggleDock();
+    expect(useUiNav.getState().dockCollapsed).toBe(true);
+    useUiNav.getState().toggleDock();
+    expect(useUiNav.getState().dockCollapsed).toBe(false);
+  });
+
+  it("dockPct 记忆：存取往返、非法值返回 null", () => {
+    expect(loadDockPct()).toBeNull();
+
+    saveDockPct(24);
+    expect(loadDockPct()).toBe(24);
+
+    localStorage.setItem(DOCK_PCT_KEY, "abc");
+    expect(loadDockPct()).toBeNull();
+
+    // 有效域 17-34 开区间：折叠态 0 与 min/max 边界值均不作为宽度恢复
+    localStorage.setItem(DOCK_PCT_KEY, "0");
+    expect(loadDockPct()).toBeNull();
+
+    localStorage.setItem(DOCK_PCT_KEY, "17");
+    expect(loadDockPct()).toBeNull();
+
+    localStorage.setItem(DOCK_PCT_KEY, "34");
+    expect(loadDockPct()).toBeNull();
   });
 
   it("sidebarPct 记忆：存取往返、非法值返回 null", () => {

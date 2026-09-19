@@ -1,4 +1,5 @@
 import { useState, type ComponentType } from "react";
+import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { StylePanel } from "../styles/StylePanel";
 import { getView } from "../../lib/nav/registry";
 import { useUiNav } from "../../lib/nav/uiStore";
@@ -19,6 +20,8 @@ const PANEL_COMPONENTS: Record<string, ComponentType> = {
 
 export function PanelDock() {
   const activeView = useUiNav((s) => s.activeView);
+  const dockCollapsed = useUiNav((s) => s.dockCollapsed);
+  const toggleDock = useUiNav((s) => s.toggleDock);
   const panels = getView(activeView)?.dockPanels ?? [];
   const [tab, setTab] = useState<string>(() => panels[0]?.id ?? "");
   const activePanel = panels.find((p) => p.id === tab) ?? panels[0];
@@ -57,6 +60,14 @@ export function PanelDock() {
             </button>
           );
         })}
+        {/* 折叠入口（同 Sidebar 的 PanelLeftClose 手法；展开走 Ctrl+\ 或拖出） */}
+        <button
+          onClick={toggleDock}
+          title={dockCollapsed ? "展开右侧面板（Ctrl+\\）" : "折叠右侧面板（Ctrl+\\）"}
+          className="flex shrink-0 items-center justify-center px-2 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
+        >
+          {dockCollapsed ? <PanelRightOpen size={15} /> : <PanelRightClose size={15} />}
+        </button>
       </div>
 
       {/* 已实现标签渲染真实面板；其余空态：大图标 + 功能名 + 一句说明 */}

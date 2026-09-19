@@ -4,6 +4,11 @@ import { create } from "zustand";
 // 避免 registry ↔ 视图组件 ↔ uiStore 的循环引用。
 export const VIEW_STORAGE_KEY = "bixian.nav.view";
 export const SIDEBAR_PCT_KEY = "bixian.nav.sidebarPct";
+export const DOCK_PCT_KEY = "bixian.nav.dockPct";
+
+/** dock 面板宽度百分比有效域（与 WriteView 中 minSize/maxSize 对应） */
+const DOCK_PCT_MIN = 17;
+const DOCK_PCT_MAX = 34;
 
 const FALLBACK_VIEW = "write";
 
@@ -12,8 +17,11 @@ interface UiNavState {
   activeView: string;
   /** 侧栏折叠态（会话内状态，不持久化——重启始终展开） */
   sidebarCollapsed: boolean;
+  /** 右侧 dock 折叠态（会话内状态，不持久化——重启始终展开） */
+  dockCollapsed: boolean;
   setView: (id: string) => void;
   toggleSidebar: () => void;
+  toggleDock: () => void;
 }
 
 function readStoredView(): string {
@@ -29,6 +37,7 @@ function readStoredView(): string {
 export const useUiNav = create<UiNavState>((set) => ({
   activeView: readStoredView(),
   sidebarCollapsed: false,
+  dockCollapsed: false,
   setView: (id) => {
     try {
       localStorage.setItem(VIEW_STORAGE_KEY, id);
@@ -38,6 +47,7 @@ export const useUiNav = create<UiNavState>((set) => ({
     set({ activeView: id });
   },
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  toggleDock: () => set((s) => ({ dockCollapsed: !s.dockCollapsed })),
 }));
 
 /** 读取用户拖定的侧栏宽度百分比；无记忆/非法值/折叠态 0 返回 null */
@@ -55,6 +65,26 @@ export function loadSidebarPct(): number | null {
 export function saveSidebarPct(pct: number): void {
   try {
     localStorage.setItem(SIDEBAR_PCT_KEY, String(pct));
+  } catch {
+    // 持久化失败静默
+  }
+}
+
+/** 读取用户拖定的右侧 dock 宽度百分比；无记忆/非法值（含 17/34 边界与折叠态 0）返回 null */
+export function loadDockPct(): number | null {
+  try {
+    const raw = localStorage.getItem(DOCK_PCT_KEY);
+    const n = raw == null ? NaN : Number(raw);
+    if (Number.isFinite(n) && n > DOCK_PCT_MIN && n < DOCK_PCT_MAX) return n;
+  } catch {
+    // localStorage 不可用
+  }
+  return null;
+}
+
+export function saveDockPct(pct: number): void {
+  try {
+    localStorage.setItem(DOCK_PCT_KEY, String(pct));
   } catch {
     // 持久化失败静默
   }
