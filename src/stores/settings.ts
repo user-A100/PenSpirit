@@ -21,13 +21,13 @@ export const useSettings = create<SettingsState>((set, get) => ({
   error: null,
   load: async () => {
     try {
-      const providers = await api.listProviders();
-      // Rust 侧未暴露 active 查询命令：激活态为前端会话内存态，失效时回落为无激活
-      const cur = get().activeProviderId;
+      // 列表与激活态并发读；激活态以落库值为准（修 T5 遗留：重启后看不到哪个在用），
+      // 后端返回的 id 已不存在时回落为无激活
+      const [providers, active] = await Promise.all([api.listProviders(), api.getActiveProvider()]);
       set({
         providers,
         error: null,
-        activeProviderId: cur != null && providers.some((p) => p.id === cur) ? cur : null,
+        activeProviderId: active != null && providers.some((p) => p.id === active) ? active : null,
       });
     } catch (e) {
       set({ error: String(e) });

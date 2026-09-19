@@ -28,6 +28,7 @@ export const api = {
   saveProvider: (p: ProviderProfile) => invoke<ProviderProfile>("save_provider", { p }),
   deleteProvider: (id: number) => invoke<void>("delete_provider", { id }),
   setActiveProvider: (id: number) => invoke<void>("set_active_provider", { id }),
+  getActiveProvider: () => invoke<number | null>("get_active_provider"),
   listStyles: () => invoke<StyleCard[]>("list_styles"),
   saveStyle: (id: number, name: string, promptMd: string, sampleMd: string, tags: string) =>
     invoke<StyleCard>("save_style", { id, name, promptMd, sampleMd, tags }),
