@@ -8,6 +8,7 @@ pub mod fs_service;
 pub mod history;
 pub mod llm;
 pub mod models;
+pub mod porting;
 pub mod repo;
 pub mod state;
 pub mod trash;
@@ -25,6 +26,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             app.manage(state::AppState::init(&dir)?);
@@ -52,6 +54,10 @@ pub fn run() {
             commands::list_history,
             commands::read_history,
             commands::snapshot_now,
+            commands::preview_import,
+            commands::import_chapters,
+            commands::export_txt,
+            commands::export_docx,
             commands_ai::list_providers,
             commands_ai::save_provider,
             commands_ai::delete_provider,

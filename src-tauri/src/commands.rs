@@ -4,6 +4,7 @@ use crate::error::{AppError, AppResult};
 use crate::fs_service;
 use crate::history;
 use crate::models::{Book, ChapterContent, ChapterMeta};
+use crate::porting;
 use crate::repo;
 use crate::state::AppState;
 use crate::trash;
@@ -313,4 +314,55 @@ pub fn read_history(s: State<AppState>, chapter_id: i64, file: String) -> AppRes
 #[tauri::command]
 pub fn snapshot_now(s: State<AppState>, chapter_id: i64, content: String) -> AppResult<bool> {
     snapshot_now_inner(&s, chapter_id, &content)
+}
+
+// ---- M2-T8 导入导出（实现在 porting/） ----
+
+/// 读文件并分章预览（.docx 走 docx 解析，其余按编码检测后分章）；只读不落库
+#[tauri::command]
+pub fn preview_import(path: String) -> AppResult<Vec<porting::import::ParsedChapter>> {
+    porting::import::preview_import_inner(std::path::Path::new(&path))
+}
+
+/// 把预览中勾选的章批量落库（标题 + 正文建章、写 md、统计字数）
+#[tauri::command]
+pub fn import_chapters(
+    s: State<AppState>,
+    book_id: i64,
+    chapters: Vec<porting::import::ParsedChapter>,
+) -> AppResult<porting::import::ImportReport> {
+    porting::import::import_chapters_inner(&s, book_id, &chapters)
+}
+
+/// 导出纯文本；`chapter_ids` 为空表示全书，`dest` 为目标文件路径
+#[tauri::command]
+pub fn export_txt(
+    s: State<AppState>,
+    book_id: i64,
+    chapter_ids: Vec<i64>,
+    indent: bool,
+    dest: String,
+) -> AppResult<()> {
+    porting::export::export_txt_inner(
+        &s,
+        book_id,
+        &porting::export::ExportRange { chapter_ids },
+        indent,
+        std::path::Path::new(&dest),
+    )
+}
+
+#[tauri::command]
+pub fn export_docx(
+    s: State<AppState>,
+    book_id: i64,
+    chapter_ids: Vec<i64>,
+    dest: String,
+) -> AppResult<()> {
+    porting::export::export_docx_inner(
+        &s,
+        book_id,
+        &porting::export::ExportRange { chapter_ids },
+        std::path::Path::new(&dest),
+    )
 }

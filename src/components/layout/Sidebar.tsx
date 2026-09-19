@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { BookOpen, FileText, PanelLeftClose, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { BookOpen, FileDown, FileText, FileUp, PanelLeftClose, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
 import { TrashPanel } from "../sidebar/TrashPanel";
+import { ImportWizard } from "../io/ImportWizard";
+import { ExportDialog } from "../io/ExportDialog";
 import { useUiNav } from "../../lib/nav/uiStore";
 import { api } from "../../lib/tauri";
 
@@ -52,11 +54,13 @@ function InlineInput(props: {
 }
 
 export function Sidebar() {
-  const { books, chapters, currentBookId, currentChapterId, loadBooks, selectBook, createBook, createChapter, selectChapter } = useWorkspace();
+  const { books, chapters, currentBookId, currentChapterId, loadBooks, selectBook, createBook, createChapter, selectChapter, reloadChapters } = useWorkspace();
   const toggleSidebar = useUiNav((s) => s.toggleSidebar);
   const [newBook, setNewBook] = useState("");
   const [newChapter, setNewChapter] = useState("");
   const [trashOpen, setTrashOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   useEffect(() => { loadBooks(); }, [loadBooks]);
 
@@ -80,6 +84,24 @@ export function Sidebar() {
             供 TrashPanel 的点击外部关闭逻辑豁免，避免「开→关→再开」抖动 */}
         <div className="relative mb-1.5 flex items-center px-2">
           <span className="flex-1 text-xs text-[color:var(--text-faint)]">书籍</span>
+          {currentBookId != null && (
+            <>
+              <button
+                onClick={() => setImportOpen(true)}
+                title="导入章节"
+                className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+              >
+                <FileUp size={13} />
+              </button>
+              <button
+                onClick={() => setExportOpen(true)}
+                title="导出全书"
+                className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+              >
+                <FileDown size={13} />
+              </button>
+            </>
+          )}
           <button
             data-trash-toggle
             onClick={() => setTrashOpen((v) => !v)}
@@ -170,6 +192,22 @@ export function Sidebar() {
           重建索引
         </button>
       </div>
+
+      {importOpen && currentBookId != null && (
+        <ImportWizard
+          bookId={currentBookId}
+          onClose={() => setImportOpen(false)}
+          onImported={() => void reloadChapters()}
+        />
+      )}
+      {exportOpen && currentBookId != null && (
+        <ExportDialog
+          bookId={currentBookId}
+          bookTitle={books.find((b) => b.id === currentBookId)?.title ?? "导出"}
+          chapters={chapters}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
     </div>
   );
 }

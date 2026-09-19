@@ -29,6 +29,10 @@ export interface AcpTurnEvent { session_id: number; ok: boolean; content: string
 // ---- M2-T7：章节快照版本历史 ----
 export interface SnapshotInfo { file: string; ts: string; words: number; title: string }
 
+// ---- M2-T8：导入导出 ----
+export interface ParsedChapter { title: string; content: string; volume: string | null } // volume 仅用于预览分组，不落库
+export interface ImportReport { chapters: number; words: number }
+
 export const api = {
   listBooks: () => invoke<Book[]>("list_books"),
   createBook: (title: string) => invoke<Book>("create_book", { title }),
@@ -78,4 +82,13 @@ export const api = {
   readHistory: (chapterId: number, file: string) => invoke<string>("read_history", { chapterId, file }),
   // 恢复旧版前先补存当前编辑器内容（运行时传入，故防抖窗口内的输入也不丢）
   snapshotNow: (chapterId: number, content: string) => invoke<boolean>("snapshot_now", { chapterId, content }),
+  // ---- M2-T8：导入导出 ----
+  previewImport: (path: string) => invoke<ParsedChapter[]>("preview_import", { path }),
+  importChapters: (bookId: number, chapters: ParsedChapter[]) =>
+    invoke<ImportReport>("import_chapters", { bookId, chapters }),
+  // chapterIds 为空数组 = 导出全书；dest 由前端文件对话框给出
+  exportTxt: (bookId: number, chapterIds: number[], indent: boolean, dest: string) =>
+    invoke<void>("export_txt", { bookId, chapterIds, indent, dest }),
+  exportDocx: (bookId: number, chapterIds: number[], dest: string) =>
+    invoke<void>("export_docx", { bookId, chapterIds, dest }),
 };
