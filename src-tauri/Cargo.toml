@@ -34,6 +34,7 @@ chardetng = "1.0.0"
 encoding_rs = "0.8.41"
 docx-rs = "0.4.22"
 tauri-plugin-dialog = "2.7.3"
+aho-corasick = "1.1.5"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

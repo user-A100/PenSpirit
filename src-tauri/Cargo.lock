@@ -378,6 +378,7 @@ name = "bixian"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
+ "aho-corasick",
  "async-openai",
  "chardetng",
  "docx-rs",

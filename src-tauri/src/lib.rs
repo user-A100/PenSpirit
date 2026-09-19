@@ -12,7 +12,9 @@ pub mod models;
 pub mod porting;
 pub mod repo;
 pub mod search;
+pub mod sensitive;
 pub mod state;
+pub mod stats;
 pub mod trash;
 pub mod util;
 
@@ -69,6 +71,12 @@ pub fn run() {
             commands::ideas_list,
             commands::ideas_create,
             commands::ideas_delete,
+            commands::stats_add,
+            commands::stats_today,
+            commands::sensitive_get_words,
+            commands::sensitive_set_words,
+            commands::sensitive_scan,
+            commands::sensitive_import_words,
             commands_ai::list_providers,
             commands_ai::save_provider,
             commands_ai::delete_provider,

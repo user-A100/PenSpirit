@@ -3,14 +3,19 @@ import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef, useState } from "react";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { History, PenLine } from "lucide-react";
+import { History, PenLine, ScanSearch } from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
 import { useChat } from "../../stores/chat";
 import { useSearch } from "../../stores/search";
+import { localMinute, useStats } from "../../stores/stats";
 import { api } from "../../lib/tauri";
 import { useAutosave } from "../../hooks/useAutosave";
 import { countWords } from "../../lib/words";
 import { HistoryPanel } from "./HistoryPanel";
+import { SensitiveDialog } from "./SensitiveDialog";
+
+// 单次字数跳变超过它就丢弃：切章/恢复快照/清空这类程序化改动的特征
+const MAX_WORD_DELTA = 500;
 
 /** 在文档里找首个包含 needle 的文本区间（不跨文本节点，作为「跳到此行」的近似定位足够） */
 function findTextPos(doc: PMNode, needle: string): { from: number; to: number } | null {
@@ -31,7 +36,14 @@ export function ChapterEditor() {
   const dirty = useRef<string | null>(null);
   const chapterIdRef = useRef<number | null>(null);
   chapterIdRef.current = currentChapterId;
+  const bookIdRef = useRef<number | null>(null);
+  bookIdRef.current = currentBookId;
+  // 程序化改动（切章/恢复/AI 采纳）期间置位，其 transaction 不计入今日写作
+  const suppressStats = useRef(false);
+  // 上一次计入活跃的分钟串——同一分钟只记一次
+  const lastMinute = useRef<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [sensitiveOpen, setSensitiveOpen] = useState(false);
 
   const editor = useEditor({
     extensions: [StarterKit, Markdown],
@@ -40,11 +52,30 @@ export function ChapterEditor() {
     onUpdate: ({ editor: ed }) => {
       dirty.current = (ed.storage.markdown as { getMarkdown(): string }).getMarkdown();
     },
+    // M2-T11 差量统计：按字计（与章节字数同一口径），粘贴与程序化改动不计
+    onTransaction: ({ transaction: tr }) => {
+      if (!tr.docChanged || suppressStats.current) return;
+      // 粘贴整段不算"写"（ProseMirror 的粘贴处理器会打上 paste meta）
+      if (tr.getMeta("paste") || tr.getMeta("uiEvent") === "paste") return;
+      const bookId = bookIdRef.current;
+      if (bookId == null) return;
+      // tr.before 是（步骤应用前的）ProseMirror Node，tr.doc 是新的
+      const delta = countWords(tr.doc.textContent) - countWords(tr.before.textContent);
+      // 跳变过大 = 切章/恢复/清空等程序化改动（上一条是兜底，正常输入不会触及）
+      if (delta === 0 || Math.abs(delta) > MAX_WORD_DELTA) return;
+
+      const minute = localMinute();
+      const countMinute = lastMinute.current !== minute;
+      lastMinute.current = minute;
+      void useStats.getState().record(bookId, delta, countMinute);
+    },
   });
 
   useEffect(() => {
     if (editor && chapterContent != null) {
+      suppressStats.current = true;
       editor.commands.setContent(chapterContent);
+      suppressStats.current = false;
       dirty.current = null;
     }
   }, [currentChapterId, chapterContent, editor]);
@@ -66,10 +97,13 @@ export function ChapterEditor() {
   useEffect(() => {
     if (!editor || pendingAppend == null) return;
     const docEmpty = editor.state.doc.textContent.trim() === "";
+    // AI 采纳不计入今日手写字数
+    suppressStats.current = true;
     editor.commands.insertContentAt(
       editor.state.doc.content.size,
       docEmpty ? pendingAppend : `\n\n${pendingAppend}`,
     );
+    suppressStats.current = false;
     dirty.current = (editor.storage.markdown as { getMarkdown(): string }).getMarkdown();
     useChat.getState().clearPendingAppend();
   }, [pendingAppend, editor]);
@@ -90,7 +124,9 @@ export function ChapterEditor() {
   // 落盘交给上面的自动保存——与 AI 采纳路径同构。
   const restoreFromHistory = (content: string) => {
     if (!editor) return;
+    suppressStats.current = true;
     editor.commands.setContent(content);
+    suppressStats.current = false;
     dirty.current = (editor.storage.markdown as { getMarkdown(): string }).getMarkdown();
   };
 
@@ -128,6 +164,13 @@ export function ChapterEditor() {
           >
             <History size={14} />
           </button>
+          <button
+            onClick={() => setSensitiveOpen(true)}
+            title="敏感词检查"
+            className="rounded p-1 transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+          >
+            <ScanSearch size={14} />
+          </button>
           {status !== "idle" && (
             <span className="flex items-center gap-1.5">
               <span
@@ -154,6 +197,11 @@ export function ChapterEditor() {
           onRestore={restoreFromHistory}
           onClose={() => setHistoryOpen(false)}
         />
+      )}
+
+      {/* 打开时快照当前正文——弹层是模态的，期间不会有编辑 */}
+      {sensitiveOpen && (
+        <SensitiveDialog content={currentMarkdown()} onClose={() => setSensitiveOpen(false)} />
       )}
     </div>
   );

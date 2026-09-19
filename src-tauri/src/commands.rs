@@ -8,7 +8,9 @@ use crate::models::{Book, BumpWord, ChapterContent, ChapterMeta, Idea};
 use crate::porting;
 use crate::repo;
 use crate::search;
+use crate::sensitive;
 use crate::state::AppState;
+use crate::stats;
 use crate::trash;
 use crate::util::count_words;
 
@@ -427,4 +429,45 @@ pub fn ideas_create(
 #[tauri::command]
 pub fn ideas_delete(s: State<AppState>, id: i64) -> AppResult<()> {
     bump::delete_idea_inner(&s, id)
+}
+
+// ---- M2-T11 写作统计与敏感词（实现在 stats.rs / sensitive.rs） ----
+
+/// 累加当日写作字数；`count_minute` 为真时活跃分钟 +1（同一分钟只传一次）
+#[tauri::command]
+pub fn stats_add(
+    s: State<AppState>,
+    book_id: i64,
+    delta_words: i64,
+    count_minute: bool,
+) -> AppResult<()> {
+    stats::add_inner(&s, book_id, delta_words, count_minute)
+}
+
+#[tauri::command]
+pub fn stats_today(s: State<AppState>, book_id: i64) -> AppResult<stats::WritingStat> {
+    stats::today_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn sensitive_get_words(s: State<AppState>) -> AppResult<Vec<String>> {
+    sensitive::get_words_inner(&s)
+}
+
+/// 保存词库（一行一词；返回清洗去重后的结果）
+#[tauri::command]
+pub fn sensitive_set_words(s: State<AppState>, words: Vec<String>) -> AppResult<Vec<String>> {
+    sensitive::set_words_inner(&s, &words)
+}
+
+/// 用已存词库扫描正文（只报告，不改正文）
+#[tauri::command]
+pub fn sensitive_scan(s: State<AppState>, content: String) -> AppResult<Vec<sensitive::Hit>> {
+    sensitive::scan_inner(&s, &content)
+}
+
+/// 从 txt 导入词库（只解析返回，保存由用户确认）
+#[tauri::command]
+pub fn sensitive_import_words(path: String) -> AppResult<Vec<String>> {
+    sensitive::import_words_inner(std::path::Path::new(&path))
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BookOpen, FileDown, FileText, FileUp, PanelLeftClose, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
 import { TrashPanel } from "../sidebar/TrashPanel";
+import { StatsBadge } from "../sidebar/StatsBadge";
 import { ImportWizard } from "../io/ImportWizard";
 import { ExportDialog } from "../io/ExportDialog";
 import { useUiNav } from "../../lib/nav/uiStore";
@@ -177,8 +178,9 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* 底部：从磁盘重建索引 */}
+      {/* 底部：今日字数 + 从磁盘重建索引 */}
       <div className="shrink-0 border-t border-[color:var(--border-subtle)] p-2">
+        <StatsBadge />
         <button
           onClick={async () => {
             const n = await api.rescanLibrary();

@@ -46,6 +46,10 @@ export interface Idea {
   id: number; content: string; words_json: string; tags_json: string; created_at: string;
 }
 
+// ---- M2-T11：写作统计与敏感词 ----
+export interface WritingStat { date: string; book_id: number; words: number; active_minutes: number }
+export interface SensitiveHit { word: string; byte_start: number; context: string }
+
 export const api = {
   listBooks: () => invoke<Book[]>("list_books"),
   createBook: (title: string) => invoke<Book>("create_book", { title }),
@@ -117,4 +121,12 @@ export const api = {
   ideasCreate: (content: string, wordsJson: string, tagsJson: string) =>
     invoke<Idea>("ideas_create", { content, wordsJson, tagsJson }),
   ideasDelete: (id: number) => invoke<void>("ideas_delete", { id }),
+  // ---- M2-T11：写作统计与敏感词 ----
+  statsAdd: (bookId: number, deltaWords: number, countMinute: boolean) =>
+    invoke<void>("stats_add", { bookId, deltaWords, countMinute }),
+  statsToday: (bookId: number) => invoke<WritingStat>("stats_today", { bookId }),
+  sensitiveGetWords: () => invoke<string[]>("sensitive_get_words"),
+  sensitiveSetWords: (words: string[]) => invoke<string[]>("sensitive_set_words", { words }),
+  sensitiveScan: (content: string) => invoke<SensitiveHit[]>("sensitive_scan", { content }),
+  sensitiveImportWords: (path: string) => invoke<string[]>("sensitive_import_words", { path }),
 };
