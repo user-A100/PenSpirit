@@ -36,6 +36,13 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
+/* 侧边栏折叠/展开补间：react-resizable-panels v4 不做动画，
+   折叠期间由 JS 在 Group 根节点挂 data-rail-animating 属性，
+   面板 flexGrow 走 200ms 过渡（Agentero 同库零依赖手法），结束移除 */
+[data-rail-animating] * {
+  transition: flex-grow 200ms ease;
+}
+
 /* 编辑器正文：书卷气衬线排版，与 UI 的无衬线区分 */
 .prose-serif {
   font-family: Georgia, "Noto Serif SC", "Source Han Serif SC", serif;

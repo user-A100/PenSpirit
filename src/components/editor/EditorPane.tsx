@@ -3,7 +3,7 @@ import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { ChapterEditor } from "./ChapterEditor";
 import { AiDock } from "../chat/AiDock";
 
-// 垂直 PanelGroup：编辑器上、AI Dock 下。用法约束同 AppShell（v4 实测）：
+// 垂直 PanelGroup：编辑器上、AI Dock 下。用法约束同 WriteView（v4 实测）：
 // 显式 defaultLayout + Panel 显式 id + 无单位字符串（=百分比）尺寸。
 // AiDock 折叠走 Panel 原生 collapsible：collapsedSize=36px，collapse()/expand() 切换，
 // onResize 按像素判定折叠态驱动 AiDock 渲染完整面板或 36px 条。

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { BookOpen, FileText, Plus, RotateCcw, Settings } from "lucide-react";
+import { BookOpen, FileText, PanelLeftClose, Plus, RotateCcw } from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
-import { useSettings } from "../../stores/settings";
+import { useUiNav } from "../../lib/nav/uiStore";
 import { api } from "../../lib/tauri";
 
 // 列表行选中态：accent-dim 底 + 左侧 2px accent 竖条（无动画跳变，仅颜色过渡）
@@ -52,7 +52,7 @@ function InlineInput(props: {
 
 export function Sidebar() {
   const { books, chapters, currentBookId, currentChapterId, loadBooks, selectBook, createBook, createChapter, selectChapter } = useWorkspace();
-  const openSettings = useSettings((s) => s.open);
+  const toggleSidebar = useUiNav((s) => s.toggleSidebar);
   const [newBook, setNewBook] = useState("");
   const [newChapter, setNewChapter] = useState("");
 
@@ -60,15 +60,15 @@ export function Sidebar() {
 
   return (
     <div className="flex h-full flex-col bg-[var(--bg-panel)] text-sm">
-      {/* 顶部：应用标题 + 设置入口 */}
+      {/* 顶部：应用标题 + 折叠入口（设置入口已迁至 Ribbon 底部） */}
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-[color:var(--border-subtle)] pl-4 pr-2">
         <div className="text-[15px] font-semibold tracking-wide text-[color:var(--text-primary)]">笔仙</div>
         <button
-          onClick={openSettings}
-          title="设置"
+          onClick={toggleSidebar}
+          title="折叠侧栏（Ctrl+B）"
           className="rounded-md p-1.5 text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
         >
-          <Settings size={15} />
+          <PanelLeftClose size={15} />
         </button>
       </div>
 
