@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod bump;
 pub mod commands;
 pub mod commands_ai;
 pub mod context;
@@ -60,6 +61,14 @@ pub fn run() {
             commands::export_txt,
             commands::export_docx,
             commands::search_book,
+            commands::bump_list_words,
+            commands::bump_add_word,
+            commands::bump_delete_word,
+            commands::bump_clear_words,
+            commands::bump_draw,
+            commands::ideas_list,
+            commands::ideas_create,
+            commands::ideas_delete,
             commands_ai::list_providers,
             commands_ai::save_provider,
             commands_ai::delete_provider,

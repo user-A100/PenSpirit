@@ -156,3 +156,23 @@ pub struct AcpTurnEvent {
     pub content: Option<String>,
     pub error: Option<String>,
 }
+
+/// 碰碰车词库条目（M2-T10）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BumpWord {
+    pub id: i64,
+    pub word: String,
+    pub created_at: String,
+}
+
+/// 灵感卡（M2-T10；M5 素材系统直接复用）。
+/// `words_json` / `tags_json` 是 JSON 数组字符串，落库前由 bump.rs 规范化。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Idea {
+    pub id: i64,
+    /// 备注（可为空）
+    pub content: String,
+    pub words_json: String,
+    pub tags_json: String,
+    pub created_at: String,
+}

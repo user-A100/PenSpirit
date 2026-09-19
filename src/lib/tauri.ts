@@ -40,6 +40,12 @@ export interface SearchHit {
 }
 export interface SearchResult { hits: SearchHit[]; truncated: boolean }
 
+// ---- M2-T10：碰碰车（ideas 的 words_json/tags_json 是 JSON 数组字符串） ----
+export interface BumpWord { id: number; word: string; created_at: string }
+export interface Idea {
+  id: number; content: string; words_json: string; tags_json: string; created_at: string;
+}
+
 export const api = {
   listBooks: () => invoke<Book[]>("list_books"),
   createBook: (title: string) => invoke<Book>("create_book", { title }),
@@ -101,4 +107,14 @@ export const api = {
   // ---- M2-T9：全书搜索 ----
   searchBook: (bookId: number, query: string, wholeWord: boolean) =>
     invoke<SearchResult>("search_book", { bookId, query, wholeWord }),
+  // ---- M2-T10：碰碰车 ----
+  bumpListWords: () => invoke<BumpWord[]>("bump_list_words"),
+  bumpAddWord: (word: string) => invoke<BumpWord>("bump_add_word", { word }),
+  bumpDeleteWord: (id: number) => invoke<void>("bump_delete_word", { id }),
+  bumpClearWords: () => invoke<void>("bump_clear_words"),
+  bumpDraw: (count: number) => invoke<string[]>("bump_draw", { count }),
+  ideasList: () => invoke<Idea[]>("ideas_list"),
+  ideasCreate: (content: string, wordsJson: string, tagsJson: string) =>
+    invoke<Idea>("ideas_create", { content, wordsJson, tagsJson }),
+  ideasDelete: (id: number) => invoke<void>("ideas_delete", { id }),
 };

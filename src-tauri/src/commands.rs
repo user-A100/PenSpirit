@@ -1,9 +1,10 @@
 use tauri::State;
 
 use crate::error::{AppError, AppResult};
+use crate::bump;
 use crate::fs_service;
 use crate::history;
-use crate::models::{Book, ChapterContent, ChapterMeta};
+use crate::models::{Book, BumpWord, ChapterContent, ChapterMeta, Idea};
 use crate::porting;
 use crate::repo;
 use crate::search;
@@ -378,4 +379,52 @@ pub fn search_book(
     whole_word: bool,
 ) -> AppResult<search::SearchResult> {
     search::search_book_inner(&s, book_id, &query, whole_word)
+}
+
+// ---- M2-T10 碰碰车（实现在 bump.rs / repo/） ----
+
+#[tauri::command]
+pub fn bump_list_words(s: State<AppState>) -> AppResult<Vec<BumpWord>> {
+    bump::list_words_inner(&s)
+}
+
+#[tauri::command]
+pub fn bump_add_word(s: State<AppState>, word: String) -> AppResult<BumpWord> {
+    bump::add_word_inner(&s, &word)
+}
+
+#[tauri::command]
+pub fn bump_delete_word(s: State<AppState>, id: i64) -> AppResult<()> {
+    bump::delete_word_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn bump_clear_words(s: State<AppState>) -> AppResult<()> {
+    bump::clear_words_inner(&s)
+}
+
+/// 碰撞：随机抽 2-4 个词（种子取当前时间，见 bump.rs）
+#[tauri::command]
+pub fn bump_draw(s: State<AppState>, count: i64) -> AppResult<Vec<String>> {
+    bump::draw_inner(&s, count)
+}
+
+#[tauri::command]
+pub fn ideas_list(s: State<AppState>) -> AppResult<Vec<Idea>> {
+    bump::list_ideas_inner(&s)
+}
+
+#[tauri::command]
+pub fn ideas_create(
+    s: State<AppState>,
+    content: String,
+    words_json: String,
+    tags_json: String,
+) -> AppResult<Idea> {
+    bump::create_idea_inner(&s, &content, &words_json, &tags_json)
+}
+
+#[tauri::command]
+pub fn ideas_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    bump::delete_idea_inner(&s, id)
 }
