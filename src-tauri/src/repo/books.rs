@@ -12,10 +12,11 @@ fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Book> {
         updated_at: row.get(4)?,
         deleted_at: row.get(5)?,
         orig_dir_name: row.get(6)?,
+        target_words: row.get(7)?,
     })
 }
 
-const COLS: &str = "id, slug, title, created_at, updated_at, deleted_at, orig_dir_name";
+const COLS: &str = "id, slug, title, created_at, updated_at, deleted_at, orig_dir_name, target_words";
 
 pub fn list(conn: &Connection) -> AppResult<Vec<Book>> {
     let mut stmt = conn.prepare(&format!(
@@ -74,4 +75,16 @@ pub fn restore(conn: &Connection, id: i64, restore_slug: &str) -> AppResult<()> 
         params![id, restore_slug],
     )?;
     Ok(())
+}
+
+/// 设置/清空完本目标字数（None = 清空）；返回更新后的书（M3）
+pub fn set_target(conn: &Connection, id: i64, target_words: Option<i64>) -> AppResult<Book> {
+    let n = conn.execute(
+        "UPDATE books SET target_words = ?2, updated_at = datetime('now') WHERE id = ?1",
+        params![id, target_words],
+    )?;
+    if n == 0 {
+        return Err(AppError::NotFound(format!("书 #{id} 不存在")));
+    }
+    get(conn, id)
 }

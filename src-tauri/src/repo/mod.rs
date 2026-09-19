@@ -1,6 +1,7 @@
 pub mod books;
 pub mod bump;
 pub mod chapters;
+pub mod foreshadows;
 pub mod ideas;
 pub mod sessions;
 pub mod settings;

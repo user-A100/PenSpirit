@@ -19,7 +19,7 @@ vi.mock("../../lib/tauri_trash", () => ({
 describe("Sidebar", () => {
   it("显示书籍与章节", () => {
     useWorkspace.setState({
-      books: [{ id: 1, slug: "shu", title: "红楼梦", created_at: "", updated_at: "" }],
+      books: [{ id: 1, slug: "shu", title: "红楼梦", created_at: "", updated_at: "", target_words: null }],
       chapters: [{ id: 11, book_id: 1, file_path: "", title: "初见", sort_key: 1, word_count: 0, created_at: "", updated_at: "" }],
       currentBookId: 1,
     });

@@ -13,6 +13,9 @@ pub struct Book {
     /// 软删前的原目录名（恢复时移回 root/{orig_dir_name}）
     #[serde(default)]
     pub orig_dir_name: Option<String>,
+    /// 完本目标字数（None = 未设置，M3）
+    #[serde(default)]
+    pub target_words: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -175,4 +178,43 @@ pub struct Idea {
     pub words_json: String,
     pub tags_json: String,
     pub created_at: String,
+}
+
+// ---------- M3-T1 伏笔与按日统计 ----------
+
+/// 伏笔登记（foreshadows 表；planted/target 章的序号由前端按章节列表序解析，
+/// 章软删后引用仍保留——前端以 -1 特判显示「章已删」）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Foreshadow {
+    pub id: i64,
+    pub book_id: i64,
+    pub title: String,
+    pub planted_chapter_id: i64,
+    /// 计划回收章（None = 未定）
+    pub target_chapter_id: Option<i64>,
+    /// active | resolved | dropped
+    pub status: String,
+    pub note: String,
+    pub created_at: String,
+    /// 实际回收章（仅 resolved 时有值）
+    pub resolved_chapter_id: Option<i64>,
+}
+
+/// 伏笔登记入参：id=None 插入，Some 更新（book_id 以首次登记为准，更新不改属主）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForeshadowInput {
+    pub id: Option<i64>,
+    pub book_id: i64,
+    pub title: String,
+    pub planted_chapter_id: i64,
+    pub target_chapter_id: Option<i64>,
+    pub note: String,
+}
+
+/// 按日聚合统计（stats_range；书维度已 SUM 掉）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DailyStat {
+    pub date: String,
+    pub words: i64,
+    pub active_minutes: i64,
 }

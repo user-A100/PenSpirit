@@ -9,6 +9,7 @@ use serde::Serialize;
 
 use crate::commands::lock;
 use crate::error::AppResult;
+use crate::models::DailyStat;
 use crate::state::AppState;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -58,4 +59,34 @@ pub fn today_inner(s: &AppState, book_id: i64) -> AppResult<WritingStat> {
         }),
         Err(e) => Err(e.into()),
     }
+}
+
+/// 近 N 天按日聚合（M3）：book_id=None 跨书 SUM，Some 只统计该书。
+/// days 窗口起点在 SQL 里用 printf('-%d days', ?1) 拼进 date('now','localtime',…)
+/// 比较，ORDER BY date ASC 方便图表直接消费。
+pub fn range_inner(s: &AppState, days: u32, book_id: Option<i64>) -> AppResult<Vec<DailyStat>> {
+    let conn = lock(s)?;
+    let sql = format!(
+        "SELECT date, SUM(words), SUM(active_minutes) FROM writing_stats
+         WHERE date >= date('now','localtime', printf('-%d days', ?1)){}
+         GROUP BY date ORDER BY date ASC",
+        match book_id {
+            None => String::new(),
+            Some(_) => " AND book_id = ?2".to_string(),
+        }
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = match book_id {
+        None => stmt.query_map(params![days], from_stat_row)?,
+        Some(bid) => stmt.query_map(params![days, bid], from_stat_row)?,
+    };
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+fn from_stat_row(row: &rusqlite::Row) -> rusqlite::Result<DailyStat> {
+    Ok(DailyStat {
+        date: row.get(0)?,
+        words: row.get(1)?,
+        active_minutes: row.get(2)?,
+    })
 }

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export interface Book { id: number; slug: string; title: string; created_at: string; updated_at: string }
+export interface Book { id: number; slug: string; title: string; created_at: string; updated_at: string; target_words: number | null }
 export interface ChapterMeta { id: number; book_id: number; file_path: string; title: string; sort_key: number; word_count: number; created_at: string; updated_at: string }
 export interface ChapterContent { meta: ChapterMeta; content: string }
 
@@ -49,6 +49,18 @@ export interface Idea {
 // ---- M2-T11：写作统计与敏感词 ----
 export interface WritingStat { date: string; book_id: number; words: number; active_minutes: number }
 export interface SensitiveHit { word: string; byte_start: number; context: string }
+
+// ---- M3-T1：伏笔 / 按日聚合统计（settings 为通用 KV，阅读进度等也走这里） ----
+export interface Foreshadow {
+  id: number; book_id: number; title: string;
+  planted_chapter_id: number; target_chapter_id: number | null;
+  status: string; note: string; created_at: string; resolved_chapter_id: number | null;
+}
+export interface ForeshadowInput {
+  id: number | null; book_id: number; title: string;
+  planted_chapter_id: number; target_chapter_id: number | null; note: string;
+}
+export interface DailyStat { date: string; words: number; active_minutes: number }
 
 export const api = {
   listBooks: () => invoke<Book[]>("list_books"),
@@ -129,4 +141,16 @@ export const api = {
   sensitiveSetWords: (words: string[]) => invoke<string[]>("sensitive_set_words", { words }),
   sensitiveScan: (content: string) => invoke<SensitiveHit[]>("sensitive_scan", { content }),
   sensitiveImportWords: (path: string) => invoke<string[]>("sensitive_import_words", { path }),
+  // ---- M3-T1：通用设置 KV / 按日统计 / 完本目标 / 伏笔 ----
+  settingGet: (key: string) => invoke<string | null>("setting_get", { key }),
+  settingSet: (key: string, value: string) => invoke<void>("setting_set", { key, value }),
+  statsRange: (days: number, bookId: number | null) =>
+    invoke<DailyStat[]>("stats_range", { days, bookId }),
+  booksSetTarget: (bookId: number, targetWords: number | null) =>
+    invoke<Book>("books_set_target", { bookId, targetWords }),
+  foreshadowsList: (bookId: number) => invoke<Foreshadow[]>("foreshadows_list", { bookId }),
+  foreshadowUpsert: (input: ForeshadowInput) => invoke<Foreshadow>("foreshadow_upsert", { input }),
+  foreshadowSetStatus: (id: number, status: string, resolvedChapterId: number | null) =>
+    invoke<Foreshadow>("foreshadow_set_status", { id, status, resolvedChapterId }),
+  foreshadowDelete: (id: number) => invoke<void>("foreshadow_delete", { id }),
 };

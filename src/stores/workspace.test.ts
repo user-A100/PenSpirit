@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../lib/tauri", () => {
-  const books = [{ id: 1, slug: "shu", title: "书", created_at: "", updated_at: "" }];
+  const books = [{ id: 1, slug: "shu", title: "书", created_at: "", updated_at: "", target_words: null }];
   const chapters = [
     { id: 11, book_id: 1, file_path: "shu/manuscript/0001-yi.md", title: "一", sort_key: 1, word_count: 0, created_at: "", updated_at: "" },
   ];

@@ -4,7 +4,7 @@ use crate::error::{AppError, AppResult};
 use crate::bump;
 use crate::fs_service;
 use crate::history;
-use crate::models::{Book, BumpWord, ChapterContent, ChapterMeta, Idea};
+use crate::models::{Book, BumpWord, ChapterContent, ChapterMeta, DailyStat, Foreshadow, ForeshadowInput, Idea};
 use crate::porting;
 use crate::repo;
 use crate::search;
@@ -470,4 +470,84 @@ pub fn sensitive_scan(s: State<AppState>, content: String) -> AppResult<Vec<sens
 #[tauri::command]
 pub fn sensitive_import_words(path: String) -> AppResult<Vec<String>> {
     sensitive::import_words_inner(std::path::Path::new(&path))
+}
+
+// ---- M3-T1 数据层：通用设置 / 统计查询 / 目标字数 / 伏笔 ----
+
+pub fn setting_get_inner(s: &AppState, key: &str) -> AppResult<Option<String>> {
+    repo::settings::get(&*lock(s)?, key)
+}
+
+pub fn setting_set_inner(s: &AppState, key: &str, value: &str) -> AppResult<()> {
+    repo::settings::set(&*lock(s)?, key, value)
+}
+
+pub fn books_set_target_inner(s: &AppState, book_id: i64, target_words: Option<i64>) -> AppResult<Book> {
+    repo::books::set_target(&*lock(s)?, book_id, target_words)
+}
+
+pub fn foreshadows_list_inner(s: &AppState, book_id: i64) -> AppResult<Vec<Foreshadow>> {
+    repo::foreshadows::list_by_book(&*lock(s)?, book_id)
+}
+
+pub fn foreshadow_upsert_inner(s: &AppState, input: &ForeshadowInput) -> AppResult<Foreshadow> {
+    repo::foreshadows::upsert(&*lock(s)?, input)
+}
+
+pub fn foreshadow_set_status_inner(
+    s: &AppState,
+    id: i64,
+    status: &str,
+    resolved_chapter_id: Option<i64>,
+) -> AppResult<Foreshadow> {
+    repo::foreshadows::set_status(&*lock(s)?, id, status, resolved_chapter_id)
+}
+
+pub fn foreshadow_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    repo::foreshadows::delete(&*lock(s)?, id)
+}
+
+#[tauri::command]
+pub fn setting_get(s: State<AppState>, key: String) -> AppResult<Option<String>> {
+    setting_get_inner(&s, &key)
+}
+
+#[tauri::command]
+pub fn setting_set(s: State<AppState>, key: String, value: String) -> AppResult<()> {
+    setting_set_inner(&s, &key, &value)
+}
+
+#[tauri::command]
+pub fn stats_range(s: State<AppState>, days: u32, book_id: Option<i64>) -> AppResult<Vec<DailyStat>> {
+    stats::range_inner(&s, days, book_id)
+}
+
+#[tauri::command]
+pub fn books_set_target(s: State<AppState>, book_id: i64, target_words: Option<i64>) -> AppResult<Book> {
+    books_set_target_inner(&s, book_id, target_words)
+}
+
+#[tauri::command]
+pub fn foreshadows_list(s: State<AppState>, book_id: i64) -> AppResult<Vec<Foreshadow>> {
+    foreshadows_list_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn foreshadow_upsert(s: State<AppState>, input: ForeshadowInput) -> AppResult<Foreshadow> {
+    foreshadow_upsert_inner(&s, &input)
+}
+
+#[tauri::command]
+pub fn foreshadow_set_status(
+    s: State<AppState>,
+    id: i64,
+    status: String,
+    resolved_chapter_id: Option<i64>,
+) -> AppResult<Foreshadow> {
+    foreshadow_set_status_inner(&s, id, &status, resolved_chapter_id)
+}
+
+#[tauri::command]
+pub fn foreshadow_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    foreshadow_delete_inner(&s, id)
 }
