@@ -35,6 +35,7 @@ pub fn run() {
             commands::delete_chapter,
             commands::read_chapter,
             commands::write_chapter,
+            commands::rescan_library,
         ])
         .run(tauri::generate_context!())
         .expect("error while running bixian application");

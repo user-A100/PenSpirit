@@ -110,6 +110,43 @@ pub fn write_chapter_inner(s: &AppState, id: i64, content: &str) -> AppResult<Ch
     lock(s).and_then(|conn| repo::chapters::touch_content(&*conn, id, wc))
 }
 
+/// 从磁盘 md 文件重建索引：书按 slug 复用 id，已存在的 file_path 跳过。返回扫描到的章节数。
+pub fn rescan_library_inner(s: &AppState) -> AppResult<i64> {
+    let scanned = fs_service::scan_library(&s.root)?;
+    let mut total: i64 = 0;
+    for b in scanned {
+        let book = {
+            let conn = lock(s)?;
+            match repo::books::get_by_slug(&conn, &b.slug)? {
+                Some(existing) => existing,
+                None => repo::books::create(&*conn, &b.title, &b.slug)?,
+            }
+        };
+        for rel in b.files {
+            // 标题取文件名去序号与扩展名：`0001-yi.md` → `yi`；无连字符取全名
+            let file_name = rel.rsplit('/').next().unwrap();
+            let base = file_name.strip_suffix(".md").unwrap_or(file_name);
+            let title = match base.split_once('-') {
+                Some((_, t)) => t.to_string(),
+                None => base.to_string(),
+            };
+            let existing = {
+                let conn = lock(s)?;
+                let all = repo::chapters::list_by_book(&*conn, book.id)?;
+                all.into_iter().find(|c| c.file_path == rel)
+            };
+            if existing.is_none() {
+                let wc = count_words(&fs_service::read_chapter(&s.root, &rel)?);
+                let conn = lock(s)?;
+                let created = repo::chapters::create(&*conn, book.id, &rel, &title)?;
+                repo::chapters::touch_content(&*conn, created.id, wc)?;
+            }
+            total += 1;
+        }
+    }
+    Ok(total)
+}
+
 // ---- Tauri 薄包装 ----
 #[tauri::command]
 pub fn list_books(s: State<AppState>) -> AppResult<Vec<Book>> {
@@ -154,4 +191,9 @@ pub fn read_chapter(s: State<AppState>, id: i64) -> AppResult<ChapterContent> {
 #[tauri::command]
 pub fn write_chapter(s: State<AppState>, id: i64, content: String) -> AppResult<ChapterMeta> {
     write_chapter_inner(&s, id, &content)
+}
+
+#[tauri::command]
+pub fn rescan_library(s: State<AppState>) -> AppResult<i64> {
+    rescan_library_inner(&s)
 }

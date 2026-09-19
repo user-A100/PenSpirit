@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useWorkspace } from "../../stores/workspace";
+import { api } from "../../lib/tauri";
 
 export function Sidebar() {
   const { books, chapters, currentBookId, currentChapterId, loadBooks, selectBook, createBook, createChapter, selectChapter } = useWorkspace();
@@ -43,6 +44,17 @@ export function Sidebar() {
               className="rounded px-2 py-0.5" style={{ background: "var(--accent)" }}>＋</button>
           </div>
         )}
+      </div>
+      <div className="border-t p-2" style={{ borderColor: "var(--border)" }}>
+        <button
+          onClick={async () => {
+            const n = await api.rescanLibrary();
+            await loadBooks();
+            alert(`已重建索引，共 ${n} 章`);
+          }}
+          className="w-full rounded px-2 py-1 text-xs text-[var(--fg-dim)] hover:bg-white/5">
+          重建索引（从磁盘文件）
+        </button>
       </div>
     </div>
   );

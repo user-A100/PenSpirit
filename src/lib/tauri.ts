@@ -14,4 +14,5 @@ export const api = {
   deleteChapter: (id: number) => invoke<void>("delete_chapter", { id }),
   readChapter: (id: number) => invoke<ChapterContent>("read_chapter", { id }),
   writeChapter: (id: number, content: string) => invoke<ChapterMeta>("write_chapter", { id, content }),
+  rescanLibrary: () => invoke<number>("rescan_library"),
 };
