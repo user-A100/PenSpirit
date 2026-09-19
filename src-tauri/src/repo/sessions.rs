@@ -1,6 +1,6 @@
 use rusqlite::{params, Connection};
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::models::{ChatMessage, ChatSession};
 
 fn session_from_row(row: &rusqlite::Row) -> rusqlite::Result<ChatSession> {
@@ -22,6 +22,16 @@ pub fn list_by_chapter(conn: &Connection, chapter_id: i64) -> AppResult<Vec<Chat
     ))?;
     let rows = stmt.query_map([chapter_id], session_from_row)?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+/// 按 id 读单个会话（不存在时 NotFound）。
+pub fn get(conn: &Connection, id: i64) -> AppResult<ChatSession> {
+    conn.query_row(
+        &format!("SELECT {SESSION_COLS} FROM sessions WHERE id = ?1"),
+        [id],
+        session_from_row,
+    )
+    .map_err(AppError::from)
 }
 
 /// 该章唯一：已有则返回首个，无则建。

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -11,6 +12,9 @@ use crate::fs_service;
 pub struct AppState {
     pub db: Mutex<Connection>,
     pub root: PathBuf,
+    /// 进行中流式任务的取消信号：session_id → 发送端。
+    /// send 时登记，流自然结束或取消时移除。
+    pub cancels: Mutex<HashMap<i64, tokio::sync::watch::Sender<bool>>>,
 }
 
 impl AppState {
@@ -22,7 +26,11 @@ impl AppState {
         db::init(&mut conn).map_err(|e| AppError::Db(e.to_string()))?;
         let root = fs_service::library_root(app_data);
         fs::create_dir_all(&root)?;
-        Ok(Self { db: Mutex::new(conn), root })
+        Ok(Self {
+            db: Mutex::new(conn),
+            root,
+            cancels: Mutex::new(HashMap::new()),
+        })
     }
 
     /// 测试用：目录内独立 db 文件，不与开发者本机数据混用

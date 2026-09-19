@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod commands_ai;
 pub mod context;
 pub mod db;
 pub mod error;
@@ -38,6 +39,21 @@ pub fn run() {
             commands::read_chapter,
             commands::write_chapter,
             commands::rescan_library,
+            commands_ai::list_providers,
+            commands_ai::save_provider,
+            commands_ai::delete_provider,
+            commands_ai::set_active_provider,
+            commands_ai::list_styles,
+            commands_ai::save_style,
+            commands_ai::delete_style,
+            commands_ai::set_active_style,
+            commands_ai::list_sessions,
+            commands_ai::get_or_create_session,
+            commands_ai::list_messages,
+            commands_ai::delete_message,
+            commands_ai::send_message,
+            commands_ai::cancel_generation,
+            commands_ai::preview_context,
         ])
         .run(tauri::generate_context!())
         .expect("error while running bixian application");
