@@ -211,6 +211,11 @@ pub fn set_active_provider_inner(s: &AppState, id: i64) -> AppResult<()> {
     repo::settings::set_active_provider(&conn, id)
 }
 
+pub fn get_active_provider_inner(s: &AppState) -> AppResult<Option<i64>> {
+    let conn = lock(s)?;
+    repo::settings::active_provider_id(&conn)
+}
+
 // ---------- Styles ----------
 
 pub fn list_styles_inner(s: &AppState) -> AppResult<Vec<StyleCard>> {
@@ -289,6 +294,11 @@ pub fn delete_provider(s: State<AppState>, id: i64) -> AppResult<()> {
 #[tauri::command]
 pub fn set_active_provider(s: State<AppState>, id: i64) -> AppResult<()> {
     set_active_provider_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn get_active_provider(s: State<AppState>) -> AppResult<Option<i64>> {
+    get_active_provider_inner(&s)
 }
 
 #[tauri::command]

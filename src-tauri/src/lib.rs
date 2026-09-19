@@ -43,6 +43,7 @@ pub fn run() {
             commands_ai::save_provider,
             commands_ai::delete_provider,
             commands_ai::set_active_provider,
+            commands_ai::get_active_provider,
             commands_ai::list_styles,
             commands_ai::save_style,
             commands_ai::delete_style,
