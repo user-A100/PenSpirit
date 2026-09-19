@@ -3,16 +3,18 @@ import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef, useState } from "react";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { History, PenLine, ScanSearch } from "lucide-react";
+import { History, ListTree, PenLine, ScanSearch } from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
 import { useChat } from "../../stores/chat";
 import { useSearch } from "../../stores/search";
+import { useOutline } from "../../stores/outline";
 import { localMinute, useStats } from "../../stores/stats";
 import { api } from "../../lib/tauri";
 import { useAutosave } from "../../hooks/useAutosave";
 import { countWords } from "../../lib/words";
 import { HistoryPanel } from "./HistoryPanel";
 import { SensitiveDialog } from "./SensitiveDialog";
+import { FloatingOutline } from "./FloatingOutline";
 
 // 单次字数跳变超过它就丢弃：切章/恢复快照/清空这类程序化改动的特征
 const MAX_WORD_DELTA = 500;
@@ -33,6 +35,8 @@ export function ChapterEditor() {
   const { books, currentBookId, currentChapterId, chapterContent, chapters } = useWorkspace();
   const pendingAppend = useChat((s) => s.pendingAppend);
   const jumpText = useSearch((s) => s.jumpText);
+  const outlineOpen = useOutline((s) => s.open);
+  const outlineJump = useOutline((s) => s.jumpTarget);
   const dirty = useRef<string | null>(null);
   const chapterIdRef = useRef<number | null>(null);
   chapterIdRef.current = currentChapterId;
@@ -91,6 +95,17 @@ export function ChapterEditor() {
     }
     useSearch.getState().clearJump();
   }, [editor, chapterContent, jumpText]);
+
+  // 悬浮大纲跳转：与搜索跳转同款定位；consume 自取自清（一次性），避免重复定位
+  useEffect(() => {
+    if (!editor || outlineJump == null) return;
+    const pos = findTextPos(editor.state.doc, outlineJump);
+    if (pos) {
+      editor.commands.setTextSelection(pos);
+      editor.commands.scrollIntoView();
+    }
+    useOutline.getState().consume();
+  }, [editor, chapterContent, outlineJump]);
 
   // 消费 AI 采纳：把文本以空行分隔追加到文档末尾（文档为空时不加前导空行），
   // 显式置 dirty 交给自动保存，然后清空通道。清空本身触发重渲染，驱动 autosave effect。
@@ -156,6 +171,15 @@ export function ChapterEditor() {
         </div>
         <div className="flex shrink-0 items-center gap-3 text-xs text-[color:var(--text-faint)]">
           <button
+            onClick={() => useOutline.getState().toggle()}
+            title="悬浮大纲"
+            className={`rounded p-1 transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] ${
+              outlineOpen ? "text-[color:var(--accent)]" : ""
+            }`}
+          >
+            <ListTree size={14} />
+          </button>
+          <button
             onClick={() => setHistoryOpen((v) => !v)}
             title="版本历史"
             className={`rounded p-1 transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] ${
@@ -203,6 +227,9 @@ export function ChapterEditor() {
       {sensitiveOpen && (
         <SensitiveDialog content={currentMarkdown()} onClose={() => setSensitiveOpen(false)} />
       )}
+
+      {/* 悬浮大纲：fixed 定位不占版面；正文传编辑器实时 markdown，大纲随写随刷 */}
+      <FloatingOutline markdown={currentMarkdown()} />
     </div>
   );
 }
