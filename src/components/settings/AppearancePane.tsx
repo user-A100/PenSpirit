@@ -1,10 +1,19 @@
-// 外观设置面板：主题卡片网格（mini 预览随主题变量渲染）/ 明暗三选 / UI 缩放滑条。
+// 外观设置面板：主题卡片网格（mini 预览随主题变量渲染）/ 明暗三选 / UI 缩放滑条 / 正文排版。
 // 所有改动即时生效（主题与明暗立即落盘，缩放防抖落盘）。
 import { CSSProperties } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { THEMES } from "../../themes/defs";
 import {
   AppearanceMode,
+  PROSE_LETTER_SPACING_MAX,
+  PROSE_LETTER_SPACING_MIN,
+  PROSE_LETTER_SPACING_STEP,
+  PROSE_LINE_HEIGHT_MAX,
+  PROSE_LINE_HEIGHT_MIN,
+  PROSE_LINE_HEIGHT_STEP,
+  PROSE_PARA_SPACING_MAX,
+  PROSE_PARA_SPACING_MIN,
+  PROSE_PARA_SPACING_STEP,
   UI_SCALE_MAX,
   UI_SCALE_MIN,
   UI_SCALE_STEP,
@@ -25,9 +34,11 @@ export function AppearancePane() {
   const colorTheme = useAppearance((s) => s.colorTheme);
   const mode = useAppearance((s) => s.mode);
   const uiScale = useAppearance((s) => s.uiScale);
+  const prose = useAppearance((s) => s.prose);
   const setColorTheme = useAppearance((s) => s.setColorTheme);
   const setMode = useAppearance((s) => s.setMode);
   const setUiScale = useAppearance((s) => s.setUiScale);
+  const setProse = useAppearance((s) => s.setProse);
 
   return (
     <div className="flex flex-col gap-5">
@@ -114,6 +125,7 @@ export function AppearancePane() {
         <div className="flex items-center gap-3">
           <input
             type="range"
+            aria-label="界面缩放"
             min={UI_SCALE_MIN}
             max={UI_SCALE_MAX}
             step={UI_SCALE_STEP}
@@ -127,6 +139,81 @@ export function AppearancePane() {
         </div>
         <p className="mt-1.5 text-xs text-[color:var(--text-faint)]">
           80%–150%，实时生效。文字与间距随缩放；图标、固定栏宽等少量像素尺寸不随缩放。
+        </p>
+      </section>
+
+      {/* 正文排版（M3-T11）：只作用于编辑器正文，UI 其它区域不受影响 */}
+      <section>
+        <SectionTitle>正文排版</SectionTitle>
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-sm text-[color:var(--text-primary)]">段首缩进两字</span>
+          <button
+            role="switch"
+            aria-checked={prose.indent}
+            onClick={() => setProse({ indent: !prose.indent })}
+            className={`relative h-5 w-9 rounded-full transition-colors duration-150 ${
+              prose.indent ? "bg-[var(--accent)]" : "bg-[var(--bg-elevated)]"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-150 ${
+                prose.indent ? "left-[1.125rem]" : "left-0.5"
+              }`}
+            />
+          </button>
+        </div>
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center gap-3">
+            <span className="w-14 shrink-0 text-sm text-[color:var(--text-secondary)]">行高</span>
+            <input
+              type="range"
+              aria-label="行高"
+              min={PROSE_LINE_HEIGHT_MIN}
+              max={PROSE_LINE_HEIGHT_MAX}
+              step={PROSE_LINE_HEIGHT_STEP}
+              value={prose.lineHeight}
+              onChange={(e) => setProse({ lineHeight: Number(e.target.value) })}
+              className="h-1 flex-1 accent-[var(--accent)]"
+            />
+            <span className="w-12 shrink-0 text-right text-sm tabular-nums text-[color:var(--text-primary)]">
+              {prose.lineHeight.toFixed(2)}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="w-14 shrink-0 text-sm text-[color:var(--text-secondary)]">段距</span>
+            <input
+              type="range"
+              aria-label="段距"
+              min={PROSE_PARA_SPACING_MIN}
+              max={PROSE_PARA_SPACING_MAX}
+              step={PROSE_PARA_SPACING_STEP}
+              value={prose.paraSpacing}
+              onChange={(e) => setProse({ paraSpacing: Number(e.target.value) })}
+              className="h-1 flex-1 accent-[var(--accent)]"
+            />
+            <span className="w-12 shrink-0 text-right text-sm tabular-nums text-[color:var(--text-primary)]">
+              {prose.paraSpacing.toFixed(1)}em
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="w-14 shrink-0 text-sm text-[color:var(--text-secondary)]">字距</span>
+            <input
+              type="range"
+              aria-label="字距"
+              min={PROSE_LETTER_SPACING_MIN}
+              max={PROSE_LETTER_SPACING_MAX}
+              step={PROSE_LETTER_SPACING_STEP}
+              value={prose.letterSpacing}
+              onChange={(e) => setProse({ letterSpacing: Number(e.target.value) })}
+              className="h-1 flex-1 accent-[var(--accent)]"
+            />
+            <span className="w-12 shrink-0 text-right text-sm tabular-nums text-[color:var(--text-primary)]">
+              {prose.letterSpacing.toFixed(2)}em
+            </span>
+          </div>
+        </div>
+        <p className="mt-1.5 text-xs text-[color:var(--text-faint)]">
+          仅作用于编辑器正文；分场线显示为居中 ❖ 符号。
         </p>
       </section>
     </div>

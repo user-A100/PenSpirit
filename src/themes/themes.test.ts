@@ -13,9 +13,13 @@ import {
   APPEARANCE_STORAGE_KEY,
   applyColorTheme,
   applyMode,
+  applyProse,
   applyUiScale,
   DEFAULT_APPEARANCE,
+  DEFAULT_PROSE,
   loadAppearance,
+  normalizeAppearance,
+  PROSE_STYLE_ID,
   saveAppearance,
   ThemeProvider,
   useAppearance,
@@ -27,9 +31,16 @@ import { AppearancePane } from "../components/settings/AppearancePane";
 beforeEach(() => {
   localStorage.clear();
   document.getElementById(THEME_STYLE_ID)?.remove();
+  document.getElementById(PROSE_STYLE_ID)?.remove();
   document.documentElement.className = "";
   document.documentElement.style.fontSize = "";
-  useAppearance.setState({ colorTheme: DEFAULT_THEME_ID, mode: "system", uiScale: 1 });
+  document.documentElement.removeAttribute("data-prose-indent");
+  useAppearance.setState({
+    colorTheme: DEFAULT_THEME_ID,
+    mode: "system",
+    uiScale: 1,
+    prose: { ...DEFAULT_PROSE },
+  });
 });
 
 describe("主题定义", () => {
@@ -151,7 +162,12 @@ describe("外观持久化（localStorage 缓存）", () => {
   });
 
   it("存取往返", () => {
-    const a = { colorTheme: "parchment", mode: "dark" as const, uiScale: 1.15 };
+    const a = {
+      colorTheme: "parchment",
+      mode: "dark" as const,
+      uiScale: 1.15,
+      prose: { indent: false, lineHeight: 2.1, paraSpacing: 1.3, letterSpacing: 0.04 },
+    };
     saveAppearance(a);
     expect(loadAppearance()).toEqual(a);
   });
@@ -168,6 +184,84 @@ describe("外观持久化（localStorage 缓存）", () => {
     expect(a.colorTheme).toBe(DEFAULT_THEME_ID); // 未知主题 → 默认
     expect(a.mode).toBe("system"); // 非法 mode → system
     expect(a.uiScale).toBe(1.5); // 超上限 → 夹紧
+  });
+});
+
+describe("prose 排版设置（normalize）", () => {
+  it("旧数据无 prose 字段回默认", () => {
+    const a = normalizeAppearance({ colorTheme: "ink", mode: "light", uiScale: 1 });
+    expect(a.prose).toEqual(DEFAULT_PROSE);
+  });
+
+  it("合法值原样保留", () => {
+    const a = normalizeAppearance({
+      prose: { indent: false, lineHeight: 2.2, paraSpacing: 1.2, letterSpacing: 0.05 },
+    });
+    expect(a.prose).toEqual({ indent: false, lineHeight: 2.2, paraSpacing: 1.2, letterSpacing: 0.05 });
+  });
+
+  it("越界数值夹紧到有效域", () => {
+    const a = normalizeAppearance({
+      prose: { indent: true, lineHeight: 9, paraSpacing: -1, letterSpacing: 5 },
+    });
+    expect(a.prose).toEqual({ indent: true, lineHeight: 2.4, paraSpacing: 0, letterSpacing: 0.1 });
+
+    const b = normalizeAppearance({ prose: { lineHeight: 1, paraSpacing: 0, letterSpacing: 0 } });
+    expect(b.prose.lineHeight).toBe(1.5); // 行高下界夹紧
+  });
+
+  it("非法数值（非数/NaN）与非法 indent 回默认", () => {
+    const a = normalizeAppearance({
+      prose: { indent: "yes", lineHeight: Number.NaN, paraSpacing: "big", letterSpacing: null },
+    });
+    expect(a.prose).toEqual(DEFAULT_PROSE);
+  });
+});
+
+describe("applyProse 变量注入与缩进属性", () => {
+  it("注入 --prose-* 变量到独立 style 节点，indent 开启时挂 html 属性", () => {
+    applyProse({ indent: true, lineHeight: 2.2, paraSpacing: 1.2, letterSpacing: 0.05 });
+    const el = document.getElementById(PROSE_STYLE_ID);
+    expect(el).not.toBeNull();
+    const css = el!.textContent ?? "";
+    expect(css.startsWith(":root{")).toBe(true);
+    expect(css).toContain("--prose-line-height:2.2;");
+    expect(css).toContain("--prose-para-spacing:1.2em;");
+    expect(css).toContain("--prose-letter-spacing:0.05em;");
+    expect(document.documentElement.hasAttribute("data-prose-indent")).toBe(true);
+  });
+
+  it("indent=false 移除 data-prose-indent，变量保持注入", () => {
+    applyProse({ indent: true, lineHeight: 2.2, paraSpacing: 1.2, letterSpacing: 0.05 });
+    applyProse({ indent: false, lineHeight: 2.2, paraSpacing: 1.2, letterSpacing: 0.05 });
+    expect(document.documentElement.hasAttribute("data-prose-indent")).toBe(false);
+    expect(document.getElementById(PROSE_STYLE_ID)?.textContent).toContain("--prose-line-height:2.2;");
+  });
+
+  it("非法数值经 normalize 后注入默认值", () => {
+    applyProse({ indent: false, lineHeight: Number.NaN, paraSpacing: -3, letterSpacing: 9 });
+    const css = document.getElementById(PROSE_STYLE_ID)?.textContent ?? "";
+    expect(css).toContain(`--prose-line-height:${DEFAULT_PROSE.lineHeight};`);
+    expect(css).toContain(`--prose-para-spacing:0em;`);
+    expect(css).toContain(`--prose-letter-spacing:0.1em;`);
+  });
+
+  it("内容一致时跳过重写（幂等）", () => {
+    applyProse(DEFAULT_PROSE);
+    const el = document.getElementById(PROSE_STYLE_ID) as HTMLStyleElement;
+    let writes = 0;
+    let inner = el.textContent ?? "";
+    Object.defineProperty(el, "textContent", {
+      configurable: true,
+      get: () => inner,
+      set: (v: string) => { writes += 1; inner = v; },
+    });
+
+    applyProse(DEFAULT_PROSE); // 同设置：期望跳过写入
+    expect(writes).toBe(0);
+
+    applyProse({ ...DEFAULT_PROSE, lineHeight: 2.4 }); // 不同：写入一次
+    expect(writes).toBe(1);
   });
 });
 
@@ -220,6 +314,20 @@ describe("appearance store", () => {
     }
   });
 
+  it("setProse 合并部分字段、即时应用并立即持久化", () => {
+    useAppearance.getState().setProse({ lineHeight: 2.1 });
+    const s = useAppearance.getState();
+    expect(s.prose.lineHeight).toBe(2.1);
+    expect(s.prose.indent).toBe(true); // 未提供的字段保留原值
+    expect(document.getElementById(PROSE_STYLE_ID)?.textContent).toContain("--prose-line-height:2.1;");
+    expect(loadAppearance().prose.lineHeight).toBe(2.1);
+
+    useAppearance.getState().setProse({ indent: false });
+    expect(useAppearance.getState().prose.indent).toBe(false);
+    expect(document.documentElement.hasAttribute("data-prose-indent")).toBe(false);
+    expect(loadAppearance().prose).toEqual({ indent: false, lineHeight: 2.1, paraSpacing: 0.9, letterSpacing: 0 });
+  });
+
   it("防抖落盘不回滚期间的即时落盘字段（缩放挂起时切明暗不被旧快照覆盖）", () => {
     vi.useFakeTimers();
     try {
@@ -258,7 +366,7 @@ describe("AppearancePane", () => {
 
   it("缩放滑条实时应用到根字号", () => {
     render(createElement(AppearancePane));
-    const slider = screen.getByRole("slider") as HTMLInputElement;
+    const slider = screen.getByRole("slider", { name: "界面缩放" }) as HTMLInputElement;
     expect(slider.min).toBe("0.8");
     expect(slider.max).toBe("1.5");
     expect(slider.step).toBe("0.05");
@@ -266,6 +374,42 @@ describe("AppearancePane", () => {
     fireEvent.change(slider, { target: { value: "1.2" } });
     expect(useAppearance.getState().uiScale).toBe(1.2);
     expect(document.documentElement.style.fontSize).toBe("19.2px");
+  });
+
+  it("正文排版：三个滑条参数正确、行高即时注入；缩进开关切 html 属性", () => {
+    render(createElement(AppearancePane));
+
+    const lineHeight = screen.getByRole("slider", { name: "行高" }) as HTMLInputElement;
+    expect(lineHeight.min).toBe("1.5");
+    expect(lineHeight.max).toBe("2.4");
+    expect(lineHeight.step).toBe("0.05");
+    const paraSpacing = screen.getByRole("slider", { name: "段距" }) as HTMLInputElement;
+    expect(paraSpacing.min).toBe("0");
+    expect(paraSpacing.max).toBe("2");
+    expect(paraSpacing.step).toBe("0.1");
+    const letterSpacing = screen.getByRole("slider", { name: "字距" }) as HTMLInputElement;
+    expect(letterSpacing.min).toBe("0");
+    expect(letterSpacing.max).toBe("0.1");
+    expect(letterSpacing.step).toBe("0.01");
+
+    // 滑条即时生效：store + 变量注入 + 缩进属性（默认开启）
+    fireEvent.change(lineHeight, { target: { value: "2.2" } });
+    expect(useAppearance.getState().prose.lineHeight).toBe(2.2);
+    expect(document.getElementById(PROSE_STYLE_ID)?.textContent).toContain("--prose-line-height:2.2;");
+    expect(document.documentElement.hasAttribute("data-prose-indent")).toBe(true);
+
+    // 开关关闭缩进：html 属性移除并落盘
+    fireEvent.click(screen.getByRole("switch"));
+    expect(useAppearance.getState().prose.indent).toBe(false);
+    expect(document.documentElement.hasAttribute("data-prose-indent")).toBe(false);
+    expect(loadAppearance().prose.indent).toBe(false);
+
+    fireEvent.change(paraSpacing, { target: { value: "1.5" } });
+    expect(useAppearance.getState().prose.paraSpacing).toBe(1.5);
+    expect(document.getElementById(PROSE_STYLE_ID)?.textContent).toContain("--prose-para-spacing:1.5em;");
+    fireEvent.change(letterSpacing, { target: { value: "0.03" } });
+    expect(useAppearance.getState().prose.letterSpacing).toBe(0.03);
+    expect(document.getElementById(PROSE_STYLE_ID)?.textContent).toContain("--prose-letter-spacing:0.03em;");
   });
 });
 

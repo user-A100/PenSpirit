@@ -49,17 +49,21 @@ body {
 }
 
 /* 编辑器正文：书卷气衬线排版，与 UI 的无衬线区分。
-   颜色走 --prose-fg 随主题；字号用 rem 跟随 UI 缩放 */
+   颜色走 --prose-fg 随主题；字号用 rem 跟随 UI 缩放。
+   行高/字距由设置面板注入的 --prose-* 变量驱动（M3-T11，带回退默认值） */
 .prose-serif {
   font-family: Georgia, "Noto Serif SC", "Source Han Serif SC", serif;
   font-size: 0.9375rem;
-  line-height: 1.9;
+  line-height: var(--prose-line-height, 1.9);
+  letter-spacing: var(--prose-letter-spacing, 0);
   color: var(--prose-fg);
 }
 
 /* TipTap 编辑区：无边框融入背景 */
 .ProseMirror { outline: none; }
-.ProseMirror p { margin: 0 0 0.9em; }
+.ProseMirror p { margin: 0 0 var(--prose-para-spacing, 0.9em); }
+/* 首行缩进两字（中文小说惯例；html 属性由 ThemeProvider.applyProse 挂/摘） */
+html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
 .ProseMirror h1, .ProseMirror h2, .ProseMirror h3 { font-weight: 600; line-height: 1.5; margin: 1.4em 0 0.6em; }
 .ProseMirror h1 { font-size: 1.5em; }
 .ProseMirror h2 { font-size: 1.3em; }
@@ -69,4 +73,10 @@ body {
 .ProseMirror code { background: var(--bg-elevated); border-radius: 4px; padding: 0.1em 0.35em; font-size: 0.88em; }
 .ProseMirror pre { background: var(--bg-elevated); border-radius: 6px; padding: 0.8em 1em; overflow-x: auto; margin: 0 0 0.9em; }
 .ProseMirror pre code { background: none; padding: 0; }
-.ProseMirror hr { border: none; border-top: 1px solid var(--border-subtle); margin: 1.6em 0; }
+/* 分场符：居中 ❖ 徽章骑在细线上（Maple hr.scss 手法——徽章底色遮线） */
+.ProseMirror hr { border: none; border-top: 1px solid var(--border-subtle); text-align: center; margin: 1.6em 0; overflow: visible; }
+.ProseMirror hr::after {
+  content: "❖"; display: inline-block; position: relative; top: -0.75em;
+  padding: 0 0.75em; font-size: 0.85em; color: var(--text-faint);
+  background: var(--bg-base);
+}
