@@ -45,6 +45,13 @@ pub struct ChatSession {
     pub chapter_id: i64,
     pub title: String,
     pub created_at: String,
+    /// 会话后端来源：'provider'（M1 HTTP 直连）或 'agent:{id}'（ACP agent）
+    #[serde(default = "default_session_source")]
+    pub source: String,
+}
+
+fn default_session_source() -> String {
+    "provider".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,4 +106,41 @@ pub struct ProbeResult {
     pub can_resume: bool,
     /// 失败原因（ok=false 时给出；成功时为 None）
     pub detail: Option<String>,
+}
+
+// ---------- M2-T4 ACP 事件 payload（emit 到前端） ----------
+
+/// `agent://stream`：流式增量（经 StreamCoalescer 合并）。
+#[derive(Debug, Clone, Serialize)]
+pub struct AcpStreamEvent {
+    pub session_id: i64,
+    pub text: String,
+}
+
+/// 权限选项（agent://permission 事件内）。
+#[derive(Debug, Clone, Serialize)]
+pub struct PermOption {
+    pub option_id: String,
+    pub name: String,
+    /// allow_once | allow_always | reject_once | reject_always
+    pub kind: String,
+}
+
+/// `agent://permission`：agent 请求工具授权，前端必须应答
+/// （agents_respond_permission 传回 option_id；超时自动拒绝）。
+#[derive(Debug, Clone, Serialize)]
+pub struct AcpPermissionEvent {
+    pub session_id: i64,
+    pub request_id: String,
+    pub title: String,
+    pub options: Vec<PermOption>,
+}
+
+/// `agent://turn`：一回合结束（done 或 error）。content 非空时已落库。
+#[derive(Debug, Clone, Serialize)]
+pub struct AcpTurnEvent {
+    pub session_id: i64,
+    pub ok: bool,
+    pub content: Option<String>,
+    pub error: Option<String>,
 }

@@ -15,6 +15,9 @@ pub struct AppState {
     /// 进行中流式任务的取消信号：session_id → 发送端。
     /// send 时登记，流自然结束或取消时移除。
     pub cancels: Mutex<HashMap<i64, tokio::sync::watch::Sender<bool>>>,
+    /// ACP 待应答权限请求：chat session_id → 队列。
+    /// 前端应答（或超时）后由 oneshot 通知后台应答任务回写 SDK responder。
+    pub pending_perms: Mutex<HashMap<i64, Vec<crate::agents::interaction::PendingPerm>>>,
 }
 
 impl AppState {
@@ -30,6 +33,7 @@ impl AppState {
             db: Mutex::new(conn),
             root,
             cancels: Mutex::new(HashMap::new()),
+            pending_perms: Mutex::new(HashMap::new()),
         })
     }
 

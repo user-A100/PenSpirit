@@ -18,14 +18,14 @@ fn lock(s: &AppState) -> AppResult<std::sync::MutexGuard<'_, rusqlite::Connectio
 }
 
 /// 组装上下文所需的素材（send 与 preview 共用读取路径）。
-struct ContextBundle {
+pub(crate) struct ContextBundle {
     book_title: String,
     style_prompt: Option<String>,
     chapter_text: String,
     prev_tail: Option<String>,
 }
 
-fn assemble_with(bundle: &ContextBundle, instruction: &str) -> Assembled {
+pub(crate) fn assemble_with(bundle: &ContextBundle, instruction: &str) -> Assembled {
     assemble(&AssembleInput {
         book_title: &bundle.book_title,
         style_prompt: bundle.style_prompt.as_deref(),
@@ -37,7 +37,7 @@ fn assemble_with(bundle: &ContextBundle, instruction: &str) -> Assembled {
 
 /// 读会话并收集组装素材：书名 / 激活文风 prompt_md / 当前章正文 /
 /// 同书 sort_key 前一章整章正文（窗口截断交由组装器按字符处理）。
-fn gather_context(s: &AppState, session_id: i64) -> AppResult<ContextBundle> {
+pub(crate) fn gather_context(s: &AppState, session_id: i64) -> AppResult<ContextBundle> {
     let (book_id, chapter_id) = {
         let conn = lock(s)?;
         let session = repo::sessions::get(&conn, session_id)?;

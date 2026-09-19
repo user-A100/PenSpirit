@@ -10,10 +10,11 @@ fn session_from_row(row: &rusqlite::Row) -> rusqlite::Result<ChatSession> {
         chapter_id: row.get(2)?,
         title: row.get(3)?,
         created_at: row.get(4)?,
+        source: row.get(5)?,
     })
 }
 
-const SESSION_COLS: &str = "id, book_id, chapter_id, title, created_at";
+const SESSION_COLS: &str = "id, book_id, chapter_id, title, created_at, source";
 const MESSAGE_COLS: &str = "id, session_id, role, content, created_at";
 
 pub fn list_by_chapter(conn: &Connection, chapter_id: i64) -> AppResult<Vec<ChatSession>> {
@@ -60,6 +61,15 @@ pub fn get_or_create(
 /// 级联删 messages（FK ON DELETE CASCADE + foreign_keys=ON）。
 pub fn delete(conn: &Connection, id: i64) -> AppResult<()> {
     conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+/// 更新会话后端来源标记（'provider' | 'agent:{id}'）。
+pub fn update_source(conn: &Connection, id: i64, source: &str) -> AppResult<()> {
+    conn.execute(
+        "UPDATE sessions SET source = ?2 WHERE id = ?1",
+        params![id, source],
+    )?;
     Ok(())
 }
 

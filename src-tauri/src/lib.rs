@@ -62,6 +62,9 @@ pub fn run() {
             agents::agents_upsert,
             agents::agents_remove,
             agents::agents_set_default,
+            agents::send_message_acp,
+            agents::cancel_generation_acp,
+            agents::agents_respond_permission,
         ])
         .run(tauri::generate_context!())
         .expect("error while running bixian application");
