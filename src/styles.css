@@ -327,3 +327,13 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
 
 /* 底栏进度滑条 */
 .read-progress-slider { accent-color: var(--accent); }
+
+/* ---------- 设置搜索命中高亮（M3-T6，阅读右面板） ---------- */
+/* SettingPanel 命中分区挂 1.8s：accent-dim 底 + 内描边先保持后淡出，
+   类由 JS 在计时结束时移除，动画与移除同拍 */
+@keyframes setting-hit {
+  0% { background-color: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent); }
+  65% { background-color: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent); }
+  100% { background-color: transparent; box-shadow: inset 0 0 0 1px transparent; }
+}
+.setting-hit { animation: setting-hit 1.8s ease; border-radius: 8px; }

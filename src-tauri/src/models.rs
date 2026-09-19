@@ -218,3 +218,13 @@ pub struct DailyStat {
     pub words: i64,
     pub active_minutes: i64,
 }
+
+/// 阅读背景图（M3-T6）。文件存 {appData}/background/{id}-{name}.{ext}，
+/// 纯文件资源不进 db；id = 导入时刻纳秒时间戳 hex，name 为原文件名（净化后）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BgImage {
+    pub id: String,
+    /// 入库文件绝对路径（前端 convertFileSrc 转 asset 协议）
+    pub path: String,
+    pub name: String,
+}

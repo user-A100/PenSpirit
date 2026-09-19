@@ -62,6 +62,9 @@ export interface ForeshadowInput {
 }
 export interface DailyStat { date: string; words: number; active_minutes: number }
 
+// ---- M3-T6：阅读背景图（文件存 {appData}/background/，经 asset 协议加载） ----
+export interface BgImage { id: string; path: string; name: string }
+
 export const api = {
   listBooks: () => invoke<Book[]>("list_books"),
   createBook: (title: string) => invoke<Book>("create_book", { title }),
@@ -153,4 +156,8 @@ export const api = {
   foreshadowSetStatus: (id: number, status: string, resolvedChapterId: number | null) =>
     invoke<Foreshadow>("foreshadow_set_status", { id, status, resolvedChapterId }),
   foreshadowDelete: (id: number) => invoke<void>("foreshadow_delete", { id }),
+  // ---- M3-T6：阅读背景图 ----
+  readingBgImport: (srcPath: string) => invoke<BgImage>("reading_bg_import", { srcPath }),
+  readingBgList: () => invoke<BgImage[]>("reading_bg_list"),
+  readingBgDelete: (id: string) => invoke<void>("reading_bg_delete", { id }),
 };

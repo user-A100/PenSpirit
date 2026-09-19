@@ -10,6 +10,7 @@ import { useSettings } from "../../stores/settings";
 import { useUiNav } from "../../lib/nav/uiStore";
 import { kvGet, kvSet } from "../../lib/kv";
 import { READING_FONT_STACKS, useReadingPrefs } from "./readingPrefs";
+import { readingBgStyle } from "./readerBg";
 import { useReadingPanels, type PanelPos } from "./readingPanels";
 import { ReadingShell } from "./ReadingShell";
 
@@ -268,7 +269,7 @@ export function ReadView() {
   const chapterTitle = idx >= 0 ? chapters[idx].title : "";
 
   return (
-    <div className="relative h-full w-full overflow-hidden" style={{ backgroundColor: prefs.bgColor }}>
+    <div className="relative h-full w-full overflow-hidden" style={readingBgStyle(prefs)}>
       <ReadingShell
         bookTitle={bookTitle}
         chapterTitle={chapterTitle}

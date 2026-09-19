@@ -7,13 +7,13 @@ import {
   ChevronsUp,
   Lock,
   LockOpen,
-  Settings2,
 } from "lucide-react";
 import type { ChapterMeta } from "../../lib/tauri";
 import { useReadingPanels, type PanelPos } from "./readingPanels";
 import { NavPanel } from "./NavPanel";
 import { TopPanel } from "./TopPanel";
 import { BottomPanel } from "./BottomPanel";
+import { SettingPanel } from "./SettingPanel";
 
 // 阅读四边面板调度壳（books-reader 40-414 行机制移植到 hooks）：
 // - 热区 onMouseEnter → 500ms 延迟且鼠标静止（100ms 内无移动）才 open；
@@ -256,11 +256,7 @@ export function ReadingShell(props: ReadingShellProps) {
           onFocus={() => (settingInputFocus.current = true)}
           onBlur={() => (settingInputFocus.current = false)}
         >
-          <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-xs text-[var(--text-faint)]">
-            <Settings2 size={20} className="opacity-50" />
-            <div className="text-[var(--text-secondary)]">阅读设置</div>
-            <div>排版 / 配色 / 背景图（T6 接入）</div>
-          </div>
+          <SettingPanel />
         </div>
       </section>
 

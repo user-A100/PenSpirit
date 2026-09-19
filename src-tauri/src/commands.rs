@@ -4,7 +4,7 @@ use crate::error::{AppError, AppResult};
 use crate::bump;
 use crate::fs_service;
 use crate::history;
-use crate::models::{Book, BumpWord, ChapterContent, ChapterMeta, DailyStat, Foreshadow, ForeshadowInput, Idea};
+use crate::models::{BgImage, Book, BumpWord, ChapterContent, ChapterMeta, DailyStat, Foreshadow, ForeshadowInput, Idea};
 use crate::porting;
 use crate::repo;
 use crate::search;
@@ -550,4 +550,277 @@ pub fn foreshadow_set_status(
 #[tauri::command]
 pub fn foreshadow_delete(s: State<AppState>, id: i64) -> AppResult<()> {
     foreshadow_delete_inner(&s, id)
+}
+
+// ---- M3-T6 阅读背景图（纯文件操作，不碰 db 锁） ----
+
+/// 允许的图片扩展（小写比较；gif/webp/png/jpg/jpeg）
+const BG_ALLOWED_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "gif"];
+const BG_MAX_BYTES: u64 = 10 * 1024 * 1024;
+
+/// id 单调递增保险：同一纳秒内连续导入也各得其一
+static BG_ID_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn bg_dir(s: &AppState) -> std::path::PathBuf {
+    // root = {appData}/library，其上级即 appData
+    s.config_dir().join("background")
+}
+
+fn next_bg_id() -> String {
+    use std::sync::atomic::Ordering;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos() as u64;
+    let prev = BG_ID_SEQ.load(Ordering::Relaxed);
+    let id = if now > prev { now } else { prev + 1 };
+    BG_ID_SEQ.store(id, Ordering::Relaxed);
+    format!("{id:x}")
+}
+
+/// name 净化：Windows 非法字符与控制符换 _，限长 60，首尾空白/点去掉，空回「背景」
+fn bg_sanitize_name(raw: &str) -> String {
+    let cleaned: String = raw
+        .chars()
+        .map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            c if c.is_control() => '_',
+            c => c,
+        })
+        .collect();
+    let trimmed = cleaned.trim().trim_matches('.');
+    let taken: String = trimmed.chars().take(60).collect();
+    let taken = taken.trim().trim_matches('.');
+    if taken.is_empty() {
+        "背景".to_string()
+    } else {
+        taken.to_string()
+    }
+}
+
+pub fn reading_bg_import_inner(s: &AppState, src_path: &str) -> AppResult<BgImage> {
+    let src = std::path::Path::new(src_path);
+    if !src.is_file() {
+        return Err(AppError::NotFound("背景图文件不存在".into()));
+    }
+    let ext = src
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    if !BG_ALLOWED_EXTS.contains(&ext.as_str()) {
+        return Err(AppError::Invalid("仅支持 png / jpg / jpeg / webp / gif 图片".into()));
+    }
+    let meta = std::fs::metadata(src)?;
+    if meta.len() > BG_MAX_BYTES {
+        return Err(AppError::Invalid("背景图不能超过 10MB".into()));
+    }
+    let name = bg_sanitize_name(src.file_stem().and_then(|n| n.to_str()).unwrap_or("背景"));
+    let id = next_bg_id();
+    let dir = bg_dir(s);
+    std::fs::create_dir_all(&dir)?;
+    let dest = dir.join(format!("{id}-{name}.{ext}"));
+    std::fs::copy(src, &dest)?;
+    Ok(BgImage {
+        id,
+        path: dest.to_string_lossy().into_owned(),
+        name,
+    })
+}
+
+pub fn reading_bg_list_inner(s: &AppState) -> AppResult<Vec<BgImage>> {
+    let dir = bg_dir(s);
+    if !dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut out: Vec<(String, BgImage)> = Vec::new();
+    for entry in std::fs::read_dir(&dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        if !BG_ALLOWED_EXTS.contains(&ext.as_str()) {
+            continue;
+        }
+        let file_name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+        let stem = path
+            .file_stem()
+            .and_then(|n| n.to_str())
+            .unwrap_or(file_name.trim_end_matches(&format!(".{ext}")))
+            .to_string();
+        // 文件名 = {id}-{name}：首段「-」前为 id，其后还原 name；外来文件无 id 段则整体作 id
+        let (id, name) = match stem.split_once('-') {
+            Some((id, name)) => (id.to_string(), name.to_string()),
+            None => (stem.clone(), stem),
+        };
+        if id.is_empty() {
+            continue;
+        }
+        out.push((
+            file_name,
+            BgImage {
+                id,
+                path: path.to_string_lossy().into_owned(),
+                name,
+            },
+        ));
+    }
+    // 文件名以 id 开头且等宽 hex → 字典序即导入先后
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(out.into_iter().map(|(_, img)| img).collect())
+}
+
+pub fn reading_bg_delete_inner(s: &AppState, id: &str) -> AppResult<()> {
+    let dir = bg_dir(s);
+    if dir.is_dir() {
+        for entry in std::fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            let stem = match path.file_stem().and_then(|n| n.to_str()) {
+                Some(n) => n,
+                None => continue,
+            };
+            // 只按「{id}-」前缀（或恰好整段）匹配，id 串本身不会注入路径分隔
+            if stem == id || stem.starts_with(&format!("{id}-")) {
+                std::fs::remove_file(&path)?;
+                return Ok(());
+            }
+        }
+    }
+    Err(AppError::NotFound("背景图不存在".into()))
+}
+
+#[tauri::command]
+pub fn reading_bg_import(s: State<AppState>, src_path: String) -> AppResult<BgImage> {
+    reading_bg_import_inner(&s, &src_path)
+}
+
+#[tauri::command]
+pub fn reading_bg_list(s: State<AppState>) -> AppResult<Vec<BgImage>> {
+    reading_bg_list_inner(&s)
+}
+
+#[tauri::command]
+pub fn reading_bg_delete(s: State<AppState>, id: String) -> AppResult<()> {
+    reading_bg_delete_inner(&s, &id)
+}
+
+#[cfg(test)]
+mod bg_tests {
+    use super::*;
+    use crate::state::AppState;
+
+    fn setup() -> (tempfile::TempDir, AppState) {
+        let tmp = tempfile::tempdir().unwrap();
+        let state = AppState::test_state(tmp.path());
+        (tmp, state)
+    }
+
+    fn write_file(dir: &std::path::Path, name: &str, bytes: &[u8]) -> std::path::PathBuf {
+        let p = dir.join(name);
+        std::fs::write(&p, bytes).unwrap();
+        p
+    }
+
+    #[test]
+    fn bg_import_list_delete_roundtrip() {
+        let (tmp, s) = setup();
+        // 目录缺失 → list 回空
+        assert!(reading_bg_list_inner(&s).unwrap().is_empty());
+
+        let src = write_file(tmp.path(), "山间晨雾.png", b"fake png bytes");
+        let img = reading_bg_import_inner(&s, src.to_str().unwrap()).unwrap();
+        assert_eq!(img.name, "山间晨雾", "name 取原文件名");
+        assert!(!img.id.is_empty(), "id = 纳秒 hex");
+        assert!(img.path.ends_with(".png"));
+        assert!(img.path.contains("background"), "拷到 appData/background/: {}", img.path);
+        assert_eq!(
+            std::fs::read(&img.path).unwrap(),
+            b"fake png bytes",
+            "内容完整拷贝"
+        );
+
+        // list：一条；name 从文件名还原（去 id 前缀）
+        let list = reading_bg_list_inner(&s).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, img.id);
+        assert_eq!(list[0].name, "山间晨雾");
+        assert_eq!(list[0].path, img.path);
+
+        // delete 后 list 空、文件删除
+        reading_bg_delete_inner(&s, &img.id).unwrap();
+        assert!(reading_bg_list_inner(&s).unwrap().is_empty());
+        assert!(!std::path::Path::new(&img.path).exists());
+    }
+
+    #[test]
+    fn bg_import_rejects_bad_extension_and_oversize() {
+        let (tmp, s) = setup();
+        let bmp = write_file(tmp.path(), "x.bmp", b"not an allowed image");
+        let err = reading_bg_import_inner(&s, bmp.to_str().unwrap()).unwrap_err();
+        assert!(matches!(err, AppError::Invalid(_)), "实际: {err:?}");
+
+        let missing = reading_bg_import_inner(&s, "no/such/file.png").unwrap_err();
+        assert!(matches!(missing, AppError::NotFound(_)), "实际: {missing:?}");
+
+        // 大写扩展放行（按小写比较）
+        let upper = write_file(tmp.path(), "UPPER.PNG", b"ok");
+        assert!(reading_bg_import_inner(&s, upper.to_str().unwrap()).is_ok());
+
+        // 超过 10MB 拒绝
+        let big = tmp.path().join("big.png");
+        std::fs::write(&big, vec![0u8; 10 * 1024 * 1024 + 1]).unwrap();
+        let err = reading_bg_import_inner(&s, big.to_str().unwrap()).unwrap_err();
+        assert!(matches!(err, AppError::Invalid(_)), "实际: {err:?}");
+    }
+
+    #[test]
+    fn bg_reimport_stores_duplicate_and_list_sorted_by_import() {
+        let (tmp, s) = setup();
+        let src = write_file(tmp.path(), "同一张.png", b"same bytes");
+
+        let a = reading_bg_import_inner(&s, src.to_str().unwrap()).unwrap();
+        let b = reading_bg_import_inner(&s, src.to_str().unwrap()).unwrap();
+        assert_ne!(a.id, b.id, "重复导入多存一份（id 不同）");
+        assert_eq!(reading_bg_list_inner(&s).unwrap().len(), 2);
+
+        // 排序：id hex 升序 = 导入先后
+        let list = reading_bg_list_inner(&s).unwrap();
+        assert!(list[0].id < list[1].id, "{:?} 应按导入序", list);
+
+        // 只删一份：删 b 后 a 还在
+        reading_bg_delete_inner(&s, &b.id).unwrap();
+        let rest = reading_bg_list_inner(&s).unwrap();
+        assert_eq!(rest.len(), 1);
+        assert_eq!(rest[0].id, a.id);
+    }
+
+    #[test]
+    fn bg_name_sanitized_and_missing_delete_not_found() {
+        let (tmp, s) = setup();
+        // 文件名带 Windows 非法字符（构造不出非法路径本身，用正斜杠语义近似：
+        // 这里主要测 name 还原与 delete 未命中）
+        let src = write_file(tmp.path(), "旅行 照片.jpg", b"jpg");
+        let img = reading_bg_import_inner(&s, src.to_str().unwrap()).unwrap();
+        assert_eq!(img.name, "旅行 照片");
+
+        // 未命中 id
+        let err = reading_bg_delete_inner(&s, "deadbeef").unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)), "实际: {err:?}");
+
+        // 空 id 也未命中（不会误删目录内全部）
+        let err = reading_bg_delete_inner(&s, "").unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)), "实际: {err:?}");
+        assert_eq!(reading_bg_list_inner(&s).unwrap().len(), 1, "文件仍在");
+    }
 }
