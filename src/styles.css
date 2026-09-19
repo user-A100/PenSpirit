@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #1e1e1e;
+  --bg-panel: #252526;
+  --bg-editor: #1e1e1e;
+  --fg: #d4d4d4;
+  --fg-dim: #8a8a8a;
+  --accent: #7c6ff0;
+  --border: #3c3c3c;
+}
+
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Microsoft YaHei UI", system-ui, sans-serif;
+}
