@@ -3,6 +3,11 @@
 //! 存储：`{book_dir}/.history/{chapter_slug}/{YYYY-MM-DD-HH-mm-ss}_{字数}.md`（全文快照，非 diff）
 //! 索引：同目录 `index.json`，`{"list":[{file,ts,words,title}]}` 新→旧，上限 50（超出丢弃最旧）。
 //!
+//! **快照粒度（时间分桶）**：自动保存（800ms 防抖）若每次都存，50 个槽位只够覆盖十几分钟，
+//! 「昨天的稿子」永远找不回来。故 Auto 模式下距最近快照不足 `MIN_INTERVAL_SECS` 则跳过，
+//! 但单次改动超过 `BIG_CHANGE_WORDS` 字时豁免（AI 采纳/大段粘贴这类跳跃性改动照常入历史）。
+//! 恢复旧版前的保险快照用 Force 模式，不受间隔限制——否则那次恢复就不可逆了。
+//!
 //! 章节 slug 取 md 文件名主干（如 `0001-chujian`）。选主干而非标题：md 是唯一真源，
 //! DB 重建后按文件名仍能对上历史；代价是重命名章节会另起一份历史（见遗留说明）。
 //!
@@ -24,6 +29,19 @@ use crate::util::count_words;
 pub const HISTORY_DIR: &str = ".history";
 /// 滚动上限
 pub const MAX_SNAPSHOTS: usize = 50;
+/// Auto 模式的最小间隔（秒）：同一时段内不重复占位，让 50 个槽位覆盖数天而非十几分钟
+pub const MIN_INTERVAL_SECS: i64 = 5 * 60;
+/// Auto 模式的豁免阈值（字）：单次改动超过它则无视间隔立即入历史（AI 采纳/大段粘贴）
+pub const BIG_CHANGE_WORDS: i64 = 200;
+
+/// 写入策略
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapshotMode {
+    /// 正文自动保存：尊重最小间隔（大幅改动豁免）
+    Auto,
+    /// 显式补存（恢复旧版前的保险）：忽略间隔，必须落一版
+    Force,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SnapshotInfo {
@@ -53,6 +71,37 @@ fn snapshot_dir(book_dir: &Path, slug: &str) -> PathBuf {
 /// 本地时间 `YYYY-MM-DD HH:MM:SS`：借 SQLite localtime，避免为时间格式化引入 chrono
 pub fn local_now(conn: &Connection) -> AppResult<String> {
     Ok(conn.query_row("SELECT datetime('now','localtime')", [], |r| r.get(0))?)
+}
+
+/// 民用日期 → 距 1970-01-01 的天数（Howard Hinnant 算法；纯整数运算，无时区/闰秒概念）
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let doy = (153 * ((m + 9) % 12) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719468
+}
+
+/// 解析 `YYYY-MM-DD HH:MM:SS` → 秒（本地墙钟，仅用于求差）；格式不符返回 None
+fn parse_ts(s: &str) -> Option<i64> {
+    let b = s.as_bytes();
+    if b.len() != 19 || b[4] != b'-' || b[7] != b'-' || b[10] != b' ' || b[13] != b':' || b[16] != b':' {
+        return None;
+    }
+    let two = |i: usize| s.get(i..i + 2)?.parse::<i64>().ok();
+    let y = s.get(0..4)?.parse::<i64>().ok()?;
+    Some(
+        days_from_civil(y, two(5)?, two(8)?) * 86400
+            + two(11)? * 3600
+            + two(14)? * 60
+            + two(17)?,
+    )
+}
+
+/// `b - a` 秒数；任一格式不符返回 None（跨日/跨月由 days_from_civil 保证正确）
+pub fn seconds_between(a: &str, b: &str) -> Option<i64> {
+    Some(parse_ts(b)? - parse_ts(a)?)
 }
 
 /// 归一化：统一换行、去行尾空白、压连续空行、去首尾空行。
@@ -95,14 +144,24 @@ fn write_index(dir: &Path, idx: &Index) -> AppResult<()> {
     Ok(())
 }
 
-/// 记录一次快照。返回是否真正写入——内容为空、或与最近一次快照实质相同 → false（不重复占位）。
+/// 记录一次快照。返回是否真正写入——以下情况为 false（不占槽位）：
+/// 内容为空；与最近一次快照实质相同；Auto 模式下距最近快照不足 `MIN_INTERVAL_SECS`
+/// 且字数变化未超过 `BIG_CHANGE_WORDS`。
 /// IO 失败一律返回 false：历史记录失败不应阻断正文保存。
-pub fn snapshot(book_dir: &Path, slug: &str, title: &str, content: &str, ts: &str) -> bool {
+pub fn snapshot(
+    book_dir: &Path,
+    slug: &str,
+    title: &str,
+    content: &str,
+    ts: &str,
+    mode: SnapshotMode,
+) -> bool {
     if !safe_component(slug) || content.trim().is_empty() {
         return false;
     }
     let dir = snapshot_dir(book_dir, slug);
     let mut idx = read_index(&dir);
+    let words = count_words(content);
 
     // 与最近一次快照比对（空白差异不算改动）
     if let Some(latest) = idx.list.first() {
@@ -111,9 +170,15 @@ pub fn snapshot(book_dir: &Path, slug: &str, title: &str, content: &str, ts: &st
                 return false;
             }
         }
+        // 时间分桶：同一时段内不重复占位，大幅改动（AI 采纳/大段粘贴）豁免
+        if mode == SnapshotMode::Auto
+            && (words - latest.words).abs() < BIG_CHANGE_WORDS
+            && seconds_between(&latest.ts, ts).is_some_and(|dt| (0..MIN_INTERVAL_SECS).contains(&dt))
+        {
+            return false;
+        }
     }
 
-    let words = count_words(content);
     let stamp = ts.replace(' ', "-").replace(':', "-");
     let mut file = format!("{stamp}_{words}.md");
     let mut n = 2;

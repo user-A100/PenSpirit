@@ -107,9 +107,16 @@ pub fn write_chapter_inner(s: &AppState, id: i64, content: &str) -> AppResult<Ch
     let ctx = history_ctx(s, id)?;
     fs_service::write_chapter(&s.root, &ctx.rel, content)?;
     let wc = count_words(content);
-    // M2-T7 快照钩子：落盘成功后记录本版本（内容为空或与最近快照实质相同则内部跳过）。
+    // M2-T7 快照钩子：落盘成功后记录本版本（空内容/无实质改动/同一时段内则内部跳过）。
     // snapshot 吞掉 IO 错误并返回 bool——历史写入失败绝不阻断正文保存。
-    history::snapshot(&s.root.join(&ctx.book_slug), &ctx.slug, &ctx.title, content, &ctx.ts);
+    history::snapshot(
+        &s.root.join(&ctx.book_slug),
+        &ctx.slug,
+        &ctx.title,
+        content,
+        &ctx.ts,
+        history::SnapshotMode::Auto,
+    );
     lock(s).and_then(|conn| repo::chapters::touch_content(&*conn, id, wc))
 }
 
@@ -279,10 +286,18 @@ pub fn read_history_inner(s: &AppState, chapter_id: i64, file: &str) -> AppResul
 }
 
 /// 把给定内容存为该章的一次快照。前端在恢复旧版前用它做保险——传入的是编辑器**实时**内容，
-/// 故自动保存防抖窗口（800ms）内尚未落盘的输入也不会丢；内容空或与最近快照实质相同则为 no-op。
+/// 故自动保存防抖窗口（800ms）内尚未落盘的输入也不会丢。
+/// 用 Force 模式：无视时间分桶，必须落一版（否则这次恢复就不可逆了）；内容空或与最近快照相同则为 no-op。
 pub fn snapshot_now_inner(s: &AppState, chapter_id: i64, content: &str) -> AppResult<bool> {
     let ctx = history_ctx(s, chapter_id)?;
-    Ok(history::snapshot(&s.root.join(&ctx.book_slug), &ctx.slug, &ctx.title, content, &ctx.ts))
+    Ok(history::snapshot(
+        &s.root.join(&ctx.book_slug),
+        &ctx.slug,
+        &ctx.title,
+        content,
+        &ctx.ts,
+        history::SnapshotMode::Force,
+    ))
 }
 
 #[tauri::command]

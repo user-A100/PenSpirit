@@ -181,6 +181,9 @@ export function HistoryPanel(props: {
             return lines.map((l, j) => <Line key={`${i}-${j}`} text={l} kind={kind} />);
           })}
         </div>
+        <div className="shrink-0 border-t border-[color:var(--border-subtle)] px-3 py-1.5 text-[11px] text-[color:var(--text-faint)]">
+          自动保存每 5 分钟记一版（大段改动立即记）；恢复前会先保留当前内容
+        </div>
       </div>
     </div>
   );
