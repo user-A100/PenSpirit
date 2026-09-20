@@ -15,8 +15,9 @@ const fullValid: ReadingPrefs = {
   lineHeight: 2,
   letterSpacing: 1.5,
   paraSpacing: 1.2,
-  pageWidth: 800,
+  pageWidth: 1000,
   margin: 32,
+  bottomSpace: 45,
   fontFamily: "kai",
   textAlign: "left",
   indent: false,
@@ -64,12 +65,17 @@ describe("normalizeReadingPrefs", () => {
     n = normalizeReadingPrefs({ ...fullValid, pageWidth: 10 });
     expect(n.pageWidth).toBe(480);
     n = normalizeReadingPrefs({ ...fullValid, pageWidth: 99999 });
-    expect(n.pageWidth).toBe(1000);
+    expect(n.pageWidth).toBe(1600);
 
     n = normalizeReadingPrefs({ ...fullValid, margin: -8 });
     expect(n.margin).toBe(0);
     n = normalizeReadingPrefs({ ...fullValid, margin: 900 });
     expect(n.margin).toBe(96);
+
+    n = normalizeReadingPrefs({ ...fullValid, bottomSpace: -5 });
+    expect(n.bottomSpace).toBe(0);
+    n = normalizeReadingPrefs({ ...fullValid, bottomSpace: 999 });
+    expect(n.bottomSpace).toBe(60);
 
     n = normalizeReadingPrefs({ ...fullValid, bgOpacity: -5 });
     expect(n.bgOpacity).toBe(0);
@@ -98,12 +104,11 @@ describe("normalizeReadingPrefs", () => {
     expect(n.bgImage).toBeNull();
   });
 
-  it("lineHeight 数值吸附到五档（1/1.25/1.5/1.75/2）", () => {
-    expect(normalizeReadingPrefs({ lineHeight: 0.2 }).lineHeight).toBe(1);
-    expect(normalizeReadingPrefs({ lineHeight: 1.3 }).lineHeight).toBe(1.25);
-    expect(normalizeReadingPrefs({ lineHeight: 1.6 }).lineHeight).toBe(1.5);
-    expect(normalizeReadingPrefs({ lineHeight: 1.9 }).lineHeight).toBe(2);
-    expect(normalizeReadingPrefs({ lineHeight: 99 }).lineHeight).toBe(2);
+  it("lineHeight clamp 到 [1.4,3.0] 并取 0.1 档（连续滑条）", () => {
+    expect(normalizeReadingPrefs({ lineHeight: 0.2 }).lineHeight).toBe(1.4);
+    expect(normalizeReadingPrefs({ lineHeight: 1.75 }).lineHeight).toBe(1.8); // 旧档位值就近取 0.1 档
+    expect(normalizeReadingPrefs({ lineHeight: 2.05 }).lineHeight).toBe(2.1);
+    expect(normalizeReadingPrefs({ lineHeight: 99 }).lineHeight).toBe(3);
   });
 
   it("颜色只认 #rrggbb，其余回默认", () => {
@@ -130,8 +135,8 @@ describe("normalizeReadingPrefs", () => {
 });
 
 describe("READING_BG_PRESETS", () => {
-  it("四组预设，字段齐全", () => {
-    expect(READING_BG_PRESETS).toHaveLength(4);
+  it("七组预设（含三套深色 tint），字段齐全", () => {
+    expect(READING_BG_PRESETS).toHaveLength(7);
     for (const p of READING_BG_PRESETS) {
       expect(typeof p.bg).toBe("string");
       expect(p.bg).toMatch(/^#[0-9a-fA-F]{6}$/);

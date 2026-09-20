@@ -26,6 +26,8 @@ interface ReadProgress {
 
 const PROGRESS_DEBOUNCE_MS = 300;
 const NAV_AUTO_HIDE_MS = 1500;
+/** 长按 Esc 退出（作家助手同款 1500ms，防误退） */
+const ESC_HOLD_MS = 1500;
 
 // T5 顶栏消费：本次进入阅读的时刻（ReadView 每次挂载刷新）
 let enteredAt = Date.now();
@@ -71,6 +73,11 @@ export function ReadView() {
   const [navShown, setNavShown] = useState(true);
   /** 最新滚动比例 0-1（TopPanel 百分比轮询；ref 旁路避免滚动路径重渲染） */
   const progressRef = useRef(0);
+  /** 视口伪分页（作家助手三公式）：页位置供顶/底栏轮询展示 */
+  const pageRef = useRef({ page: 1, total: 1 });
+  /** 长按 Esc 退出进度提示 */
+  const [escHold, setEscHold] = useState(false);
+  const escTimer = useRef<number | undefined>(undefined);
   /** 滚到底 → 章末「下一章」提示 */
   const [atBottom, setAtBottom] = useState(false);
 
@@ -104,6 +111,15 @@ export function ReadView() {
     el.scrollTop = denom > 0 ? r.ratio * denom : 0;
   }, []);
 
+  /** 视口伪分页（作家助手公式）：total=ceil(高/视口)，page=ceil((顶+视口)/视口) */
+  const syncPageInfo = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || el.clientHeight <= 0) return;
+    const total = Math.max(1, Math.ceil(el.scrollHeight / el.clientHeight));
+    const page = Math.min(total, Math.max(1, Math.ceil((el.scrollTop + el.clientHeight) / el.clientHeight)));
+    pageRef.current = { page, total };
+  }, []);
+
   // 灌内容 + 滚动定位（先于定位声明，同一次提交里内容先落 DOM）
   useEffect(() => {
     if (!editor || chapterContent == null) return;
@@ -132,7 +148,8 @@ export function ReadView() {
     } else {
       setAtBottom(el.scrollTop / denom >= 0.995);
     }
-  }, [currentChapterId, chapterContent]);
+    syncPageInfo();
+  }, [currentChapterId, chapterContent, syncPageInfo]);
 
   // 进入时恢复上次进度：有记录且章存在 → 切到该章，内容就位后回到比例位置
   useEffect(() => {
@@ -159,7 +176,7 @@ export function ReadView() {
     };
   }, [currentBookId, applyRestore]);
 
-  // ---- 进度记忆：滚动 300ms 防抖落 KV；比例同步进 ref / 章末态 ----
+  // ---- 进度记忆：滚动 300ms 防抖落 KV；比例同步进 ref / 章末态 / 页码 ----
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
     if (el) {
@@ -167,6 +184,7 @@ export function ReadView() {
       const ratio = denom > 0 ? Math.min(1, Math.max(0, el.scrollTop / denom)) : 1;
       progressRef.current = ratio;
       setAtBottom(ratio >= 0.995); // 同值 setState 由 React bail，不额外渲染
+      syncPageInfo();
     }
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
@@ -182,7 +200,7 @@ export function ReadView() {
         ts: Date.now(),
       }).catch(() => {});
     }, PROGRESS_DEBOUNCE_MS);
-  }, []);
+  }, [syncPageInfo]);
 
   useEffect(() => () => window.clearTimeout(saveTimer.current), []);
 
@@ -191,8 +209,12 @@ export function ReadView() {
   const prevChapter = idx > 0 ? chapters[idx - 1] : null;
   const nextChapter = idx >= 0 && idx + 1 < chapters.length ? chapters[idx + 1] : null;
 
-  // ---- 键盘：Esc 退出 / Ctrl+←→ 换章 / F6-9 面板开合；↑↓/PageUp/Down 走容器原生滚动 ----
+  // ---- 键盘：长按 Esc 1500ms 退出（防误退）/ Ctrl+←→ 换章 / Ctrl+↑↓ 章首尾 / F6-9 面板 ----
   useEffect(() => {
+    const cancelEsc = () => {
+      window.clearTimeout(escTimer.current);
+      setEscHold(false);
+    };
     const onKey = (e: KeyboardEvent) => {
       // 设置/搜索弹层开着时让给它处理
       if (useSettings.getState().modalOpen || useSearch.getState().open) return;
@@ -204,10 +226,27 @@ export function ReadView() {
       }
       if (e.key === "Escape") {
         e.preventDefault();
-        exitRead();
+        if (e.repeat) return; // 按住不放的系统重复事件：计时器已在跑
+        setEscHold(true);
+        window.clearTimeout(escTimer.current);
+        escTimer.current = window.setTimeout(() => {
+          setEscHold(false);
+          exitRead();
+        }, ESC_HOLD_MS);
         return;
       }
       if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        // 章首/章尾（作家助手 Ctrl+↑/↓）
+        const el = scrollRef.current;
+        if (!el) return;
+        e.preventDefault();
+        el.scrollTo({
+          top: e.key === "ArrowUp" ? 0 : el.scrollHeight,
+          behavior: "smooth",
+        });
+        return;
+      }
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       const ws = useWorkspace.getState();
       const i = ws.chapters.findIndex((c) => c.id === ws.currentChapterId);
@@ -223,8 +262,16 @@ export function ReadView() {
       e.preventDefault();
       void ws.selectChapter(target.id);
     };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cancelEsc();
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
+      window.clearTimeout(escTimer.current);
+    };
   }, [exitRead]);
 
   // ---- 悬浮圆钮：进入显示 1.5s 后淡出，鼠标进入恢复、离开再计时 ----
@@ -275,6 +322,7 @@ export function ReadView() {
         chapterTitle={chapterTitle}
         startedAt={startedAt}
         progressRef={progressRef}
+        pageRef={pageRef}
         chapters={chapters}
         currentChapterId={currentChapterId}
         onSelectChapter={gotoChapter}
@@ -303,6 +351,8 @@ export function ReadView() {
               letterSpacing: `${prefs.letterSpacing}em`,
               textAlign: prefs.textAlign,
               color: prefs.textColor,
+              // 章尾底部留白（作家助手 bottomSpace：读到末尾时内容不必顶死屏幕底）
+              paddingBottom: `${prefs.bottomSpace}vh`,
               ...(fontStack ? { fontFamily: fontStack } : null),
               ...({ "--prose-para-spacing": `${prefs.paraSpacing}em` } as unknown as CSSProperties),
             }}
@@ -324,6 +374,16 @@ export function ReadView() {
           </div>
         </div>
       </ReadingShell>
+
+      {/* 长按 Esc 退出提示：按下出现，填满 1500ms 即退出，松开取消 */}
+      {escHold && (
+        <div className="pointer-events-none fixed bottom-12 left-1/2 z-20 -translate-x-1/2">
+          <div className="overflow-hidden rounded-full bg-black/60 px-4 py-1.5 text-xs text-white/90 backdrop-blur-sm">
+            继续按住 Esc 退出阅读…
+            <span className="esc-hold-bar" aria-hidden />
+          </div>
+        </div>
+      )}
 
       {/* 右下角悬浮圆钮：上一章 / 下一章 / 退出（右侧锁定时让位） */}
       <div
@@ -356,7 +416,7 @@ export function ReadView() {
         >
           <ChevronRight size={16} />
         </button>
-        <button onClick={exitRead} title="退出阅读（Esc）" className={NAV_BTN}>
+        <button onClick={exitRead} title="退出阅读（长按 Esc）" className={NAV_BTN}>
           <X size={16} />
         </button>
       </div>

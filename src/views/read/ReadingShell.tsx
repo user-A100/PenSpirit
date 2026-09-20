@@ -41,6 +41,8 @@ interface ReadingShellProps {
   startedAt: number;
   /** 最新滚动比例 0-1（ReadView 滚动时同步写入，TopPanel 轮询消费） */
   progressRef: { current: number };
+  /** 视口伪分页页位置（TopPanel/BottomPanel 轮询消费） */
+  pageRef: { current: { page: number; total: number } };
   chapters: ChapterMeta[];
   currentChapterId: number | null;
   onSelectChapter: (id: number) => void;
@@ -54,7 +56,7 @@ interface ReadingShellProps {
 
 export function ReadingShell(props: ReadingShellProps) {
   const {
-    bookTitle, chapterTitle, startedAt, progressRef, chapters,
+    bookTitle, chapterTitle, startedAt, progressRef, pageRef, chapters,
     currentChapterId, onSelectChapter, onExit,
     onPrevChapter, onNextChapter, prevDisabled, nextDisabled, children,
   } = props;
@@ -273,6 +275,7 @@ export function ReadingShell(props: ReadingShellProps) {
             chapterTitle={chapterTitle}
             startedAt={startedAt}
             progressRef={progressRef}
+            pageRef={pageRef}
             onExit={onExit}
           />
         </div>
@@ -294,6 +297,7 @@ export function ReadingShell(props: ReadingShellProps) {
             onNext={onNextChapter}
             prevDisabled={prevDisabled}
             nextDisabled={nextDisabled}
+            pageRef={pageRef}
           />
         </div>
       </section>

@@ -115,7 +115,7 @@ describe("SettingPanel", () => {
     await waitFor(() => expect(api.readingBgList).toHaveBeenCalledTimes(2));
   });
 
-  it("选预设圆色圈写 prefs 配色", () => {
+  it("选预设圆色圈写 prefs 配色（含新增深色 tint）", () => {
     render(<SettingPanel />);
     fireEvent.click(screen.getByLabelText("配色预设 暗夜"));
     expect(useReadingPrefs.getState().bgColor).toBe("#1a1a1a");
@@ -124,18 +124,28 @@ describe("SettingPanel", () => {
     fireEvent.click(screen.getByLabelText("配色预设 护眼绿"));
     expect(useReadingPrefs.getState().bgColor).toBe("#cfe8d0");
     expect(useReadingPrefs.getState().textColor).toBe("#2d4a33");
+
+    fireEvent.click(screen.getByLabelText("配色预设 藏青"));
+    expect(useReadingPrefs.getState().bgColor).toBe("#354359");
+    expect(useReadingPrefs.getState().textColor).toBe("#dfe6f0");
   });
 
-  it("排版滑条即时写 prefs", () => {
+  it("排版滑条即时写 prefs（行距连续档/页宽上限 1600/留白）", () => {
     render(<SettingPanel />);
     fireEvent.change(screen.getByRole("slider", { name: "字号" }), { target: { value: "22" } });
     expect(useReadingPrefs.getState().fontSize).toBe(22);
 
-    fireEvent.change(screen.getByRole("slider", { name: "行距" }), { target: { value: "1" } });
-    expect(useReadingPrefs.getState().lineHeight).toBe(1.25);
+    const lineHeight = screen.getByRole("slider", { name: "行距" }) as HTMLInputElement;
+    expect(lineHeight.min).toBe("1.4");
+    expect(lineHeight.max).toBe("3");
+    fireEvent.change(lineHeight, { target: { value: "2.3" } });
+    expect(useReadingPrefs.getState().lineHeight).toBe(2.3);
 
-    fireEvent.change(screen.getByRole("slider", { name: "页宽" }), { target: { value: "860" } });
-    expect(useReadingPrefs.getState().pageWidth).toBe(860);
+    fireEvent.change(screen.getByRole("slider", { name: "页宽" }), { target: { value: "1500" } });
+    expect(useReadingPrefs.getState().pageWidth).toBe(1500);
+
+    fireEvent.change(screen.getByRole("slider", { name: "留白" }), { target: { value: "45" } });
+    expect(useReadingPrefs.getState().bottomSpace).toBe(45);
   });
 
   it("字体下拉/对齐/缩进开关写 prefs", () => {

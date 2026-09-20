@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChapterMeta } from "../../lib/tauri";
 import {
@@ -178,6 +178,7 @@ describe("BottomPanel", () => {
   const onSelectChapter = vi.fn();
   const onPrev = vi.fn();
   const onNext = vi.fn();
+  const pageRef = { current: { page: 3, total: 8 } };
 
   function setup(current = 12, prevDisabled = false, nextDisabled = false) {
     render(
@@ -189,17 +190,33 @@ describe("BottomPanel", () => {
         onNext={onNext}
         prevDisabled={prevDisabled}
         nextDisabled={nextDisabled}
+        pageRef={pageRef}
       />,
     );
   }
 
-  it("显示「第 X / N 章」与进度滑条", () => {
+  it("显示「第 X / N 章 · P/M 页」与进度滑条", () => {
     setup();
-    expect(screen.getByText("第 2 / 3 章")).toBeInTheDocument();
+    expect(screen.getByText("第 2 / 3 章 · 3/8 页")).toBeInTheDocument();
     const slider = screen.getByRole("slider");
     expect(slider).toHaveAttribute("min", "1");
     expect(slider).toHaveAttribute("max", "3");
     expect((slider as HTMLInputElement).value).toBe("2");
+  });
+
+  it("pageRef 更新后轮询刷新页码展示", () => {
+    vi.useFakeTimers();
+    try {
+      setup();
+      expect(screen.getByText("第 2 / 3 章 · 3/8 页")).toBeInTheDocument();
+      pageRef.current = { page: 6, total: 8 };
+      act(() => {
+        vi.advanceTimersByTime(350); // 300ms 轮询周期
+      });
+      expect(screen.getByText("第 2 / 3 章 · 6/8 页")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("滑条换章：change 到第 1 章 → selectChapter(11)", () => {

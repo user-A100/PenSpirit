@@ -11,6 +11,8 @@ interface TopPanelProps {
   startedAt: number;
   /** 最新滚动比例 0-1（ReadView 滚动时同步写入） */
   progressRef: { current: number };
+  /** 视口伪分页页位置（ReadView 滚动时同步写入） */
+  pageRef: { current: { page: number; total: number } };
   onExit: () => void;
 }
 
@@ -21,7 +23,7 @@ function fmtDuration(ms: number): string {
   return `${m}:${String(ss).padStart(2, "0")}`;
 }
 
-export function TopPanel({ bookTitle, chapterTitle, startedAt, progressRef, onExit }: TopPanelProps) {
+export function TopPanel({ bookTitle, chapterTitle, startedAt, progressRef, pageRef, onExit }: TopPanelProps) {
   const [now, setNow] = useState(() => Date.now());
   const [fullscreen, setFullscreen] = useState(() => Boolean(document.fullscreenElement));
 
@@ -45,6 +47,7 @@ export function TopPanel({ bookTitle, chapterTitle, startedAt, progressRef, onEx
   };
 
   const pct = Math.round(Math.min(1, Math.max(0, progressRef.current)) * 100);
+  const pg = pageRef.current;
 
   return (
     <div className="flex h-full w-full items-center gap-3 px-4 text-xs">
@@ -58,6 +61,9 @@ export function TopPanel({ bookTitle, chapterTitle, startedAt, progressRef, onEx
       </div>
       <span className="tabular-nums opacity-70" title="本次阅读时长">
         {fmtDuration(now - startedAt)}
+      </span>
+      <span className="tabular-nums opacity-70" title="本章页位置（作家助手同款视口分页）">
+        {pg.page}/{pg.total} 页
       </span>
       <span className="tabular-nums opacity-70" title="本章进度">
         {pct}%

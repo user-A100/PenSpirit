@@ -13,7 +13,6 @@ import { READING_BG_PRESETS, useReadingPrefs } from "./readingPrefs";
 // 滑条/色圈直写 readingPrefs store（localStorage 即时落盘，ReadView 即时消费）。
 // 面板常驻挂载在 ReadingShell 右栏——input 聚焦守卫由壳层 onFocus/onBlur 负责。
 
-const LINE_HEIGHT_STEPS = [1, 1.25, 1.5, 1.75, 2];
 const FONT_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "默认衬线" },
   { value: "kai", label: "楷体" },
@@ -306,10 +305,9 @@ export function SettingPanel() {
             fmt={(v) => `${v}px`}
           />
           <SliderRow
-            label="行距" min={0} max={4} step={1}
-            value={Math.max(0, LINE_HEIGHT_STEPS.indexOf(prefs.lineHeight))}
-            onChange={(v) => prefs.set({ lineHeight: LINE_HEIGHT_STEPS[v] ?? prefs.lineHeight })}
-            fmt={(v) => `${LINE_HEIGHT_STEPS[v] ?? prefs.lineHeight}`}
+            label="行距" min={1.4} max={3} step={0.1}
+            value={prefs.lineHeight}
+            onChange={(v) => prefs.set({ lineHeight: v })}
           />
           <SliderRow
             label="字距" min={0} max={2} step={0.1}
@@ -324,7 +322,7 @@ export function SettingPanel() {
             fmt={(v) => `${v}em`}
           />
           <SliderRow
-            label="页宽" min={480} max={1000} step={10}
+            label="页宽" min={480} max={1600} step={10}
             value={prefs.pageWidth}
             onChange={(v) => prefs.set({ pageWidth: v })}
             fmt={(v) => `${v}px`}
@@ -334,6 +332,12 @@ export function SettingPanel() {
             value={prefs.margin}
             onChange={(v) => prefs.set({ margin: v })}
             fmt={(v) => `${v}px`}
+          />
+          <SliderRow
+            label="留白" min={0} max={60} step={5}
+            value={prefs.bottomSpace}
+            onChange={(v) => prefs.set({ bottomSpace: v })}
+            fmt={(v) => `${v}%`}
           />
         </Section>
 

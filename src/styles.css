@@ -337,3 +337,19 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
   100% { background-color: transparent; box-shadow: inset 0 0 0 1px transparent; }
 }
 .setting-hit { animation: setting-hit 1.8s ease; border-radius: 8px; }
+
+/* ---------- 长按 Esc 退出阅读（ReadView，作家助手同款 1500ms） ---------- */
+/* 按下 Esc 出现提示胶囊，内嵌进度条 1500ms 线性填满即退出；松开即取消 */
+.esc-hold-bar {
+  display: block;
+  height: 2px;
+  margin-top: 3px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.95);
+  width: 0;
+  animation: esc-hold-fill 1500ms linear forwards;
+}
+@keyframes esc-hold-fill {
+  from { width: 0; }
+  to { width: 100%; }
+}

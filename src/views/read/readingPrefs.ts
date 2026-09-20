@@ -7,12 +7,13 @@ import { create } from "zustand";
 export const READING_PREFS_KEY = "bixian.reading";
 
 export interface ReadingPrefs {
-  fontSize: number; // 13-40 px，默认 17（books-reader 同域）
-  lineHeight: number; // 1 | 1.25 | 1.5 | 1.75 | 2，默认 1.75
+  fontSize: number; // 13-40 px，默认 19（作家助手桌面 16px + 桌面大屏余量）
+  lineHeight: number; // 1.4-3.0 连续值，默认 1.9（作家助手阅读态有效区间 1.8-2.1）
   letterSpacing: number; // 0-2（em），默认 0
-  paraSpacing: number; // 0-3（em）段距，默认 0.6
-  pageWidth: number; // 480-1000 px 正文列宽，默认 720
+  paraSpacing: number; // 0-3（em）段距，默认 1（作家助手正文段距 padding-bottom 1em）
+  pageWidth: number; // 480-1600 px 正文列宽，默认 800（作家助手 ≤1920 屏 1040px 同比例）
   margin: number; // 0-96 px 额外页边，默认 0
+  bottomSpace: number; // 0-60（vh%），默认 30——章尾底部留白（作家助手 bottomSpace 0.3 同款）
   fontFamily: string; // "" = 默认衬线栈；"kai"/"song"/"hei" 预设映射
   textAlign: "left" | "justify"; // 默认 justify（中文书版惯例）
   indent: boolean; // 首行缩进 2em，默认 true
@@ -23,12 +24,13 @@ export interface ReadingPrefs {
 }
 
 export const defaultReadingPrefs: ReadingPrefs = {
-  fontSize: 17,
-  lineHeight: 1.75,
+  fontSize: 19,
+  lineHeight: 1.9,
   letterSpacing: 0,
-  paraSpacing: 0.6,
-  pageWidth: 720,
+  paraSpacing: 1,
+  pageWidth: 800,
   margin: 0,
+  bottomSpace: 30,
   fontFamily: "",
   textAlign: "justify",
   indent: true,
@@ -38,12 +40,15 @@ export const defaultReadingPrefs: ReadingPrefs = {
   bgOpacity: 78,
 };
 
-/** 配色四预设（books-reader 同序）：白纸 / 暗夜 / 米黄 / 护眼绿 */
+/** 配色七预设：白纸/暗夜/米黄/护眼绿 + 三套深色 tint（色值取自作家助手暗色皮肤） */
 export const READING_BG_PRESETS: { bg: string; text: string; name: string }[] = [
   { bg: "#ffffff", text: "#1f1f1f", name: "白纸" },
   { bg: "#1a1a1a", text: "#d8d8d8", name: "暗夜" },
   { bg: "#f5eddd", text: "#3b3227", name: "米黄" },
   { bg: "#cfe8d0", text: "#2d4a33", name: "护眼绿" },
+  { bg: "#363636", text: "#ebebeb", name: "深灰" },
+  { bg: "#354359", text: "#dfe6f0", name: "藏青" },
+  { bg: "#4e4025", text: "#e8dcc8", name: "暖褐" },
 ];
 
 /** 字体预设 → 字体栈映射（"" 用 .prose-serif 默认衬线栈，不在此表） */
@@ -53,7 +58,8 @@ export const READING_FONT_STACKS: Record<string, string> = {
   hei: '"Microsoft YaHei", "PingFang SC", "黑体", sans-serif',
 };
 
-const LINE_HEIGHT_STEPS = [1, 1.25, 1.5, 1.75, 2];
+const LINE_HEIGHT_MIN = 1.4;
+const LINE_HEIGHT_MAX = 3.0;
 
 /** 有限数值 clamp 到 [min,max]，否则回默认 */
 function num(raw: unknown, fallback: number, min: number, max: number): number {
@@ -61,12 +67,10 @@ function num(raw: unknown, fallback: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, raw));
 }
 
-/** clamp 到 [1,2] 后吸附最近的行高档 */
+/** clamp 到 [1.4,3.0] 后取 0.1 档（作家助手滑杆同 step） */
 function normLineHeight(raw: unknown): number {
-  const n = num(raw, defaultReadingPrefs.lineHeight, 1, 2);
-  return LINE_HEIGHT_STEPS.reduce((best, s) =>
-    Math.abs(s - n) < Math.abs(best - n) ? s : best,
-  );
+  const n = num(raw, defaultReadingPrefs.lineHeight, LINE_HEIGHT_MIN, LINE_HEIGHT_MAX);
+  return Math.round(n * 10) / 10;
 }
 
 function normFontFamily(raw: unknown): string {
@@ -95,8 +99,9 @@ export function normalizeReadingPrefs(raw: unknown): ReadingPrefs {
     lineHeight: normLineHeight(o.lineHeight),
     letterSpacing: num(o.letterSpacing, defaultReadingPrefs.letterSpacing, 0, 2),
     paraSpacing: num(o.paraSpacing, defaultReadingPrefs.paraSpacing, 0, 3),
-    pageWidth: num(o.pageWidth, defaultReadingPrefs.pageWidth, 480, 1000),
+    pageWidth: num(o.pageWidth, defaultReadingPrefs.pageWidth, 480, 1600),
     margin: num(o.margin, defaultReadingPrefs.margin, 0, 96),
+    bottomSpace: num(o.bottomSpace, defaultReadingPrefs.bottomSpace, 0, 60),
     fontFamily: normFontFamily(o.fontFamily),
     textAlign: o.textAlign === "left" || o.textAlign === "justify" ? o.textAlign : "justify",
     indent: typeof o.indent === "boolean" ? o.indent : true,
