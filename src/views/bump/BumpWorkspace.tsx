@@ -51,7 +51,7 @@ export function BumpWorkspace() {
   };
 
   return (
-    <div className="flex h-full bg-[var(--bg-base)]">
+    <div className="flex h-full bg-transparent">
       {/* 碰撞台 */}
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[color:var(--border-subtle)] px-4">

@@ -82,7 +82,11 @@ export default function App() {
     <ThemeProvider>
       <div className="flex h-full w-full bg-[var(--bg-base)]">
         <Ribbon />
-        <main className="min-w-0 flex-1">
+        <main className="min-w-0 flex-1 p-[var(--sep)]">
+          {/* Zen 浮卡骨架：全部视图整体浮在 --bg-base 背板上，四周留 --sep 缝隙。
+              overflow-hidden 负责把各视图自带的方角背景裁成卡片圆角；弹窗/浮窗走
+              fixed 定位（不受裁切影响），回收站浮层横跨三栏、远在卡片内部。 */}
+          <div className="h-full overflow-hidden rounded-[var(--radius-md)] bg-[var(--bg-panel)]">
           {/* WriteView 常挂（hidden 而非卸载）保住编辑器/dock/侧栏的内部状态 */}
           <div className={current === "write" ? "h-full" : "hidden"}>
             <WriteView />
@@ -92,6 +96,7 @@ export default function App() {
             const Active = getView(current)?.Component;
             return Active ? <Active /> : null;
           })()}
+          </div>
         </main>
         {/* 纸张纹理覆盖层（M3-T3）：z-200 高于全部面板/弹窗，均匀铺满整页（Maple 整页纸感）；
             preset="none" 时不渲染。定位样式见 styles.css #texture-layer 分区 */}

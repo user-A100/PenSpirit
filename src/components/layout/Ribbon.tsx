@@ -16,7 +16,7 @@ export function Ribbon() {
   const openSettings = useSettings((s) => s.open);
 
   return (
-    <aside className="flex h-full w-12 flex-none flex-col items-center border-r border-[color:var(--border-subtle)] bg-[var(--bg-panel)]">
+    <aside className="flex h-full w-12 flex-none flex-col items-center bg-[var(--bg-panel)]">
       {/* 顶部：笔仙 logo */}
       <div className="flex h-12 shrink-0 items-center justify-center border-b border-[color:var(--border-subtle)]" title="笔仙">
         <PenTool size={18} className="text-[color:var(--accent)]" />

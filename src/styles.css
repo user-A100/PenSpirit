@@ -29,7 +29,7 @@
   --warning: #fbbf24;
 }
 
-/* Zen 结构 token：圆角/阴影/动效时长（zen-theme.css 规格；不随主题切换） */
+/* Zen 结构 token：圆角/阴影/动效时长/背板缝隙（zen-theme.css 规格；不随主题切换） */
 :root {
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -37,6 +37,9 @@
   --shadow-pop: 0 3px 8px rgba(0, 0, 0, 0.24);
   --dur-fast: 0.1s;
   --dur-md: 0.15s;
+  /* 背板缝隙：内容浮卡与窗口边框/导航条之间的留白
+     （Zen --zen-element-separation，zen-split-view.css:99） */
+  --sep: 8px;
 }
 
 /* 弹窗/浮卡入场：Zen zen-dialog-fade-in（下移 10px 淡入，0.15s ease） */
@@ -99,7 +102,7 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
 .ProseMirror hr::after {
   content: "❖"; display: inline-block; position: relative; top: -0.75em;
   padding: 0 0.75em; font-size: 0.85em; color: var(--text-faint);
-  background: var(--bg-base);
+  background: var(--bg-panel); /* 编辑器坐在内容浮卡上，遮线底色须同卡片 */
 }
 
 /* ---------- 悬浮大纲（M3-T7 写作模式，Maple 视觉三件套） ---------- */

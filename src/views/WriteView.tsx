@@ -55,7 +55,7 @@ export function WriteView() {
     >
       <Group
         orientation="horizontal"
-        className="h-full bg-[var(--bg-base)]"
+        className="h-full bg-transparent"
         defaultLayout={initialLayout}
       >
       <Panel

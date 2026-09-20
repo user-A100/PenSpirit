@@ -155,7 +155,7 @@ export function ChapterEditor() {
 
   if (currentChapterId == null) {
     return (
-      <div className="relative flex h-full flex-col items-center justify-center gap-3 bg-[var(--bg-base)]">
+      <div className="relative flex h-full flex-col items-center justify-center gap-3 bg-transparent">
         {/* 空态也没有顶部栏——dock 折叠时的展开入口挂这里（同顶栏按钮） */}
         {dockCollapsed && (
           <button
@@ -176,7 +176,7 @@ export function ChapterEditor() {
   const text = editor?.state.doc.textBetween(0, editor.state.doc.content.size, "\n", " ") ?? "";
 
   return (
-    <div className="relative flex h-full flex-col bg-[var(--bg-base)]">
+    <div className="relative flex h-full flex-col bg-transparent">
       {/* 顶部栏 40px：面包屑 + 保存状态 + 字数 */}
       <div className="flex h-10 shrink-0 items-center justify-between gap-4 border-b border-[color:var(--border-subtle)] pl-4 pr-5">
         <div className="flex min-w-0 items-center gap-1.5 text-sm">

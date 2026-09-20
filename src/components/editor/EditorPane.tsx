@@ -16,7 +16,7 @@ export function EditorPane() {
   return (
     <Group
       orientation="vertical"
-      className="h-full bg-[var(--bg-base)]"
+      className="h-full bg-transparent"
       defaultLayout={{ editor: 68, aidock: 32 }}
     >
       <Panel id="editor" defaultSize="68" minSize="30">

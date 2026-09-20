@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 // 这里只给页面骨架与最大宽度（阅读友好的 56rem）。
 export function ViewShell({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="h-full bg-[var(--bg-base)]">
+    <div className="h-full bg-transparent">
       <div className="mx-auto h-full max-w-4xl px-6 pb-6 pt-5">
         <h1 className="mb-4 shrink-0 text-base font-semibold tracking-wide text-[color:var(--text-primary)]">
           {title}
