@@ -8,10 +8,12 @@ import { api, type ParsedChapter } from "../../lib/tauri";
 // 默认全选：绝大多数场景就是「整本导进来」。
 
 export function ImportWizard(props: {
-  bookId: number;
+  /** 当前选中书 id（null = 空库）。默认导入为「新书」——一个文件一本书，
+   *  防止连续导入把几本书的章节全并进当前书（用户实际踩过的坑） */
+  bookId: number | null;
   onClose: () => void;
-  /** 导入成功后回调（父组件负责刷新章节列表） */
-  onImported: () => void;
+  /** 导入成功后回调（回传实际落库的书 id；父组件负责刷新/选中新书） */
+  onImported: (bookId: number) => void;
 }) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [items, setItems] = useState<ParsedChapter[]>([]);
@@ -19,6 +21,8 @@ export function ImportWizard(props: {
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 默认导入为新书；有选中书时才允许切换为「并入当前书」
+  const [intoCurrent, setIntoCurrent] = useState(false);
 
   const choose = async () => {
     try {
@@ -55,14 +59,20 @@ export function ImportWizard(props: {
     if (picked.size === 0) return;
     setBusy(true);
     try {
+      // 默认以文件名（去扩展名）建书——「一个文件一本书」是用户心智（books-reader 同款）
+      let bookId = props.bookId;
+      if (bookId == null || !intoCurrent) {
+        const name = (fileName ?? "").replace(/\.(txt|md|docx)$/i, "").trim() || "导入的书";
+        bookId = (await api.createBook(name)).id;
+      }
       const chosen = items.filter((_, i) => picked.has(i));
-      const r = await api.importChapters(props.bookId, chosen);
-      setReport(`已导入 ${r.chapters} 章，共 ${r.words.toLocaleString()} 字`);
+      const r = await api.importChapters(bookId, chosen);
+      setReport(`已导入 ${r.chapters} 章（${intoCurrent ? "并入当前书" : "新书已创建"}），共 ${r.words.toLocaleString()} 字`);
       setItems([]);
       setPicked(new Set());
       setFileName(null);
       setError(null);
-      props.onImported();
+      props.onImported(bookId);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -118,6 +128,19 @@ export function ImportWizard(props: {
 
         {error && <div className="px-4 py-2 text-xs text-[color:var(--danger)]">{error}</div>}
         {report && <div className="px-4 py-2 text-xs text-[color:var(--success)]">{report}</div>}
+
+        {props.bookId != null && items.length > 0 && (
+          <label className="flex shrink-0 cursor-pointer items-center gap-2 border-b border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-secondary)]">
+            <input
+              type="checkbox"
+              checked={intoCurrent}
+              onChange={() => setIntoCurrent((v) => !v)}
+              className="shrink-0 accent-[color:var(--accent)]"
+              data-testid="into-current"
+            />
+            并入当前书（不勾选则按文件名新建一本书）
+          </label>
+        )}
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
           {items.length === 0 ? (

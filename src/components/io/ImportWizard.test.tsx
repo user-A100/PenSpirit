@@ -5,7 +5,7 @@ import { ImportWizard } from "./ImportWizard";
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
 
 vi.mock("../../lib/tauri", () => ({
-  api: { previewImport: vi.fn(), importChapters: vi.fn() },
+  api: { previewImport: vi.fn(), importChapters: vi.fn(), createBook: vi.fn() },
 }));
 
 import { open } from "@tauri-apps/plugin-dialog";
@@ -22,6 +22,13 @@ function pickFile() {
   (api.previewImport as ReturnType<typeof vi.fn>).mockResolvedValue(PARSED);
 }
 
+/** 只取分章列表的复选框（排除「并入当前书」开关） */
+function chapterBoxes(): HTMLInputElement[] {
+  return screen
+    .getAllByRole("checkbox")
+    .filter((c) => c.getAttribute("data-testid") !== "into-current") as HTMLInputElement[];
+}
+
 describe("ImportWizard", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -36,7 +43,7 @@ describe("ImportWizard", () => {
     expect(screen.getByText("第一章 初见")).toBeInTheDocument();
     expect(screen.getByText("第一卷 风雪")).toBeInTheDocument(); // 卷分组标题
     expect(screen.getByText("novel.txt")).toBeInTheDocument();
-    expect(screen.getAllByRole("checkbox").every((c) => (c as HTMLInputElement).checked)).toBe(true);
+    expect(chapterBoxes().every((c) => c.checked)).toBe(true);
     expect(screen.getByText("导入 3 章")).toBeInTheDocument();
   });
 
@@ -49,7 +56,9 @@ describe("ImportWizard", () => {
     fireEvent.click(screen.getByText("选择文件"));
     await screen.findByText("序章");
 
-    fireEvent.click(screen.getAllByRole("checkbox")[2]); // 取消「番外 后日谈」
+    // 并入当前书，聚焦验证「按勾选导入」本身
+    fireEvent.click(screen.getByTestId("into-current"));
+    fireEvent.click(chapterBoxes()[2]); // 取消「番外 后日谈」
     fireEvent.click(screen.getByText("导入 2 章"));
 
     await waitFor(() =>
@@ -80,5 +89,52 @@ describe("ImportWizard", () => {
 
     await waitFor(() => expect(open).toHaveBeenCalled());
     expect(api.previewImport).not.toHaveBeenCalled();
+  });
+
+  it("有选中书：默认仍按文件名建新书导入（防多书并一）；勾选并入当前书则不建书", async () => {
+    pickFile();
+    (api.createBook as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 9, title: "novel" });
+    (api.importChapters as ReturnType<typeof vi.fn>).mockResolvedValue({ chapters: 3, words: 30 });
+    const onImported = vi.fn();
+    render(<ImportWizard bookId={7} onClose={vi.fn()} onImported={onImported} />);
+
+    fireEvent.click(screen.getByText("选择文件"));
+    await screen.findByText("序章");
+
+    // 默认：新书
+    fireEvent.click(screen.getByText("导入 3 章"));
+    await waitFor(() => expect(api.createBook).toHaveBeenCalledWith("novel"));
+    await waitFor(() => expect(api.importChapters).toHaveBeenCalledWith(9, PARSED));
+    expect(onImported).toHaveBeenCalledWith(9);
+
+    // 勾选并入当前书：不建书，直接导到 7
+    (api.createBook as ReturnType<typeof vi.fn>).mockClear();
+    (api.importChapters as ReturnType<typeof vi.fn>).mockClear();
+    fireEvent.click(screen.getByText("选择文件"));
+    await screen.findByText("序章");
+    fireEvent.click(screen.getByTestId("into-current"));
+    fireEvent.click(screen.getByText("导入 3 章"));
+    await waitFor(() => expect(api.importChapters).toHaveBeenCalledWith(7, PARSED));
+    expect(api.createBook).not.toHaveBeenCalled();
+    expect(onImported).toHaveBeenCalledWith(7);
+  });
+
+  it("空库（bookId=null）：以文件名自动建书再导入，回传新书 id", async () => {
+    pickFile();
+    (api.createBook as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 9, title: "novel" });
+    (api.importChapters as ReturnType<typeof vi.fn>).mockResolvedValue({ chapters: 3, words: 30 });
+    const onImported = vi.fn();
+    render(<ImportWizard bookId={null} onClose={vi.fn()} onImported={onImported} />);
+
+    fireEvent.click(screen.getByText("选择文件"));
+    await screen.findByText("序章");
+    fireEvent.click(screen.getByText("导入 3 章"));
+
+    // 文件名去扩展名作书名
+    await waitFor(() => expect(api.createBook).toHaveBeenCalledWith("novel"));
+    await waitFor(() =>
+      expect(api.importChapters).toHaveBeenCalledWith(9, PARSED),
+    );
+    expect(onImported).toHaveBeenCalledWith(9);
   });
 });

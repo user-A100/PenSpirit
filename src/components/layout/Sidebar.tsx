@@ -85,23 +85,22 @@ export function Sidebar() {
             供 TrashPanel 的点击外部关闭逻辑豁免，避免「开→关→再开」抖动 */}
         <div className="relative mb-1.5 flex items-center px-2">
           <span className="flex-1 text-xs text-[color:var(--text-faint)]">书籍</span>
+          {/* 导入常驻：空库时也要能凭 txt 重建书库（向导会以文件名自动建书）；导出需要已有书 */}
+          <button
+            onClick={() => setImportOpen(true)}
+            title="导入章节"
+            className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+          >
+            <FileUp size={13} />
+          </button>
           {currentBookId != null && (
-            <>
-              <button
-                onClick={() => setImportOpen(true)}
-                title="导入章节"
-                className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
-              >
-                <FileUp size={13} />
-              </button>
-              <button
-                onClick={() => setExportOpen(true)}
-                title="导出全书"
-                className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
-              >
-                <FileDown size={13} />
-              </button>
-            </>
+            <button
+              onClick={() => setExportOpen(true)}
+              title="导出全书"
+              className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            >
+              <FileDown size={13} />
+            </button>
           )}
           <button
             data-trash-toggle
@@ -195,11 +194,18 @@ export function Sidebar() {
         </button>
       </div>
 
-      {importOpen && currentBookId != null && (
+      {importOpen && (
         <ImportWizard
           bookId={currentBookId}
           onClose={() => setImportOpen(false)}
-          onImported={() => void reloadChapters()}
+          onImported={(bid) => {
+            if (bid === currentBookId) {
+              void reloadChapters();
+            } else {
+              // 向导自动建的新书：刷书单并选中（selectBook 会连带拉章节）
+              void loadBooks().then(() => selectBook(bid));
+            }
+          }}
         />
       )}
       {exportOpen && currentBookId != null && (

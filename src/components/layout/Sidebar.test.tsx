@@ -40,4 +40,18 @@ describe("Sidebar", () => {
     fireEvent.click(screen.getByTitle("回收站"));
     expect(screen.queryByText("回收站是空的")).not.toBeInTheDocument();
   });
+
+  it("空库（无选中书）也显示导入入口，点击打开向导；导出入口仍隐藏", () => {
+    useWorkspace.setState({
+      books: [], chapters: [], currentBookId: null, currentChapterId: null, chapterContent: null,
+    });
+    render(<Sidebar />);
+
+    const importBtn = screen.getByTitle("导入章节");
+    expect(importBtn).toBeInTheDocument();
+    expect(screen.queryByTitle("导出全书")).not.toBeInTheDocument();
+
+    fireEvent.click(importBtn);
+    expect(screen.getByText("选择文件")).toBeInTheDocument();
+  });
 });
