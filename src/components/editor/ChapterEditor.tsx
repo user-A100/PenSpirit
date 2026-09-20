@@ -155,7 +155,17 @@ export function ChapterEditor() {
 
   if (currentChapterId == null) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 bg-[var(--bg-base)]">
+      <div className="relative flex h-full flex-col items-center justify-center gap-3 bg-[var(--bg-base)]">
+        {/* 空态也没有顶部栏——dock 折叠时的展开入口挂这里（同顶栏按钮） */}
+        {dockCollapsed && (
+          <button
+            onClick={toggleDock}
+            title="展开右侧面板（Ctrl+\\）"
+            className="absolute right-3 top-3 rounded p-1.5 text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+          >
+            <PanelRightOpen size={15} />
+          </button>
+        )}
         <PenLine size={32} strokeWidth={1.5} className="text-[color:var(--text-faint)]" />
         <div className="text-sm text-[color:var(--text-secondary)]">选择或创建一个章节开始写作</div>
         <div className="text-xs text-[color:var(--text-faint)]">Ctrl+N 快速新建（即将支持）</div>

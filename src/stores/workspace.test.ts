@@ -26,6 +26,28 @@ describe("workspace store", () => {
     expect(useWorkspace.getState().books).toHaveLength(1);
   });
 
+  it("冷启动自动选中上次的书（localStorage 记忆）", async () => {
+    localStorage.setItem("bixian.lastBookId", "1");
+    await useWorkspace.getState().loadBooks();
+    expect(useWorkspace.getState().currentBookId).toBe(1);
+    expect(useWorkspace.getState().chapters).toHaveLength(1);
+    localStorage.removeItem("bixian.lastBookId");
+  });
+
+  it("记忆的书不在列表时退到第一本；selectBook 写记忆", async () => {
+    localStorage.setItem("bixian.lastBookId", "999");
+    await useWorkspace.getState().loadBooks();
+    expect(useWorkspace.getState().currentBookId).toBe(1); // 退到第一本
+    expect(localStorage.getItem("bixian.lastBookId")).toBe("1"); // selectBook 更新记忆
+    localStorage.removeItem("bixian.lastBookId");
+  });
+
+  it("已有选中书时 loadBooks 不改选中", async () => {
+    await useWorkspace.getState().selectBook(1);
+    await useWorkspace.getState().loadBooks();
+    expect(useWorkspace.getState().currentBookId).toBe(1);
+  });
+
   it("selectBook 加载章节并记住当前书", async () => {
     await useWorkspace.getState().selectBook(1);
     expect(useWorkspace.getState().currentBookId).toBe(1);

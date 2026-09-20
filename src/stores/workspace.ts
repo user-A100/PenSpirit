@@ -19,10 +19,21 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   books: [], chapters: [], currentBookId: null, currentChapterId: null, chapterContent: null, loading: false, error: null,
   loadBooks: async () => {
     set({ loading: true, error: null });
-    try { set({ books: await api.listBooks(), loading: false }); }
-    catch (e) { set({ error: String(e), loading: false }); }
+    try {
+      const books = await api.listBooks();
+      set({ books, loading: false });
+      // 冷启动自动恢复上次的书（localStorage 记忆；书没了/首次启动退到第一本）。
+      // 没有这一步，伏笔/人物卡等面板会停在「请先选择书籍」、登记按钮永远灰着，
+      // 用户视角即「功能不能用」。
+      if (get().currentBookId == null && books.length > 0) {
+        const last = Number(localStorage.getItem("bixian.lastBookId"));
+        const restore = books.find((b) => b.id === last) ?? books[0];
+        await get().selectBook(restore.id);
+      }
+    } catch (e) { set({ error: String(e), loading: false }); }
   },
   selectBook: async (id) => {
+    localStorage.setItem("bixian.lastBookId", String(id));
     set({ currentBookId: id, currentChapterId: null });
     set({ chapters: await api.listChapters(id) });
   },
