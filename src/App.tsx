@@ -80,7 +80,7 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <div className="flex h-full w-full bg-[var(--bg-base)]">
+      <div className="flex h-full w-full bg-[var(--bg-backdrop)]">
         <Ribbon />
         <main className="min-w-0 flex-1 p-[var(--sep)]">
           {/* Zen 浮卡骨架：全部视图整体浮在 --bg-base 背板上，四周留 --sep 缝隙。

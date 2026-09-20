@@ -23,6 +23,7 @@ import {
   normalizeAppearance,
   PROSE_STYLE_ID,
   saveAppearance,
+  themeCss,
   ThemeProvider,
   useAppearance,
 } from "./ThemeProvider";
@@ -86,6 +87,15 @@ describe("applyColorTheme", () => {
     for (const [k, v] of Object.entries(findTheme("matcha")!.vars)) {
       expect(css).toContain(`${k}:${v};`);
     }
+  });
+
+  it("themeCss 派生 --bg-backdrop 且注入后可读", () => {
+    const css = themeCss(findTheme("matcha")!);
+    expect(css).toContain("--bg-backdrop:");
+    applyColorTheme("matcha");
+    expect(
+      getComputedStyle(document.documentElement).getPropertyValue("--bg-backdrop").trim().length,
+    ).toBeGreaterThan(0);
   });
 
   it("切换到其它主题时重写内容", () => {

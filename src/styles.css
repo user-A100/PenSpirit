@@ -20,6 +20,8 @@
   --prose-fg: #e4e4e8;
   /* 选中标签页浮卡底色（Zen 选中项浮纸卡手法） */
   --tab-selected-bg: rgba(255, 255, 255, 0.2);
+  /* 背板：窗口底色比内容浮卡再深一档（默认主题的 backdropOf 派生值，mix(#17171a,#000,0.45)） */
+  --bg-backdrop: #0a0a0c;
   /* 强调与状态 */
   --accent: #7c6ff0;
   --accent-hover: #8f83f5;

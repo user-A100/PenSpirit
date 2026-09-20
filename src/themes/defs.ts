@@ -347,3 +347,9 @@ export const THEMES: ThemeDef[] = [
 export function findTheme(id: string): ThemeDef | undefined {
   return THEMES.find((t) => t.id === id);
 }
+
+/** 背板色：bg-base 再压暗一档，内容浮卡与窗口边框之间要有可感知的落差
+ *  （Zen 的 chrome backdrop 比内容深；比例经实机核验定档） */
+export function backdropOf(theme: ThemeDef): string {
+  return mix(theme.vars["--bg-base"], "#000000", theme.dark ? 0.45 : 0.9);
+}

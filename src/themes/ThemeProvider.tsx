@@ -7,7 +7,7 @@
 // 上层（store / ThemeProvider / AppearancePane）无需改动。
 import { useEffect } from "react";
 import { create } from "zustand";
-import { DEFAULT_THEME_ID, findTheme, THEME_STYLE_ID, THEME_VAR_KEYS, ThemeDef } from "./defs";
+import { backdropOf, DEFAULT_THEME_ID, findTheme, THEME_STYLE_ID, THEME_VAR_KEYS, ThemeDef } from "./defs";
 import { findTexture, TexturePresetId, TEXTURE_TILE_PX } from "./textures";
 
 export type AppearanceMode = "system" | "light" | "dark";
@@ -87,10 +87,11 @@ const TEXTURE_BLENDS: readonly TextureBlend[] = ["normal", "multiply", "overlay"
 
 // ---------- DOM 应用 ----------
 
-/** 主题 → `:root{--k:v;…}`（键序固定，保证同主题生成稳定字符串便于幂等比较） */
+/** 主题 → `:root{--k:v;…}`（键序固定，保证同主题生成稳定字符串便于幂等比较）。
+ *  末尾追加派生的 --bg-backdrop（背板色，M4 Zen 收尾） */
 export function themeCss(theme: ThemeDef): string {
   const body = THEME_VAR_KEYS.map((k) => `${k}:${theme.vars[k]};`).join("");
-  return `:root{${body}}`;
+  return `:root{${body}--bg-backdrop:${backdropOf(theme)};}`;
 }
 
 /**
