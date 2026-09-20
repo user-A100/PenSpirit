@@ -211,6 +211,33 @@ pub struct ForeshadowInput {
     pub note: String,
 }
 
+// ---------- M4 人物卡 ----------
+
+/// 人物卡（characters 表）。图谱化（关系/出场章节）在此之上迭代。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Character {
+    pub id: i64,
+    pub book_id: i64,
+    pub name: String,
+    pub role: String,
+    /// 逗号分隔别名（检索/图谱消歧用）
+    pub aliases: String,
+    pub description: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// 人物卡入参：id=None 插入，Some 更新（book_id 不改属主）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharacterInput {
+    pub id: Option<i64>,
+    pub book_id: i64,
+    pub name: String,
+    pub role: String,
+    pub aliases: String,
+    pub description: String,
+}
+
 /// 按日聚合统计（stats_range；书维度已 SUM 掉）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DailyStat {

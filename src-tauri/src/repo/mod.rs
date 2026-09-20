@@ -1,5 +1,6 @@
 pub mod books;
 pub mod bump;
+pub mod characters;
 pub mod chapters;
 pub mod foreshadows;
 pub mod ideas;

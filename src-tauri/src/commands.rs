@@ -4,7 +4,7 @@ use crate::error::{AppError, AppResult};
 use crate::bump;
 use crate::fs_service;
 use crate::history;
-use crate::models::{BgImage, Book, BumpWord, ChapterContent, ChapterMeta, DailyStat, Foreshadow, ForeshadowInput, Idea};
+use crate::models::{BgImage, Book, BumpWord, ChapterContent, ChapterMeta, Character, CharacterInput, DailyStat, Foreshadow, ForeshadowInput, Idea};
 use crate::porting;
 use crate::repo;
 use crate::search;
@@ -507,6 +507,20 @@ pub fn foreshadow_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
     repo::foreshadows::delete(&*lock(s)?, id)
 }
 
+// ---- M4 人物卡 ----
+
+pub fn characters_list_inner(s: &AppState, book_id: i64) -> AppResult<Vec<Character>> {
+    repo::characters::list_by_book(&*lock(s)?, book_id)
+}
+
+pub fn character_upsert_inner(s: &AppState, input: &CharacterInput) -> AppResult<Character> {
+    repo::characters::upsert(&*lock(s)?, input)
+}
+
+pub fn character_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    repo::characters::delete(&*lock(s)?, id)
+}
+
 #[tauri::command]
 pub fn setting_get(s: State<AppState>, key: String) -> AppResult<Option<String>> {
     setting_get_inner(&s, &key)
@@ -550,6 +564,21 @@ pub fn foreshadow_set_status(
 #[tauri::command]
 pub fn foreshadow_delete(s: State<AppState>, id: i64) -> AppResult<()> {
     foreshadow_delete_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn characters_list(s: State<AppState>, book_id: i64) -> AppResult<Vec<Character>> {
+    characters_list_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn character_upsert(s: State<AppState>, input: CharacterInput) -> AppResult<Character> {
+    character_upsert_inner(&s, &input)
+}
+
+#[tauri::command]
+pub fn character_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    character_delete_inner(&s, id)
 }
 
 // ---- M3-T6 阅读背景图（纯文件操作，不碰 db 锁） ----
