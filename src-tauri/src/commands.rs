@@ -4,7 +4,7 @@ use crate::error::{AppError, AppResult};
 use crate::bump;
 use crate::fs_service;
 use crate::history;
-use crate::models::{BgImage, Book, BumpWord, ChapterContent, ChapterMeta, Character, CharacterInput, DailyStat, Foreshadow, ForeshadowInput, Idea, Outline, OutlineInput};
+use crate::models::{BgImage, Book, BumpWord, ChapterContent, ChapterMeta, Character, CharacterInput, DailyStat, Foreshadow, ForeshadowInput, Idea, Material, MaterialInput, Outline, OutlineInput, PlotBlock, PlotBlockInput};
 use crate::porting;
 use crate::repo;
 use crate::search;
@@ -535,6 +535,36 @@ pub fn outline_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
     repo::outlines::delete(&*lock(s)?, id)
 }
 
+// ---- M4 素材库 / 情节块 ----
+
+pub fn materials_list_inner(s: &AppState, query: Option<String>) -> AppResult<Vec<Material>> {
+    repo::materials::search(&*lock(s)?, query.as_deref().unwrap_or(""))
+}
+
+pub fn material_upsert_inner(s: &AppState, input: &MaterialInput) -> AppResult<Material> {
+    repo::materials::upsert(&*lock(s)?, input)
+}
+
+pub fn material_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    repo::materials::delete(&*lock(s)?, id)
+}
+
+pub fn plot_blocks_list_inner(s: &AppState, book_id: i64) -> AppResult<Vec<PlotBlock>> {
+    repo::plot_blocks::list_by_book(&*lock(s)?, book_id)
+}
+
+pub fn plot_block_upsert_inner(s: &AppState, input: &PlotBlockInput) -> AppResult<PlotBlock> {
+    repo::plot_blocks::upsert(&*lock(s)?, input)
+}
+
+pub fn plot_block_reorder_inner(s: &AppState, ids: &[i64]) -> AppResult<()> {
+    repo::plot_blocks::reorder(&*lock(s)?, ids)
+}
+
+pub fn plot_block_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    repo::plot_blocks::delete(&*lock(s)?, id)
+}
+
 #[tauri::command]
 pub fn setting_get(s: State<AppState>, key: String) -> AppResult<Option<String>> {
     setting_get_inner(&s, &key)
@@ -608,6 +638,41 @@ pub fn outline_upsert(s: State<AppState>, input: OutlineInput) -> AppResult<Outl
 #[tauri::command]
 pub fn outline_delete(s: State<AppState>, id: i64) -> AppResult<()> {
     outline_delete_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn materials_list(s: State<AppState>, query: Option<String>) -> AppResult<Vec<Material>> {
+    materials_list_inner(&s, query)
+}
+
+#[tauri::command]
+pub fn material_upsert(s: State<AppState>, input: MaterialInput) -> AppResult<Material> {
+    material_upsert_inner(&s, &input)
+}
+
+#[tauri::command]
+pub fn material_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    material_delete_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn plot_blocks_list(s: State<AppState>, book_id: i64) -> AppResult<Vec<PlotBlock>> {
+    plot_blocks_list_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn plot_block_upsert(s: State<AppState>, input: PlotBlockInput) -> AppResult<PlotBlock> {
+    plot_block_upsert_inner(&s, &input)
+}
+
+#[tauri::command]
+pub fn plot_block_reorder(s: State<AppState>, ids: Vec<i64>) -> AppResult<()> {
+    plot_block_reorder_inner(&s, &ids)
+}
+
+#[tauri::command]
+pub fn plot_block_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    plot_block_delete_inner(&s, id)
 }
 
 // ---- M3-T6 阅读背景图（纯文件操作，不碰 db 锁） ----

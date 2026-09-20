@@ -268,6 +268,52 @@ pub struct OutlineInput {
     pub sort_key: i64,
 }
 
+// ---------- M4 素材库 / 情节块 ----------
+
+/// 素材（materials 表，全局不分书）。素材是作者资产：地名/门派/道具/金句/桥段，跨书复用。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Material {
+    pub id: i64,
+    pub title: String,
+    pub category: String,
+    pub content: String,
+    pub tags: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaterialInput {
+    pub id: Option<i64>,
+    pub title: String,
+    pub category: String,
+    pub content: String,
+    pub tags: String,
+}
+
+/// 情节块（plot_blocks 表，按书）。叙事草稿材料：一句话场景/事件，
+/// status 三态（idea=点子 → ready=可写 → used=已用），chapter_id 记录用在哪章。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlotBlock {
+    pub id: i64,
+    pub book_id: i64,
+    pub content: String,
+    pub status: String,
+    pub chapter_id: Option<i64>,
+    pub sort_key: i64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlotBlockInput {
+    pub id: Option<i64>,
+    pub book_id: i64,
+    pub content: String,
+    pub status: String,
+    pub chapter_id: Option<i64>,
+    pub sort_key: i64,
+}
+
 /// 按日聚合统计（stats_range；书维度已 SUM 掉）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DailyStat {

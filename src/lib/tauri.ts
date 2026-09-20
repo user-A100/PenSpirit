@@ -84,6 +84,24 @@ export interface OutlineInput {
   chapter_id: number | null; title: string; content: string; sort_key: number;
 }
 
+// ---- M4：素材库（全局）/ 情节块（按书） ----
+export interface Material {
+  id: number; title: string; category: string;
+  content: string; tags: string; created_at: string; updated_at: string;
+}
+export interface MaterialInput {
+  id: number | null; title: string; category: string; content: string; tags: string;
+}
+export type PlotBlockStatus = "idea" | "ready" | "used";
+export interface PlotBlock {
+  id: number; book_id: number; content: string; status: PlotBlockStatus;
+  chapter_id: number | null; sort_key: number; created_at: string;
+}
+export interface PlotBlockInput {
+  id: number | null; book_id: number; content: string; status: PlotBlockStatus;
+  chapter_id: number | null; sort_key: number;
+}
+
 // ---- M3-T6：阅读背景图（文件存 {appData}/background/，经 asset 协议加载） ----
 export interface BgImage { id: string; path: string; name: string }
 
@@ -184,6 +202,14 @@ export const api = {
   outlinesList: (bookId: number) => invoke<Outline[]>("outlines_list", { bookId }),
   outlineUpsert: (input: OutlineInput) => invoke<Outline>("outline_upsert", { input }),
   outlineDelete: (id: number) => invoke<void>("outline_delete", { id }),
+  materialsList: (query?: string) =>
+    invoke<Material[]>("materials_list", { query: query ?? null }),
+  materialUpsert: (input: MaterialInput) => invoke<Material>("material_upsert", { input }),
+  materialDelete: (id: number) => invoke<void>("material_delete", { id }),
+  plotBlocksList: (bookId: number) => invoke<PlotBlock[]>("plot_blocks_list", { bookId }),
+  plotBlockUpsert: (input: PlotBlockInput) => invoke<PlotBlock>("plot_block_upsert", { input }),
+  plotBlockReorder: (ids: number[]) => invoke<void>("plot_block_reorder", { ids }),
+  plotBlockDelete: (id: number) => invoke<void>("plot_block_delete", { id }),
   // ---- M3-T6：阅读背景图 ----
   readingBgImport: (srcPath: string) => invoke<BgImage>("reading_bg_import", { srcPath }),
   readingBgList: () => invoke<BgImage[]>("reading_bg_list"),

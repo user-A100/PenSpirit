@@ -1,25 +1,21 @@
 import { useState, type ComponentType } from "react";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
-import { StylePanel } from "../styles/StylePanel";
-import { StatsPanel } from "../stats/StatsPanel";
 import { ForeshadowPanel } from "../foreshadow/ForeshadowPanel";
 import { CharactersPanel } from "../characters/CharactersPanel";
 import { OutlineDockPanel } from "../outline/OutlineDockPanel";
+import { PlotBlocksPanel } from "../plot/PlotBlocksPanel";
 import { getView } from "../../lib/nav/registry";
 import { useUiNav } from "../../lib/nav/uiStore";
 
 // tab 由当前一级视图的 dockPanels 驱动（registry 注册）；
 // 内容按 DockPanelDef.id 映射：已实现的渲染真实组件，其余保持空态。
-const PANEL_EMPTY_TEXT: Record<string, string> = {
-  styles: "",
-};
+const PANEL_EMPTY_TEXT: Record<string, string> = {};
 
 const PANEL_COMPONENTS: Record<string, ComponentType> = {
-  styles: StylePanel,
-  stats: StatsPanel,
   foreshadow: ForeshadowPanel,
   outline: OutlineDockPanel,
   characters: CharactersPanel,
+  plot: PlotBlocksPanel,
 };
 
 export function PanelDock() {

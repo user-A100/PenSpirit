@@ -3,9 +3,7 @@ import { Ribbon } from "./components/layout/Ribbon";
 import { SettingsModal } from "./components/settings/SettingsModal";
 import { SearchPanel } from "./components/search/SearchPanel";
 import { WriteView } from "./views/WriteView";
-import { BumpView } from "./views/BumpView";
-import { ReadView } from "./views/read/ReadView";
-import { getViews } from "./lib/nav/registry";
+import { getView, getViews } from "./lib/nav/registry";
 import { useUiNav } from "./lib/nav/uiStore";
 import { useOutline } from "./stores/outline";
 import { useSearch } from "./stores/search";
@@ -89,9 +87,11 @@ export default function App() {
           <div className={current === "write" ? "h-full" : "hidden"}>
             <WriteView />
           </div>
-          {current === "bump" && <BumpView />}
-          {/* 阅读模式全屏覆盖（不常挂：进入时重建以重置进度恢复/计时） */}
-          {current === "read" && <ReadView />}
+          {/* 其余视图按注册表渲染；read 全屏覆盖（不常挂：进入时重建以重置进度恢复/计时） */}
+          {current !== "write" && (() => {
+            const Active = getView(current)?.Component;
+            return Active ? <Active /> : null;
+          })()}
         </main>
         {/* 纸张纹理覆盖层（M3-T3）：z-200 高于全部面板/弹窗，均匀铺满整页（Maple 整页纸感）；
             preset="none" 时不渲染。定位样式见 styles.css #texture-layer 分区 */}

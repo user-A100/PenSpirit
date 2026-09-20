@@ -16,20 +16,25 @@ describe("navRegistry", () => {
     localStorage.clear();
   });
 
-  it("内置注册 write 与 bump 两个一级视图", async () => {
+  it("内置注册 write/bump/read/styles/stats/materials 六个一级视图", async () => {
     const { registry, useUiNav } = await freshNav();
     const ids = registry.getViews().map((v) => v.id);
-    expect(ids).toEqual(["write", "bump", "read"]);
+    expect(ids).toEqual(["write", "bump", "read", "styles", "stats", "materials"]);
 
     const write = registry.getView("write")!;
     expect(write.label).toBe("写作");
     expect(write.icon).toBeDefined();
     expect(write.Component).toBeDefined();
-    expect(write.dockPanels.map((p) => p.label)).toEqual(["大纲", "人物", "伏笔", "统计", "文风"]);
+    expect(write.dockPanels.map((p) => p.label)).toEqual(["大纲", "人物", "伏笔", "情节块"]);
 
     const bump = registry.getView("bump")!;
     expect(bump.label).toBe("碰碰车");
     expect(bump.dockPanels).toEqual([]); // M2-T1 占位，T10 填充
+
+    // M4：统计/文风/素材库升级/新增为一级视图（dock 不再挂统计/文风 tab）
+    expect(registry.getView("stats")!.label).toBe("统计");
+    expect(registry.getView("styles")!.label).toBe("文风库");
+    expect(registry.getView("materials")!.label).toBe("素材库");
     expect(useUiNav.getState().activeView).toBe("write"); // 自愈无副作用
   });
 
@@ -52,7 +57,7 @@ describe("navRegistry", () => {
     const { registry } = await freshNav();
     const snapshot = registry.getViews() as mutableViews;
     snapshot.pop();
-    expect(registry.getViews()).toHaveLength(3);
+    expect(registry.getViews()).toHaveLength(6);
   });
 
   it("持久化了未注册的视图 id 时回退 write 并写回存储", async () => {

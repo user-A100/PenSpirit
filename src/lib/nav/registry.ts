@@ -1,8 +1,11 @@
 import type { ComponentType } from "react";
-import { BarChart3, BookOpen, CircleDot, Flag, ListTree, PenLine, Sparkles, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, Blocks, BookOpen, CircleDot, Flag, Library, ListTree, PenLine, Sparkles, Users, type LucideIcon } from "lucide-react";
 import { BumpView } from "../../views/BumpView";
 import { WriteView } from "../../views/WriteView";
 import { ReadView } from "../../views/read/ReadView";
+import { MaterialsView } from "../../views/MaterialsView";
+import { StatsView } from "../../views/StatsView";
+import { StylesView } from "../../views/StylesView";
 import { useUiNav } from "./uiStore";
 
 // 一级视图注册表（仿 Agentero 命令式注册）：Ribbon/App/PanelDock 均从此读取导航结构，
@@ -48,8 +51,7 @@ registerView({
     { id: "outline", label: "大纲", icon: ListTree },
     { id: "characters", label: "人物", icon: Users },
     { id: "foreshadow", label: "伏笔", icon: Flag },
-    { id: "stats", label: "统计", icon: BarChart3 },
-    { id: "styles", label: "文风", icon: Sparkles },
+    { id: "plot", label: "情节块", icon: Blocks },
   ],
 });
 
@@ -67,6 +69,31 @@ registerView({
   icon: BookOpen,
   Component: ReadView,
   dockPanels: [], // 全屏阅读无 dock 面板；四边热区面板在 T5 以覆盖层实现
+});
+
+// M4：原 write dock 的统计/文风 tab 升级为一级视图，素材库新增
+registerView({
+  id: "styles",
+  label: "文风库",
+  icon: Sparkles,
+  Component: StylesView,
+  dockPanels: [],
+});
+
+registerView({
+  id: "stats",
+  label: "统计",
+  icon: BarChart3,
+  Component: StatsView,
+  dockPanels: [],
+});
+
+registerView({
+  id: "materials",
+  label: "素材库",
+  icon: Library,
+  Component: MaterialsView,
+  dockPanels: [],
 });
 
 // 启动自愈：持久化的视图 id 未注册（旧版本残留/手改 localStorage）时回退 write 并写回
