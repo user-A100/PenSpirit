@@ -3,12 +3,13 @@ import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef, useState } from "react";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { History, ListTree, PenLine, ScanSearch } from "lucide-react";
+import { History, ListTree, PanelRightOpen, PenLine, ScanSearch } from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
 import { useChat } from "../../stores/chat";
 import { useSearch } from "../../stores/search";
 import { useOutline } from "../../stores/outline";
 import { localMinute, useStats } from "../../stores/stats";
+import { useUiNav } from "../../lib/nav/uiStore";
 import { api } from "../../lib/tauri";
 import { useAutosave } from "../../hooks/useAutosave";
 import { countWords } from "../../lib/words";
@@ -147,6 +148,10 @@ export function ChapterEditor() {
 
   const book = books.find((b) => b.id === currentBookId);
   const meta = chapters.find((c) => c.id === currentChapterId);
+  // dock 折叠后的展开入口（模仿侧栏在 Ribbon 底部的条件性展开按钮）：
+  // 折叠时整个 dock 被 CSS 摘除，按钮必须挂在编辑器这侧才能被点到
+  const dockCollapsed = useUiNav((s) => s.dockCollapsed);
+  const toggleDock = useUiNav((s) => s.toggleDock);
 
   if (currentChapterId == null) {
     return (
@@ -206,6 +211,15 @@ export function ChapterEditor() {
             </span>
           )}
           <span>{countWords(text).toLocaleString()} 字</span>
+          {dockCollapsed && (
+            <button
+              onClick={toggleDock}
+              title="展开右侧面板（Ctrl+\\）"
+              className="rounded p-1 text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            >
+              <PanelRightOpen size={14} />
+            </button>
+          )}
         </div>
       </div>
 
