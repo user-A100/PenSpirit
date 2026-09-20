@@ -5,7 +5,7 @@ import { ImportWizard } from "./ImportWizard";
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
 
 vi.mock("../../lib/tauri", () => ({
-  api: { previewImport: vi.fn(), importChapters: vi.fn(), createBook: vi.fn() },
+  api: { previewImport: vi.fn(), previewImportDir: vi.fn(), importChapters: vi.fn(), createBook: vi.fn() },
 }));
 
 import { open } from "@tauri-apps/plugin-dialog";
@@ -117,6 +117,20 @@ describe("ImportWizard", () => {
     await waitFor(() => expect(api.importChapters).toHaveBeenCalledWith(7, PARSED));
     expect(api.createBook).not.toHaveBeenCalled();
     expect(onImported).toHaveBeenCalledWith(7);
+  });
+
+  it("选文件夹：目录选择后走 previewImportDir 并全选", async () => {
+    (open as ReturnType<typeof vi.fn>).mockResolvedValue("C:\\book");
+    (api.previewImportDir as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { title: "开端", content: "正文一", volume: null },
+    ]);
+    render(<ImportWizard bookId={null} onClose={vi.fn()} onImported={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /选文件夹/ }));
+
+    expect(await screen.findByText("开端")).toBeInTheDocument();
+    expect(api.previewImportDir).toHaveBeenCalledWith("C:\\book");
+    expect(chapterBoxes().every((c) => c.checked)).toBe(true);
   });
 
   it("空库（bookId=null）：以文件名自动建书再导入，回传新书 id", async () => {

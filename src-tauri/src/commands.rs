@@ -330,6 +330,12 @@ pub fn preview_import(s: State<AppState>, path: String) -> AppResult<Vec<porting
     porting::import::preview_import_inner(std::path::Path::new(&path), &rules)
 }
 
+/// 文件夹成书导入预览（M4-T3）：目录内 *.md/*.txt 按文件名自然序一文件一章；只读不落库
+#[tauri::command]
+pub fn preview_import_dir(path: String) -> AppResult<Vec<porting::import::ParsedChapter>> {
+    porting::import::preview_import_dir_inner(std::path::Path::new(&path))
+}
+
 /// 把预览中勾选的章批量落库（标题 + 正文建章、写 md、统计字数）
 #[tauri::command]
 pub fn import_chapters(

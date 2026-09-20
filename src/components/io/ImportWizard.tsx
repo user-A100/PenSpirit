@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FileUp } from "lucide-react";
+import { FolderOpen, FileUp } from "lucide-react";
 import { api, type ParsedChapter } from "../../lib/tauri";
 import { Modal } from "../ui/Modal";
 
@@ -48,6 +48,24 @@ export function ImportWizard(props: {
     }
   };
 
+  // M4-T3 选文件夹：目录内 *.md/*.txt 按文件名自然序一文件一章（文件名去序号作章题）
+  const chooseDir = async () => {
+    try {
+      const sel = await open({ directory: true });
+      if (typeof sel !== "string") return;
+      setFileName(`${sel.split(/[\\/]/).pop() ?? sel}（文件夹）`);
+      setReport(null);
+      const parsed = await api.previewImportDir(sel);
+      setItems(parsed);
+      setPicked(new Set(parsed.map((_, i) => i)));
+      setError(parsed.length === 0 ? "文件夹里没有可导入的 .md/.txt 文件" : null);
+    } catch (e) {
+      setItems([]);
+      setPicked(new Set());
+      setError(String(e));
+    }
+  };
+
   const toggle = (i: number) =>
     setPicked((prev) => {
       const next = new Set(prev);
@@ -63,7 +81,10 @@ export function ImportWizard(props: {
       // 默认以文件名（去扩展名）建书——「一个文件一本书」是用户心智（books-reader 同款）
       let bookId = props.bookId;
       if (bookId == null || !intoCurrent) {
-        const name = (fileName ?? "").replace(/\.(txt|md|docx)$/i, "").trim() || "导入的书";
+        const name = (fileName ?? "")
+          .replace(/\.(txt|md|docx)$/i, "")
+          .replace(/（文件夹）$/, "")
+          .trim() || "导入的书";
         bookId = (await api.createBook(name)).id;
       }
       const chosen = items.filter((_, i) => picked.has(i));
@@ -103,6 +124,13 @@ export function ImportWizard(props: {
           >
             <FileUp size={13} />
             选择文件
+          </button>
+          <button
+            onClick={() => void chooseDir()}
+            className="flex items-center gap-1.5 rounded-md border border-[color:var(--border-subtle)] px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+          >
+            <FolderOpen size={13} />
+            选文件夹
           </button>
           <span className="min-w-0 flex-1 truncate text-xs text-[color:var(--text-faint)]">
             {fileName ?? "支持 .txt / .md / .docx"}

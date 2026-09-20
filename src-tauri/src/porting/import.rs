@@ -380,6 +380,104 @@ pub fn preview_import_inner(path: &Path, custom: &[Regex]) -> AppResult<Vec<Pars
     }
 }
 
+/// 自然序比较：连续数字段按数值比、其余按字符比（"2" < "10"，folderBook 同款）
+fn nat_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    let (mut a, mut b) = (a, b);
+    loop {
+        let (ad, bd) = (a.chars().next(), b.chars().next());
+        match (ad, bd) {
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(x), Some(y)) if x.is_ascii_digit() && y.is_ascii_digit() => {
+                let na = take_digits_run(&mut a);
+                let nb = take_digits_run(&mut b);
+                let (za, zb) = (na.trim_start_matches('0'), nb.trim_start_matches('0'));
+                let ord = za.len().cmp(&zb.len()).then_with(|| za.cmp(zb));
+                if ord != Ordering::Equal {
+                    return ord;
+                }
+            }
+            (Some(x), Some(y)) => {
+                if x != y {
+                    return x.cmp(&y);
+                }
+                a = &a[x.len_utf8()..];
+                b = &b[y.len_utf8()..];
+            }
+        }
+    }
+}
+
+fn take_digits_run(s: &mut &str) -> String {
+    let end = s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len());
+    let (run, rest) = s.split_at(end);
+    *s = rest;
+    run.to_string()
+}
+
+/// 文件名去序号作章题：剥前导数字串+分隔符，再剥「第X章」式前缀；剥完为空保留原名
+fn strip_serial(stem: &str) -> String {
+    let s = stem.trim();
+    let no_digits = s.trim_start_matches(|c: char| is_digit(c));
+    let no_digits = no_digits.trim_start_matches(['.', '．', '、', '-', '_', ' ', '\u{3000}']);
+    let step1 = if no_digits.is_empty() { s } else { no_digits };
+    if let Some(rest) = step1.strip_prefix('第') {
+        if let Some((ui, uc)) = rest
+            .char_indices()
+            .find(|(_, c)| matches!(c, '章' | '卷' | '回' | '集' | '部' | '篇'))
+        {
+            let mid = &rest[..ui];
+            let after = rest[ui + uc.len_utf8()..]
+                .trim_start_matches(['.', '．', '、', '-', '_', ' ', '\u{3000}', ':', '：']);
+            if !mid.is_empty() && mid.chars().all(is_numeral) && !after.is_empty() {
+                return truncate_chars(after, TITLE_MAX_CHARS);
+            }
+        }
+    }
+    truncate_chars(step1, TITLE_MAX_CHARS)
+}
+
+/// 文件夹成书导入（M4-T3）：*.md / *.txt 按文件名自然序，一文件一章。
+/// 不递归子目录；docx 不收（二进制混排无意义）。
+/// 章题取文件名去序号；剥完纯数字（"2.txt" 这类无名义文件名）时回退用正文首行。
+pub fn preview_import_dir_inner(path: &Path) -> AppResult<Vec<ParsedChapter>> {
+    let mut entries: Vec<(String, std::path::PathBuf)> = std::fs::read_dir(path)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+        .filter_map(|e| {
+            let p = e.path();
+            let ext = p.extension()?.to_str()?.to_ascii_lowercase();
+            if ext != "md" && ext != "txt" {
+                return None;
+            }
+            Some((p.file_stem()?.to_str()?.to_string(), p))
+        })
+        .collect();
+    entries.sort_by(|a, b| nat_cmp(&a.0, &b.0));
+    let mut out = Vec::new();
+    for (stem, p) in entries {
+        let bytes = std::fs::read(&p)?;
+        let content = normalize_paragraphs(&trim_blank(&detect_and_decode(&bytes)));
+        if content.is_empty() {
+            continue;
+        }
+        let stripped = strip_serial(&stem);
+        let title = if stripped.chars().all(is_digit) {
+            content
+                .lines()
+                .find(|l| !l.trim().is_empty())
+                .map(|l| truncate_chars(l.trim(), TITLE_MAX_CHARS))
+                .unwrap_or(stripped)
+        } else {
+            stripped
+        };
+        out.push(ParsedChapter { title, content, volume: None });
+    }
+    Ok(out)
+}
+
 /// 批量建章并落盘。导入是"一次成型"的批量操作，**不走快照钩子**：
 /// 首次导入的初稿没有回退价值，而逐章快照会让几百章的导入多出几百次写盘。
 pub fn import_chapters_inner(
@@ -447,5 +545,39 @@ mod custom_rule_tests {
         // 无配置 / 坏 JSON → 空
         commands::setting_set_inner(&s, "customChapterRules", "{{{").unwrap();
         assert!(load_custom_rules(&s).is_empty());
+    }
+
+    #[test]
+    fn nat_cmp_sorts_numbers_numerically() {
+        let mut names = vec!["10.md".to_string(), "2.md".to_string(), "1.md".to_string()];
+        names.sort_by(|a, b| nat_cmp(a, b));
+        assert_eq!(names, vec!["1.md", "2.md", "10.md"]);
+    }
+
+    #[test]
+    fn strip_serial_variants() {
+        assert_eq!(strip_serial("001 风雪"), "风雪");
+        assert_eq!(strip_serial("001"), "001", "剥完为空则保留原名");
+        assert_eq!(strip_serial("第12章 风雪"), "风雪");
+        assert_eq!(strip_serial("第十二章-风雪"), "风雪");
+        assert_eq!(strip_serial("楔子"), "楔子");
+    }
+
+    #[test]
+    fn preview_import_dir_orders_and_titles() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("book");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("10.md"), "第十章正文\n\n第二段").unwrap();
+        std::fs::write(dir.join("2.txt"), "第二章正文").unwrap();
+        std::fs::write(dir.join("封面.png"), b"png").unwrap(); // 非文本跳过
+        std::fs::write(dir.join("001 开端.md"), "开端正文").unwrap();
+        let out = preview_import_dir_inner(&dir).unwrap();
+        assert_eq!(
+            out.iter().map(|c| c.title.as_str()).collect::<Vec<_>>(),
+            vec!["开端", "第二章正文", "第十章正文"],
+            "自然序排列；文件名去序号作章题，纯数字文件名回退正文首行"
+        );
+        assert!(out[0].content.contains("开端正文"));
     }
 }

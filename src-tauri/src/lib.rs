@@ -84,6 +84,7 @@ pub fn run() {
             commands::read_history,
             commands::snapshot_now,
             commands::preview_import,
+            commands::preview_import_dir,
             commands::import_chapters,
             commands::export_txt,
             commands::export_docx,
