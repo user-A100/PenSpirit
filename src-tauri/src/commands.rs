@@ -336,6 +336,18 @@ pub fn preview_import_dir(path: String) -> AppResult<Vec<porting::import::Parsed
     porting::import::preview_import_dir_inner(std::path::Path::new(&path))
 }
 
+/// 导入查重（M4-T4）：预览章内容与目标书已落库章的 content_hash 比对，逐条返回疑似重复
+pub fn check_duplicates_inner(s: &AppState, book_id: i64, contents: &[String]) -> AppResult<Vec<bool>> {
+    let known: std::collections::HashSet<String> =
+        repo::chapters::hashes_for_book(&*lock(s)?, book_id)?.into_iter().collect();
+    Ok(contents.iter().map(|c| known.contains(&porting::import::content_md5(c))).collect())
+}
+
+#[tauri::command]
+pub fn check_duplicates(s: State<AppState>, bookId: i64, contents: Vec<String>) -> AppResult<Vec<bool>> {
+    check_duplicates_inner(&s, bookId, &contents)
+}
+
 /// 把预览中勾选的章批量落库（标题 + 正文建章、写 md、统计字数）
 #[tauri::command]
 pub fn import_chapters(
@@ -953,5 +965,44 @@ mod bg_tests {
         let err = reading_bg_delete_inner(&s, "").unwrap_err();
         assert!(matches!(err, AppError::NotFound(_)), "实际: {err:?}");
         assert_eq!(reading_bg_list_inner(&s).unwrap().len(), 1, "文件仍在");
+    }
+}
+
+#[cfg(test)]
+mod import_dedup_tests {
+    use super::*;
+    use crate::porting::import::{content_md5, import_chapters_inner, ParsedChapter};
+
+    fn setup() -> (tempfile::TempDir, AppState) {
+        let tmp = tempfile::tempdir().unwrap();
+        let state = AppState::test_state(tmp.path());
+        (tmp, state)
+    }
+
+    fn ch(title: &str, content: &str) -> ParsedChapter {
+        ParsedChapter { title: title.into(), content: content.into(), volume: None }
+    }
+
+    #[test]
+    fn duplicates_flagged_within_same_book_only() {
+        let (_tmp, s) = setup();
+        let bid = create_book_inner(&s, "测试书").unwrap().id;
+        import_chapters_inner(&s, bid, &[ch("一", "同样的内容"), ch("二", "别的内容")]).unwrap();
+
+        let flags = check_duplicates_inner(&s, bid, &["同样的内容".into(), "第三种".into()]).unwrap();
+        assert_eq!(flags, vec![true, false], "同书已有 hash 命中即疑似重复");
+
+        let bid2 = create_book_inner(&s, "另一本书").unwrap().id;
+        let flags2 = check_duplicates_inner(&s, bid2, &["同样的内容".into()]).unwrap();
+        assert_eq!(flags2, vec![false], "查重范围=目标书，跨书不误报");
+    }
+
+    #[test]
+    fn imported_chapters_carry_hash() {
+        let (_tmp, s) = setup();
+        let bid = create_book_inner(&s, "哈希书").unwrap().id;
+        import_chapters_inner(&s, bid, &[ch("一", "内容甲")]).unwrap();
+        let hashes = repo::chapters::hashes_for_book(&*lock(&s).unwrap(), bid).unwrap();
+        assert_eq!(hashes, vec![content_md5("内容甲")]);
     }
 }

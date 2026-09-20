@@ -158,6 +158,9 @@ export const api = {
   previewImport: (path: string) => invoke<ParsedChapter[]>("preview_import", { path }),
   // M4-T3 文件夹成书导入：目录内 *.md/*.txt 按文件名自然序一文件一章
   previewImportDir: (path: string) => invoke<ParsedChapter[]>("preview_import_dir", { path }),
+  // M4-T4 导入查重：预览内容与目标书已落库章逐条比对（true=疑似重复）
+  checkDuplicates: (bookId: number, contents: string[]) =>
+    invoke<boolean[]>("check_duplicates", { bookId, contents }),
   importChapters: (bookId: number, chapters: ParsedChapter[]) =>
     invoke<ImportReport>("import_chapters", { bookId, chapters }),
   // chapterIds 为空数组 = 导出全书；dest 由前端文件对话框给出

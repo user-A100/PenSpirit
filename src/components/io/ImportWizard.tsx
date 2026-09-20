@@ -2,6 +2,7 @@ import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderOpen, FileUp } from "lucide-react";
 import { api, type ParsedChapter } from "../../lib/tauri";
+import { Badge } from "../ui/Badge";
 import { Modal } from "../ui/Modal";
 
 // M2-T8 导入向导：选文件 → Rust 侧编码检测 + 分章 → 勾选 → 批量落库。
@@ -22,8 +23,35 @@ export function ImportWizard(props: {
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // M4-T4 疑似重复章（与当前书已落库内容 MD5 命中），默认不勾选
+  const [dups, setDups] = useState<Set<number>>(new Set());
   // 默认导入为新书；有选中书时才允许切换为「并入当前书」
   const [intoCurrent, setIntoCurrent] = useState(false);
+
+  // M4-T4 查重：与当前书已落库章比对（无选中书 / 查重失败都不阻断导入）
+  const computeDups = async (parsed: ParsedChapter[]): Promise<Set<number>> => {
+    if (props.bookId == null) return new Set<number>();
+    try {
+      const flags = await api.checkDuplicates(
+        props.bookId,
+        parsed.map((p) => p.content),
+      );
+      return new Set(flags.flatMap((dup, i) => (dup ? [i] : [])));
+    } catch {
+      return new Set<number>();
+    }
+  };
+
+  // 解析结果统一入列：默认全选但排除疑似重复（等查重回来再定勾选，避免竞态）
+  const applyParsed = async (name: string, parsed: ParsedChapter[], emptyMsg: string) => {
+    setFileName(name);
+    setReport(null);
+    setItems(parsed);
+    const d = await computeDups(parsed);
+    setDups(d);
+    setPicked(new Set(parsed.map((_, i) => i).filter((i) => !d.has(i))));
+    setError(parsed.length === 0 ? emptyMsg : null);
+  };
 
   const choose = async () => {
     try {
@@ -35,12 +63,7 @@ export function ImportWizard(props: {
         ],
       });
       if (typeof sel !== "string") return;
-      setFileName(sel.split(/[\\/]/).pop() ?? sel);
-      setReport(null);
-      const parsed = await api.previewImport(sel);
-      setItems(parsed);
-      setPicked(new Set(parsed.map((_, i) => i)));
-      setError(parsed.length === 0 ? "没有从文件中解析出任何章节" : null);
+      await applyParsed(sel.split(/[\\/]/).pop() ?? sel, await api.previewImport(sel), "没有从文件中解析出任何章节");
     } catch (e) {
       setItems([]);
       setPicked(new Set());
@@ -53,12 +76,8 @@ export function ImportWizard(props: {
     try {
       const sel = await open({ directory: true });
       if (typeof sel !== "string") return;
-      setFileName(`${sel.split(/[\\/]/).pop() ?? sel}（文件夹）`);
-      setReport(null);
-      const parsed = await api.previewImportDir(sel);
-      setItems(parsed);
-      setPicked(new Set(parsed.map((_, i) => i)));
-      setError(parsed.length === 0 ? "文件夹里没有可导入的 .md/.txt 文件" : null);
+      const name = `${sel.split(/[\\/]/).pop() ?? sel}（文件夹）`;
+      await applyParsed(name, await api.previewImportDir(sel), "文件夹里没有可导入的 .md/.txt 文件");
     } catch (e) {
       setItems([]);
       setPicked(new Set());
@@ -187,6 +206,11 @@ export function ImportWizard(props: {
                       <span className="shrink-0 text-[11px] text-[color:var(--text-faint)]">
                         {c.content.replace(/\s/g, "").length} 字
                       </span>
+                      {dups.has(i) && (
+                        <Badge tone="amber" title="当前书里已有相同内容的章">
+                          疑似重复
+                        </Badge>
+                      )}
                     </label>
                   ),
                 )}

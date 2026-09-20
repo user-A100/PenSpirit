@@ -85,6 +85,7 @@ pub fn run() {
             commands::snapshot_now,
             commands::preview_import,
             commands::preview_import_dir,
+            commands::check_duplicates,
             commands::import_chapters,
             commands::export_txt,
             commands::export_docx,

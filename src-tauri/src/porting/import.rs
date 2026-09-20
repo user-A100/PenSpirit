@@ -478,6 +478,11 @@ pub fn preview_import_dir_inner(path: &Path) -> AppResult<Vec<ParsedChapter>> {
     Ok(out)
 }
 
+/// 章内容 MD5（M4-T4 导入查重）：只作同书内容指纹比对，无安全用途
+pub fn content_md5(c: &str) -> String {
+    format!("{:x}", md5::compute(c.as_bytes()))
+}
+
 /// 批量建章并落盘。导入是"一次成型"的批量操作，**不走快照钩子**：
 /// 首次导入的初稿没有回退价值，而逐章快照会让几百章的导入多出几百次写盘。
 pub fn import_chapters_inner(
@@ -490,7 +495,11 @@ pub fn import_chapters_inner(
         let ChapterMeta { id, .. } = commands::create_chapter_inner(s, book_id, &p.title)?;
         crate::fs_service::write_chapter(&s.root, &chapter_rel(s, id)?, &p.content)?;
         let wc = count_words(&p.content);
-        lock(s).and_then(|conn| repo::chapters::touch_content(&*conn, id, wc))?;
+        let hash = content_md5(&p.content);
+        lock(s).and_then(|conn| {
+            repo::chapters::touch_content(&*conn, id, wc)?;
+            repo::chapters::set_hash(&*conn, id, &hash)
+        })?;
         report.chapters += 1;
         report.words += wc;
     }

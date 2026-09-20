@@ -5,7 +5,13 @@ import { ImportWizard } from "./ImportWizard";
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
 
 vi.mock("../../lib/tauri", () => ({
-  api: { previewImport: vi.fn(), previewImportDir: vi.fn(), importChapters: vi.fn(), createBook: vi.fn() },
+  api: {
+    previewImport: vi.fn(),
+    previewImportDir: vi.fn(),
+    checkDuplicates: vi.fn(),
+    importChapters: vi.fn(),
+    createBook: vi.fn(),
+  },
 }));
 
 import { open } from "@tauri-apps/plugin-dialog";
@@ -131,6 +137,23 @@ describe("ImportWizard", () => {
     expect(await screen.findByText("开端")).toBeInTheDocument();
     expect(api.previewImportDir).toHaveBeenCalledWith("C:\\book");
     expect(chapterBoxes().every((c) => c.checked)).toBe(true);
+  });
+
+  it("并入当前书时疑似重复章默认不勾选并标徽章", async () => {
+    (open as ReturnType<typeof vi.fn>).mockResolvedValue("D:\\dup.txt");
+    (api.previewImport as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { title: "旧章", content: "已有内容", volume: null },
+      { title: "新章", content: "新内容", volume: null },
+    ]);
+    (api.checkDuplicates as ReturnType<typeof vi.fn>).mockResolvedValue([true, false]);
+    render(<ImportWizard bookId={7} onClose={vi.fn()} onImported={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /选择文件/ }));
+
+    expect(await screen.findByText("疑似重复")).toBeInTheDocument();
+    const row = screen.getByText("旧章").closest("label")!;
+    expect(row.querySelector("input")!.checked).toBe(false);
+    expect(screen.getByText("导入 1 章")).toBeInTheDocument();
   });
 
   it("空库（bookId=null）：以文件名自动建书再导入，回传新书 id", async () => {

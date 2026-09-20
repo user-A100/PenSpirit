@@ -71,6 +71,19 @@ pub fn touch_content(conn: &Connection, id: i64, word_count: i64) -> AppResult<C
     get(conn, id)
 }
 
+/// 同书未删章的 content_hash（NULL 不含；M4-T4 导入查重用）
+pub fn hashes_for_book(conn: &Connection, book_id: i64) -> AppResult<Vec<String>> {
+    let mut stmt =
+        conn.prepare("SELECT content_hash FROM chapters WHERE book_id = ?1 AND deleted_at IS NULL AND content_hash IS NOT NULL")?;
+    let rows = stmt.query_map([book_id], |r| r.get::<_, String>(0))?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+pub fn set_hash(conn: &Connection, id: i64, hash: &str) -> AppResult<()> {
+    conn.execute("UPDATE chapters SET content_hash = ?1 WHERE id = ?2", params![hash, id])?;
+    Ok(())
+}
+
 pub fn delete(conn: &Connection, id: i64) -> AppResult<()> {
     conn.execute("DELETE FROM chapters WHERE id = ?1", [id])?;
     Ok(())
