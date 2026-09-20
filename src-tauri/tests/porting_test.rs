@@ -64,6 +64,63 @@ fn strips_utf8_bom_when_decoding() {
 // ---- 分章 ----
 
 #[test]
+fn tight_chapter_matching_avoids_prose_false_positives() {
+    // 编号必须紧贴单位字，且不含"节"（books-reader 的刻意取舍）
+    let cs = split_txt(
+        "第一次集合。\n\n第一节课开始讲卷积。\n\n他去排队。\n\n第二回开场。",
+    );
+    // 「第一节课开始讲卷积。」以句读结尾，双保险被挡；
+    // 「第一次集合。」——「次」不是单位字，紧贴规则不命中
+    assert_eq!(cs.len(), 1, "全部是正文，不误切: {:?}", titles(&cs));
+}
+
+#[test]
+fn fullwidth_digits_and_extra_units_are_chapters() {
+    let cs = split_txt("第１２３章 夜行\n\n正文。\n\n第一部 起源\n\n正文。\n\n第一篇 雪\n\n正文。");
+    assert_eq!(
+        titles(&cs),
+        vec!["第１２３章 夜行", "第一部 起源", "第一篇 雪"]
+    );
+}
+
+#[test]
+fn bare_volume_line_groups_but_not_chapters() {
+    // 「卷一」无"第"字的卷行 + 英文 Volume 行
+    let cs = split_txt("卷一 风雪\n\n第一章 一\n\n正文一。\u{feff}Volume 2\n\nChapter 5\n\n正文二。");
+    assert_eq!(titles(&cs), vec!["第一章 一", "Chapter 5"]);
+    assert_eq!(cs[0].volume.as_deref(), Some("卷一 风雪"));
+    assert_eq!(cs[1].volume.as_deref(), Some("Volume 2"));
+}
+
+#[test]
+fn english_headings_are_recognized() {
+    let cs = split_txt(
+        "Prologue\n\nThe snow fell.\n\nChapter 1 The Gate\n\nHe opened it.\n\nPart III\n\nWar.\n\nEpilogue 尾声\n\nYears later.",
+    );
+    assert_eq!(
+        titles(&cs),
+        vec!["Prologue", "Chapter 1 The Gate", "Part III", "Epilogue 尾声"]
+    );
+}
+
+#[test]
+fn numbered_headings_dot_style() {
+    // `1.标题` / `1、标题` 是书目风格章题；`3.14159` 是数字串不是标题
+    let cs = split_txt("1. 开端\n\n正文一。\n\n2、逃亡\n\n正文二。\n\n3.14159 不是标题。");
+    assert_eq!(titles(&cs), vec!["1. 开端", "2、逃亡"]);
+    assert!(cs[1].content.contains("3.14159 不是标题。"));
+}
+
+#[test]
+fn long_prose_line_is_not_a_heading() {
+    // 超过 40 字的行是正文，即使恰好以「第N章」开头
+    let long_line = format!("第一章{}。", "他推开门风雪灌进来灯晃了一下他坐下沉入回忆".repeat(3));
+    let cs = split_txt(&format!("{long_line}\n\n第九章 归来\n\n正文。"));
+    assert_eq!(titles(&cs), vec!["第九章 归来"]);
+    assert!(cs[0].content.contains(&long_line), "长行归入正文不丢字");
+}
+
+#[test]
 fn splits_typical_novel_with_volumes_and_special_chapters() {
     let cs = split_txt(SAMPLE);
     assert_eq!(titles(&cs), vec!["序章", "第一章 初见", "第二章 刀", "番外 后日谈"]);
@@ -117,6 +174,22 @@ fn long_heading_title_is_truncated() {
     let cs = split_txt(&format!("{heading}\n\n正文。"));
     assert_eq!(cs[0].title.chars().count(), 35);
     assert!(cs[0].title.starts_with("第一章 "));
+}
+
+#[test]
+fn indented_single_newline_paragraphs_are_normalized() {
+    // 网文 txt 的原生形态：U+3000 缩进 + 单换行分段。
+    // 落库必须转成「无缩进 + 空行分段」，否则 markdown 渲染整章叠成一段。
+    let cs = split_txt("第一章 初见\n　　他推开门。\n　　风雪灌进来。\n　　灯晃了一下。");
+    assert_eq!(cs.len(), 1);
+    assert_eq!(cs[0].content, "他推开门。\n\n风雪灌进来。\n\n灯晃了一下。");
+}
+
+#[test]
+fn normalize_is_idempotent_on_blank_line_paragraphs() {
+    // 已规范化的文本（空行分段、无缩进）原样通过
+    let cs = split_txt("第一章 一\n\n正文一。\n\n正文二。");
+    assert_eq!(cs[0].content, "正文一。\n\n正文二。");
 }
 
 #[test]
