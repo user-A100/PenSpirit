@@ -1,4 +1,4 @@
-// 主题定义：六套完整配色，每套覆盖 styles.css :root 的全部 16 个 CSS 变量。
+// 主题定义：八套完整配色，每套覆盖 styles.css :root 的全部 16 个 CSS 变量。
 // styles.css 的 :root 即默认主题（bixian-dark）的值；其余主题由 ThemeProvider
 // 注入 <style id="bixian-theme"> 覆盖（Agentero applyUiTheme 手法）。
 
@@ -185,7 +185,72 @@ const midnightBlue: ThemeDef = {
   },
 };
 
-export const THEMES: ThemeDef[] = [bixianDark, bixianLight, ink, parchment, matcha, midnightBlue];
+// 枫叶/枫夜：移植自 Obsidian Maple 主题默认色板（color-use-custom 出厂值）。
+// Maple 全部颜色由基础色相派生：浅色 h=35（暖枫）、深色 h=207（静蓝），
+// 这里按其出厂色相换算成定值。出处 D:\Mycraft\research\maple\theme.css。
+const maple: ThemeDef = {
+  id: "maple",
+  name: "枫叶",
+  dark: false,
+  vars: {
+    // bg = hsl(35,12%,97%) / alt(35,10%,95%) / secondary(h-18, 8%,93%)
+    "--bg-base": "#f8f8f6",
+    "--bg-panel": "#efedec",
+    "--bg-elevated": "#f4f2f1",
+    "--bg-hover": "#efece8", // hsl(35,20%,78%,25%) 叠底的有效色
+    "--border-subtle": "#eae8e4", // frame：hsl(35,13.2%,90.6%)
+    "--border-strong": "#d2c9bc", // Maple 非激活态高亮色（暖檀线）
+    "--text-primary": "#2e2b26",
+    "--text-secondary": "#6e675c",
+    "--text-faint": "#9b9287",
+    // Maple 激活色 hsl(35,22%,56%)——标志性的柔和檀金
+    "--accent": "#a79376",
+    "--accent-hover": "#b9a690",
+    "--accent-dim": "rgba(167, 147, 118, 0.16)",
+    "--success": "#478f14",
+    "--danger": "#bd5151",
+    "--warning": "#c77b23",
+    "--prose-fg": "#332f28",
+  },
+};
+
+const mapleNight: ThemeDef = {
+  id: "mapleNight",
+  name: "枫夜",
+  dark: true,
+  vars: {
+    // bg = hsl(207,5%,11%) / alt(207,10%,13%) / secondary(h-18, 6%,12%)
+    "--bg-base": "#1b1c1d",
+    "--bg-panel": "#1d2020",
+    "--bg-elevated": "#1e2124",
+    "--bg-hover": "#293137", // hsl(207,24%,50%,20%) 叠底的有效色
+    "--border-subtle": "#26292d",
+    "--border-strong": "#343a41",
+    // 正文/主文字 = hsla(207,50%,94%,75%) 叠底有效色——Maple 标志性的低声线
+    "--text-primary": "#b5bbc0",
+    "--text-secondary": "#8b96a1",
+    "--text-faint": "#5d6771",
+    // 激活色 hsl(207,24%,44.2%)（52%×0.85 色彩不透明度）
+    "--accent": "#56738c",
+    "--accent-hover": "#7699ad",
+    "--accent-dim": "rgba(86, 115, 140, 0.18)",
+    "--success": "#7fab86",
+    "--danger": "#b47777",
+    "--warning": "#b89c72",
+    "--prose-fg": "#b5bbc0",
+  },
+};
+
+export const THEMES: ThemeDef[] = [
+  bixianDark,
+  bixianLight,
+  ink,
+  parchment,
+  matcha,
+  midnightBlue,
+  maple,
+  mapleNight,
+];
 
 export function findTheme(id: string): ThemeDef | undefined {
   return THEMES.find((t) => t.id === id);

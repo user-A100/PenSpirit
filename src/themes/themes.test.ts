@@ -50,17 +50,17 @@ beforeEach(() => {
 });
 
 describe("主题定义", () => {
-  it("六套主题、id 唯一、首项为默认深色", () => {
-    expect(THEMES).toHaveLength(6);
+  it("八套主题、id 唯一、首项为默认深色", () => {
+    expect(THEMES).toHaveLength(8);
     const ids = THEMES.map((t) => t.id);
-    expect(new Set(ids).size).toBe(6);
+    expect(new Set(ids).size).toBe(8);
     expect(THEMES[0].id).toBe(DEFAULT_THEME_ID);
     expect(THEMES[0].dark).toBe(true);
   });
 
-  it("明暗倾向：浅色系恰好为 light/parchment/matcha", () => {
+  it("明暗倾向：浅色系恰好为 light/maple/matcha/parchment", () => {
     const light = THEMES.filter((t) => !t.dark).map((t) => t.id).sort();
-    expect(light).toEqual(["bixian-light", "matcha", "parchment"]);
+    expect(light).toEqual(["bixian-light", "maple", "matcha", "parchment"]);
   });
 
   it("每套主题完整覆盖全部 16 个变量且值非空", () => {
