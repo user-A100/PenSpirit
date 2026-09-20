@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Zen 实机验证脚本的截图/日志暂存（scripts/zen-verify/）
+.tmp-zen-ref/
