@@ -238,6 +238,36 @@ pub struct CharacterInput {
     pub description: String,
 }
 
+// ---------- M4 大纲体系 ----------
+
+/// 大纲条目（outlines 表）。三级：master=总纲（每书一篇）、
+/// volume=卷纲（手动分卷）、chapter=章细纲（chapter_id 关联，每章一篇）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Outline {
+    pub id: i64,
+    pub book_id: i64,
+    pub kind: String,
+    pub chapter_id: Option<i64>,
+    pub title: String,
+    pub content: String,
+    pub sort_key: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// 大纲入参：id=None 插入，Some 更新。kind 合法性与唯一性（每书一篇总纲、
+/// 每章一篇细纲）由 repo 层校验；volume 的卷名入 title。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutlineInput {
+    pub id: Option<i64>,
+    pub book_id: i64,
+    pub kind: String,
+    pub chapter_id: Option<i64>,
+    pub title: String,
+    pub content: String,
+    pub sort_key: i64,
+}
+
 /// 按日聚合统计（stats_range；书维度已 SUM 掉）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DailyStat {

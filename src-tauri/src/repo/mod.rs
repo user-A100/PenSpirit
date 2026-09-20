@@ -4,6 +4,7 @@ pub mod characters;
 pub mod chapters;
 pub mod foreshadows;
 pub mod ideas;
+pub mod outlines;
 pub mod sessions;
 pub mod settings;
 pub mod styles;

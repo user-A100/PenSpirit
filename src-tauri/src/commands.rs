@@ -4,7 +4,7 @@ use crate::error::{AppError, AppResult};
 use crate::bump;
 use crate::fs_service;
 use crate::history;
-use crate::models::{BgImage, Book, BumpWord, ChapterContent, ChapterMeta, Character, CharacterInput, DailyStat, Foreshadow, ForeshadowInput, Idea};
+use crate::models::{BgImage, Book, BumpWord, ChapterContent, ChapterMeta, Character, CharacterInput, DailyStat, Foreshadow, ForeshadowInput, Idea, Outline, OutlineInput};
 use crate::porting;
 use crate::repo;
 use crate::search;
@@ -521,6 +521,20 @@ pub fn character_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
     repo::characters::delete(&*lock(s)?, id)
 }
 
+// ---- M4 大纲体系 ----
+
+pub fn outlines_list_inner(s: &AppState, book_id: i64) -> AppResult<Vec<Outline>> {
+    repo::outlines::list_by_book(&*lock(s)?, book_id)
+}
+
+pub fn outline_upsert_inner(s: &AppState, input: &OutlineInput) -> AppResult<Outline> {
+    repo::outlines::upsert(&*lock(s)?, input)
+}
+
+pub fn outline_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    repo::outlines::delete(&*lock(s)?, id)
+}
+
 #[tauri::command]
 pub fn setting_get(s: State<AppState>, key: String) -> AppResult<Option<String>> {
     setting_get_inner(&s, &key)
@@ -579,6 +593,21 @@ pub fn character_upsert(s: State<AppState>, input: CharacterInput) -> AppResult<
 #[tauri::command]
 pub fn character_delete(s: State<AppState>, id: i64) -> AppResult<()> {
     character_delete_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn outlines_list(s: State<AppState>, book_id: i64) -> AppResult<Vec<Outline>> {
+    outlines_list_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn outline_upsert(s: State<AppState>, input: OutlineInput) -> AppResult<Outline> {
+    outline_upsert_inner(&s, &input)
+}
+
+#[tauri::command]
+pub fn outline_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    outline_delete_inner(&s, id)
 }
 
 // ---- M3-T6 阅读背景图（纯文件操作，不碰 db 锁） ----

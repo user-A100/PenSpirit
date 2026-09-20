@@ -72,6 +72,18 @@ export interface CharacterInput {
   role: string; aliases: string; description: string;
 }
 
+// ---- M4：大纲体系（master=总纲 / volume=卷纲 / chapter=章细纲） ----
+export type OutlineKind = "master" | "volume" | "chapter";
+export interface Outline {
+  id: number; book_id: number; kind: OutlineKind;
+  chapter_id: number | null; title: string; content: string;
+  sort_key: number; created_at: string; updated_at: string;
+}
+export interface OutlineInput {
+  id: number | null; book_id: number; kind: OutlineKind;
+  chapter_id: number | null; title: string; content: string; sort_key: number;
+}
+
 // ---- M3-T6：阅读背景图（文件存 {appData}/background/，经 asset 协议加载） ----
 export interface BgImage { id: string; path: string; name: string }
 
@@ -169,6 +181,9 @@ export const api = {
   charactersList: (bookId: number) => invoke<Character[]>("characters_list", { bookId }),
   characterUpsert: (input: CharacterInput) => invoke<Character>("character_upsert", { input }),
   characterDelete: (id: number) => invoke<void>("character_delete", { id }),
+  outlinesList: (bookId: number) => invoke<Outline[]>("outlines_list", { bookId }),
+  outlineUpsert: (input: OutlineInput) => invoke<Outline>("outline_upsert", { input }),
+  outlineDelete: (id: number) => invoke<void>("outline_delete", { id }),
   // ---- M3-T6：阅读背景图 ----
   readingBgImport: (srcPath: string) => invoke<BgImage>("reading_bg_import", { srcPath }),
   readingBgList: () => invoke<BgImage[]>("reading_bg_list"),
