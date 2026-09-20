@@ -41,11 +41,14 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
-/* 侧边栏折叠/展开补间：react-resizable-panels v4 不做动画，
-   折叠期间由 JS 在 Group 根节点挂 data-rail-animating 属性，
-   面板 flexGrow 走 200ms 过渡（Agentero 同库零依赖手法），结束移除 */
-[data-rail-animating] * {
-  transition: flex-grow 200ms ease;
+/* 写作视图三栏折叠（v4.12.4 实测：panel 级 collapse()/resize() 与 group 级
+   setLayout() 在该布局下均静默无效——命令式 API 不可依赖；且 v4 在 Group 与
+   Panel 之间垫一层无类名 wrapper，真正的 flex 项是 wrapper）。
+   折叠=CSS 摘除该 wrapper（:has 命中 panel 的直接父级）：display:none 不占
+   布局，编辑区自然填充；面板内联样式保持原值，展开即还原用户拖定宽度。 */
+[data-sidebar-collapsed] div:has(> .panel-sidebar),
+[data-dock-collapsed] div:has(> .panel-dock) {
+  display: none !important;
 }
 
 /* 编辑器正文：书卷气衬线排版，与 UI 的无衬线区分。
