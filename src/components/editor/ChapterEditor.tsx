@@ -14,6 +14,7 @@ import { api } from "../../lib/tauri";
 import { useAutosave } from "../../hooks/useAutosave";
 import { countWords } from "../../lib/words";
 import { HistoryPanel } from "./HistoryPanel";
+import { PlaceholderDialog } from "./PlaceholderDialog";
 import { SensitiveDialog } from "./SensitiveDialog";
 import { FloatingOutline } from "./FloatingOutline";
 
@@ -49,6 +50,9 @@ export function ChapterEditor() {
   const lastMinute = useRef<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [sensitiveOpen, setSensitiveOpen] = useState(false);
+  // 「检查」下拉（M4-T6：敏感词 + 占位符两项）
+  const [checkOpen, setCheckOpen] = useState(false);
+  const [placeholderOpen, setPlaceholderOpen] = useState(false);
 
   const editor = useEditor({
     extensions: [StarterKit, Markdown],
@@ -203,13 +207,36 @@ export function ChapterEditor() {
           >
             <History size={14} />
           </button>
-          <button
-            onClick={() => setSensitiveOpen(true)}
-            title="敏感词检查"
-            className="rounded p-1 transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
-          >
-            <ScanSearch size={14} />
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setCheckOpen((v) => !v)}
+              title="检查"
+              className={`rounded p-1 transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] ${
+                checkOpen ? "text-[color:var(--accent)]" : ""
+              }`}
+            >
+              <ScanSearch size={14} />
+            </button>
+            {checkOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setCheckOpen(false)} />
+                <div className="absolute right-0 top-full z-20 mt-1 w-32 rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] py-1 text-xs [box-shadow:var(--shadow-pop)]">
+                  <button
+                    onClick={() => { setCheckOpen(false); setSensitiveOpen(true); }}
+                    className="block w-full px-3 py-1.5 text-left text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+                  >
+                    敏感词检查
+                  </button>
+                  <button
+                    onClick={() => { setCheckOpen(false); setPlaceholderOpen(true); }}
+                    className="block w-full px-3 py-1.5 text-left text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+                  >
+                    占位符扫描
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           {status !== "idle" && (
             <span className="flex items-center gap-1.5">
               <span
@@ -250,6 +277,9 @@ export function ChapterEditor() {
       {/* 打开时快照当前正文——弹层是模态的，期间不会有编辑 */}
       {sensitiveOpen && (
         <SensitiveDialog content={currentMarkdown()} onClose={() => setSensitiveOpen(false)} />
+      )}
+      {placeholderOpen && (
+        <PlaceholderDialog content={currentMarkdown()} onClose={() => setPlaceholderOpen(false)} />
       )}
 
       {/* 悬浮大纲：fixed 定位不占版面；正文传编辑器实时 markdown，大纲随写随刷 */}
