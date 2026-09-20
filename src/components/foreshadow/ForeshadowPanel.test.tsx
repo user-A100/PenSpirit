@@ -38,6 +38,8 @@ function fs(p: Partial<Foreshadow> & Pick<Foreshadow, "id" | "title">): Foreshad
     note: "",
     created_at: "2026-09-01 00:00:00",
     resolved_chapter_id: null,
+    override_note: "",
+    repay_chapter_id: null,
     ...p,
   };
 }
@@ -144,6 +146,8 @@ describe("ForeshadowPanel", () => {
         planted_chapter_id: 11,
         target_chapter_id: 19,
         note: "长街的灯笼",
+        override_note: "",
+        repay_chapter_id: null,
       }),
     );
     await waitFor(() => expect(api.foreshadowsList).toHaveBeenCalledTimes(2)); // 初次 + 提交后刷新

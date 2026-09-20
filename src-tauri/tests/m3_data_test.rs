@@ -20,6 +20,8 @@ fn input(book_id: i64, title: &str, planted: i64, target: Option<i64>, note: &st
         planted_chapter_id: planted,
         target_chapter_id: target,
         note: note.into(),
+        override_note: String::new(),
+        repay_chapter_id: None,
     }
 }
 

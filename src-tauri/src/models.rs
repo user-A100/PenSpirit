@@ -198,6 +198,12 @@ pub struct Foreshadow {
     pub created_at: String,
     /// 实际回收章（仅 resolved 时有值）
     pub resolved_chapter_id: Option<i64>,
+    /// 放行理由（M4 T5 还债登记：登记还债章时填写）
+    #[serde(default)]
+    pub override_note: String,
+    /// 登记的还债章（M4 T5：紧急度倒计时改按它算；None = 未登记）
+    #[serde(default)]
+    pub repay_chapter_id: Option<i64>,
 }
 
 /// 伏笔登记入参：id=None 插入，Some 更新（book_id 以首次登记为准，更新不改属主）。
@@ -209,6 +215,10 @@ pub struct ForeshadowInput {
     pub planted_chapter_id: i64,
     pub target_chapter_id: Option<i64>,
     pub note: String,
+    #[serde(default)]
+    pub override_note: String,
+    #[serde(default)]
+    pub repay_chapter_id: Option<i64>,
 }
 
 // ---------- M4 人物卡 ----------

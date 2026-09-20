@@ -3,7 +3,7 @@ use rusqlite::{params, Connection};
 use crate::error::{AppError, AppResult};
 use crate::models::{Foreshadow, ForeshadowInput};
 
-const COLS: &str = "id, book_id, title, planted_chapter_id, target_chapter_id, status, note, created_at, resolved_chapter_id";
+const COLS: &str = "id, book_id, title, planted_chapter_id, target_chapter_id, status, note, created_at, resolved_chapter_id, override_note, repay_chapter_id";
 
 fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Foreshadow> {
     Ok(Foreshadow {
@@ -16,6 +16,8 @@ fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Foreshadow> {
         note: row.get(6)?,
         created_at: row.get(7)?,
         resolved_chapter_id: row.get(8)?,
+        override_note: row.get(9)?,
+        repay_chapter_id: row.get(10)?,
     })
 }
 
@@ -43,14 +45,16 @@ pub fn upsert(conn: &Connection, input: &ForeshadowInput) -> AppResult<Foreshado
     match input.id {
         None => {
             conn.execute(
-                "INSERT INTO foreshadows (book_id, title, planted_chapter_id, target_chapter_id, note)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO foreshadows (book_id, title, planted_chapter_id, target_chapter_id, note, override_note, repay_chapter_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
                     input.book_id,
                     title,
                     input.planted_chapter_id,
                     input.target_chapter_id,
-                    input.note
+                    input.note,
+                    input.override_note,
+                    input.repay_chapter_id
                 ],
             )?;
             get(conn, conn.last_insert_rowid())
@@ -58,14 +62,17 @@ pub fn upsert(conn: &Connection, input: &ForeshadowInput) -> AppResult<Foreshado
         Some(id) => {
             let n = conn.execute(
                 "UPDATE foreshadows
-                 SET title = ?2, planted_chapter_id = ?3, target_chapter_id = ?4, note = ?5
+                 SET title = ?2, planted_chapter_id = ?3, target_chapter_id = ?4, note = ?5,
+                     override_note = ?6, repay_chapter_id = ?7
                  WHERE id = ?1",
                 params![
                     id,
                     title,
                     input.planted_chapter_id,
                     input.target_chapter_id,
-                    input.note
+                    input.note,
+                    input.override_note,
+                    input.repay_chapter_id
                 ],
             )?;
             if n == 0 {

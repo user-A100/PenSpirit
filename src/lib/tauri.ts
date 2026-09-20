@@ -55,10 +55,13 @@ export interface Foreshadow {
   id: number; book_id: number; title: string;
   planted_chapter_id: number; target_chapter_id: number | null;
   status: string; note: string; created_at: string; resolved_chapter_id: number | null;
+  /** M4-T5 还债登记：放行理由 + 登记的还债章（null=未登记） */
+  override_note: string; repay_chapter_id: number | null;
 }
 export interface ForeshadowInput {
   id: number | null; book_id: number; title: string;
   planted_chapter_id: number; target_chapter_id: number | null; note: string;
+  override_note: string; repay_chapter_id: number | null;
 }
 export interface DailyStat { date: string; words: number; active_minutes: number }
 

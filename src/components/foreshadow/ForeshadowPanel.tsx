@@ -53,6 +53,7 @@ interface Row {
   remaining: number | null;
   plantedIdx: number;
   targetIdx: number | null;
+  registered: boolean;
 }
 
 const isOpenState = (s: ForeshadowState) => s === "overdue" || s === "urgent" || s === "active";
@@ -77,6 +78,9 @@ export function ForeshadowPanel() {
   const [planted, setPlanted] = useState(""); // chapter id 字符串
   const [target, setTarget] = useState(""); // ""=未定
   const [note, setNote] = useState("");
+  // M4-T5 还债登记：repay 为还债章 id 字符串（""=未登记），overrideNote 为放行理由
+  const [repay, setRepay] = useState("");
+  const [overrideNote, setOverrideNote] = useState("");
   const [resolvingId, setResolvingId] = useState<number | null>(null);
   const [resolveCh, setResolveCh] = useState("");
   const [confirmDelId, setConfirmDelId] = useState<number | null>(null);
@@ -99,8 +103,9 @@ export function ForeshadowPanel() {
         .map((f): Row => {
           const plantedIdx = idxById.get(f.planted_chapter_id) ?? -1;
           const targetIdx = f.target_chapter_id != null ? (idxById.get(f.target_chapter_id) ?? -1) : null;
-          const u = urgencyOf({ status: f.status, plantedIdx, targetIdx, currentIdx });
-          return { f, state: u.state, remaining: u.remaining, plantedIdx, targetIdx };
+          const repayIdx = f.repay_chapter_id != null ? (idxById.get(f.repay_chapter_id) ?? -1) : null;
+          const u = urgencyOf({ status: f.status, plantedIdx, targetIdx, currentIdx, repayIdx });
+          return { f, state: u.state, remaining: u.remaining, plantedIdx, targetIdx, registered: u.registered };
         })
         .sort((a, b) => SEVERITY[a.state] - SEVERITY[b.state] || a.f.id - b.f.id),
     [list, idxById, currentIdx],
@@ -132,6 +137,8 @@ export function ForeshadowPanel() {
     setPlanted(defaultPlanted());
     setTarget("");
     setNote("");
+    setRepay("");
+    setOverrideNote("");
     setFormOpen(true);
   };
 
@@ -141,6 +148,8 @@ export function ForeshadowPanel() {
     setPlanted(String(f.planted_chapter_id));
     setTarget(f.target_chapter_id != null ? String(f.target_chapter_id) : "");
     setNote(f.note);
+    setRepay(f.repay_chapter_id != null ? String(f.repay_chapter_id) : "");
+    setOverrideNote(f.override_note);
     setFormOpen(true);
   };
 
@@ -153,6 +162,8 @@ export function ForeshadowPanel() {
       planted_chapter_id: Number(planted),
       target_chapter_id: target === "" ? null : Number(target),
       note,
+      override_note: overrideNote,
+      repay_chapter_id: repay === "" ? null : Number(repay),
     });
     if (ok) {
       setFormOpen(false);
@@ -242,6 +253,26 @@ export function ForeshadowPanel() {
                 ))}
               </select>
             </div>
+            {/* M4-T5 还债登记：登记后紧急度改按还债章倒计时（放行合约） */}
+            <div className="flex gap-1.5">
+              <select
+                title="还债章"
+                value={repay}
+                onChange={(e) => setRepay(e.target.value)}
+                className={INPUT}
+              >
+                <option value="">未登记还债章</option>
+                {chapters.map((c, i) => (
+                  <option key={c.id} value={c.id}>{`第${i + 1}章 ${c.title}`}</option>
+                ))}
+              </select>
+              <input
+                value={overrideNote}
+                onChange={(e) => setOverrideNote(e.target.value)}
+                placeholder="放行理由（如：并到第二卷高潮一起收）"
+                className={INPUT}
+              />
+            </div>
             <textarea
               rows={2}
               value={note}
@@ -288,6 +319,11 @@ export function ForeshadowPanel() {
                   <Badge tone={FORESHADOW_TONE[r.state]} title={`紧急度 ${r.state}`}>
                     {STATE_LABEL[r.state]}
                   </Badge>
+                  {r.registered && (
+                    <Badge tone="neutral" title={`已登记还债：${r.f.override_note || "未填理由"}`}>
+                      已登记还债
+                    </Badge>
+                  )}
                 </div>
                 <div className="mt-1 flex items-center gap-2 text-[11px] text-[color:var(--text-faint)]">
                   <span>{`${chLabel(r.plantedIdx)}埋 → ${chLabel(r.targetIdx)}收`}</span>

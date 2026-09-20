@@ -13,18 +13,23 @@ export function urgencyOf(f: {
   plantedIdx: number; // 埋设章序（章被软删时传 -1，展示层特判「章已删」）
   targetIdx: number | null; // 计划回收章序（null=未定）
   currentIdx: number; // 当前章序
-}): { state: ForeshadowState; remaining: number | null; score: number } {
-  // 未定回收章 → remaining 无法判定（不超期、不倒计时）
-  const remaining = f.targetIdx != null ? f.targetIdx - f.currentIdx : null;
-  const span = f.targetIdx != null ? f.targetIdx - f.plantedIdx : Number.NaN;
+  /** 已登记还债章（M4 T5 放行合约）：倒计时与超期改按它算 */
+  repayIdx?: number | null;
+}): { state: ForeshadowState; remaining: number | null; score: number; registered: boolean } {
+  const registered = f.repayIdx != null;
+  // 已登记 → 还债章就是新的截止；未登记 → 原计划回收章
+  const deadline = registered ? f.repayIdx! : f.targetIdx;
+  // 未定截止（未登记且回收章未定）→ remaining 无法判定（不超期、不倒计时）
+  const remaining = deadline != null ? deadline - f.currentIdx : null;
+  const span = deadline != null ? deadline - f.plantedIdx : Number.NaN;
   const safe = span > 0 ? span : 1;
   const score = (f.currentIdx - f.plantedIdx) / safe;
 
-  if (f.status === "resolved") return { state: "resolved", remaining, score };
-  if (f.status === "dropped") return { state: "dropped", remaining, score };
-  if (remaining != null && remaining < 0) return { state: "overdue", remaining, score };
-  if ((remaining != null && remaining <= 5) || score >= 2) return { state: "urgent", remaining, score };
-  return { state: "active", remaining, score };
+  if (f.status === "resolved") return { state: "resolved", remaining, score, registered };
+  if (f.status === "dropped") return { state: "dropped", remaining, score, registered };
+  if (remaining != null && remaining < 0) return { state: "overdue", remaining, score, registered };
+  if ((remaining != null && remaining <= 5) || score >= 2) return { state: "urgent", remaining, score, registered };
+  return { state: "active", remaining, score, registered };
 }
 
 // 四态语义色（与 T9 Badge 同色板）：超期红 / 紧急琥珀 / 活跃蓝 / 已回收绿 / 搁置灰
