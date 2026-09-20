@@ -5,6 +5,7 @@
 
 use std::path::Path;
 
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::commands::{self, lock};
@@ -36,6 +37,35 @@ pub struct ParsedChapter {
 pub struct ImportReport {
     pub chapters: i64,
     pub words: i64,
+}
+
+/// 自定义分章规则（settings 表 customChapterRules 键，M4-T2）。
+/// 行内命中即视为章题行，但仍先过句读/长度两条 guard
+/// （guard 是普适防误切，用户规则只加覆盖不豁免）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomChapterRule {
+    pub name: String,
+    pub pattern: String,
+}
+
+/// 规则数/长度上限：设置值可被外部 db 写入，信任边界处兜底防正则炸裂
+pub const CUSTOM_RULES_MAX: usize = 20;
+pub const CUSTOM_RULE_PATTERN_MAX: usize = 200;
+
+/// 读用户自定义规则并编译；坏 JSON / 坏正则 / 超限一律跳过不炸（导入绝不能因规则挂掉）
+pub fn load_custom_rules(s: &AppState) -> Vec<Regex> {
+    let raw = commands::setting_get_inner(s, "customChapterRules")
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    let Ok(list) = serde_json::from_str::<Vec<CustomChapterRule>>(&raw) else {
+        return Vec::new();
+    };
+    list.into_iter()
+        .take(CUSTOM_RULES_MAX)
+        .filter(|r| !r.pattern.is_empty() && r.pattern.len() <= CUSTOM_RULE_PATTERN_MAX)
+        .filter_map(|r| Regex::new(&r.pattern).ok())
+        .collect()
 }
 
 /// 编码检测 + 解码：chardetng 猜（BOM 优先，空 tld 不做域名偏好），encoding_rs 解。
@@ -197,7 +227,7 @@ fn is_numbered_heading(line: &str) -> bool {
 /// 卷行不在此列（split_segment 单独拦截，卷只分组不单独成章）。
 /// 末尾标点 + 行长两条 guard 是超出计划的正向补充——正文短句（如"第二天回家。"）
 /// 和长句会被章规则误判，加上这两条判断可挡掉绝大多数误切。
-fn heading_of(line: &str) -> Option<String> {
+fn heading_of(line: &str, custom: &[Regex]) -> Option<String> {
     if line.chars().count() > TITLE_LINE_MAX_CHARS {
         return None;
     }
@@ -208,6 +238,9 @@ fn heading_of(line: &str) -> Option<String> {
         return Some(truncate_chars(line, TITLE_MAX_CHARS));
     }
     if SPECIAL_MARKERS.iter().any(|m| line.starts_with(m)) {
+        return Some(truncate_chars(line, TITLE_MAX_CHARS));
+    }
+    if custom.iter().any(|r| r.is_match(line)) {
         return Some(truncate_chars(line, TITLE_MAX_CHARS));
     }
     None
@@ -236,7 +269,7 @@ fn normalize_paragraphs(s: &str) -> String {
 }
 
 /// 单个文档分章（BOM 分段后各段独立调用，避免前一段的卷状态串到下一段）
-fn split_segment(segment: &str) -> Vec<ParsedChapter> {
+fn split_segment(segment: &str, custom: &[Regex]) -> Vec<ParsedChapter> {
     let mut out: Vec<ParsedChapter> = Vec::new();
     let mut volume: Option<String> = None;
     let mut current: Option<ParsedChapter> = None;
@@ -254,7 +287,7 @@ fn split_segment(segment: &str) -> Vec<ParsedChapter> {
             volume = Some(truncate_chars(trimmed, TITLE_MAX_CHARS));
             continue;
         }
-        if let Some(title) = heading_of(trimmed) {
+        if let Some(title) = heading_of(trimmed, custom) {
             if let Some(done) = current.take() {
                 out.push(done);
             }
@@ -290,14 +323,19 @@ fn split_segment(segment: &str) -> Vec<ParsedChapter> {
 /// 规则：卷行只更新当前卷（不单独成章）；章行/特殊标记行开新章；
 /// 其余行为正文；无任何匹配时全文作第一章；章题截 `TITLE_MAX_CHARS`。
 pub fn split_txt(text: &str) -> Vec<ParsedChapter> {
+    split_txt_with(text, &[])
+}
+
+/// 带自定义规则的分章（M4-T2：preview_import 用，内置规则先判、用户规则补覆盖）
+pub fn split_txt_with(text: &str, custom: &[Regex]) -> Vec<ParsedChapter> {
     text.split('\u{feff}')
         .filter(|s| !s.trim().is_empty())
-        .flat_map(split_segment)
+        .flat_map(|s| split_segment(s, custom))
         .collect()
 }
 
-/// docx 读段落 → 拼成纯文本 → 复用同一套分章规则
-pub fn import_docx(bytes: &[u8]) -> AppResult<Vec<ParsedChapter>> {
+/// docx 读段落 → 拼成纯文本（分章由调用方决定用哪套规则）
+fn docx_to_text(bytes: &[u8]) -> AppResult<String> {
     let docx = docx_rs::read_docx(bytes).map_err(|e| AppError::Invalid(format!("docx 解析失败: {e}")))?;
     let mut text = String::new();
     for child in &docx.document.children {
@@ -318,11 +356,17 @@ pub fn import_docx(bytes: &[u8]) -> AppResult<Vec<ParsedChapter>> {
         }
         text.push('\n');
     }
-    Ok(split_txt(&text))
+    Ok(text)
 }
 
-/// 读文件 → 按扩展名分派（.docx 走 docx 解析，其余按文本解码分章）
-pub fn preview_import_inner(path: &Path) -> AppResult<Vec<ParsedChapter>> {
+/// docx 导入（内置规则分章；tests/porting_test.rs 依赖此签名）
+pub fn import_docx(bytes: &[u8]) -> AppResult<Vec<ParsedChapter>> {
+    Ok(split_txt(&docx_to_text(bytes)?))
+}
+
+/// 读文件 → 按扩展名分派（.docx 走 docx 解析，其余按文本解码分章）；
+/// custom 为用户自定义规则（M4-T2，两条路径都生效）
+pub fn preview_import_inner(path: &Path, custom: &[Regex]) -> AppResult<Vec<ParsedChapter>> {
     let bytes = std::fs::read(path)?;
     let ext = path
         .extension()
@@ -330,9 +374,9 @@ pub fn preview_import_inner(path: &Path) -> AppResult<Vec<ParsedChapter>> {
         .map(|e| e.to_ascii_lowercase())
         .unwrap_or_default();
     if ext == "docx" {
-        import_docx(&bytes)
+        Ok(split_txt_with(&docx_to_text(&bytes)?, custom))
     } else {
-        Ok(split_txt(&detect_and_decode(&bytes)))
+        Ok(split_txt_with(&detect_and_decode(&bytes), custom))
     }
 }
 
@@ -357,4 +401,51 @@ pub fn import_chapters_inner(
 
 fn chapter_rel(s: &AppState, id: i64) -> AppResult<String> {
     Ok(lock(s).and_then(|conn| repo::chapters::get(&*conn, id))?.file_path)
+}
+
+#[cfg(test)]
+mod custom_rule_tests {
+    use super::*;
+
+    fn rules(pats: &[&str]) -> Vec<Regex> {
+        pats.iter().map(|p| Regex::new(p).unwrap()).collect()
+    }
+
+    #[test]
+    fn custom_rule_splits_where_builtins_do_not() {
+        let text = "开头一段。\n【风起】\n风起了。\n【云落】\n云散了。";
+        let out = split_txt_with(text, &rules(&["^【.+】$"]));
+        assert_eq!(out.len(), 2, "两条自定义章题行各开一章: {out:?}");
+        assert_eq!(out[0].title, "【风起】");
+        assert_eq!(out[1].title, "【云落】");
+    }
+
+    #[test]
+    fn custom_rules_respect_sentence_and_length_guards() {
+        // 句读结尾的行即便是规则命中也不是标题（guard 先于自定义规则）
+        let out = split_txt_with("【风起。】\n正文", &rules(&["^【.+】$"]));
+        assert_eq!(out.len(), 1, "以句号结尾的行不切章: {out:?}");
+        // 超长行同理（>40 字符）
+        let long = format!("【{}】", "很".repeat(50));
+        let out2 = split_txt_with(&format!("{long}\n正文"), &rules(&["^【.+】$"]));
+        assert_eq!(out2.len(), 1);
+    }
+
+    #[test]
+    fn load_custom_rules_reads_settings_and_skips_invalid() {
+        let tmp = tempfile::tempdir().unwrap();
+        let s = AppState::test_state(tmp.path());
+        commands::setting_set_inner(
+            &s,
+            "customChapterRules",
+            r#"[{"name":"卷头","pattern":"^卷[一二三]$"},{"name":"坏","pattern":"("}]"#,
+        )
+        .unwrap();
+        let rs = load_custom_rules(&s);
+        assert_eq!(rs.len(), 1, "坏正则跳过不炸: {rs:?}");
+
+        // 无配置 / 坏 JSON → 空
+        commands::setting_set_inner(&s, "customChapterRules", "{{{").unwrap();
+        assert!(load_custom_rules(&s).is_empty());
+    }
 }

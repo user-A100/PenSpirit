@@ -322,10 +322,12 @@ pub fn snapshot_now(s: State<AppState>, chapter_id: i64, content: String) -> App
 
 // ---- M2-T8 导入导出（实现在 porting/） ----
 
-/// 读文件并分章预览（.docx 走 docx 解析，其余按编码检测后分章）；只读不落库
+/// 读文件并分章预览（.docx 走 docx 解析，其余按编码检测后分章）；只读不落库。
+/// 自定义分章规则（settings customChapterRules）在此编译应用（M4-T2）
 #[tauri::command]
-pub fn preview_import(path: String) -> AppResult<Vec<porting::import::ParsedChapter>> {
-    porting::import::preview_import_inner(std::path::Path::new(&path))
+pub fn preview_import(s: State<AppState>, path: String) -> AppResult<Vec<porting::import::ParsedChapter>> {
+    let rules = porting::import::load_custom_rules(&s);
+    porting::import::preview_import_inner(std::path::Path::new(&path), &rules)
 }
 
 /// 把预览中勾选的章批量落库（标题 + 正文建章、写 md、统计字数）

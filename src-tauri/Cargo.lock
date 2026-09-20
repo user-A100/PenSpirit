@@ -384,6 +384,7 @@ dependencies = [
  "docx-rs",
  "encoding_rs",
  "futures",
+ "regex",
  "rusqlite",
  "rusqlite_migration",
  "serde",
