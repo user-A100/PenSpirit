@@ -4,6 +4,7 @@ import { useSettings } from "../../stores/settings";
 import { ProviderProfile } from "../../lib/tauri";
 import { AgentsPane } from "./AgentsPane";
 import { AppearancePane } from "./AppearancePane";
+import { ImportPane } from "./ImportPane";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
@@ -12,10 +13,11 @@ const EMPTY: ProviderProfile = {
   id: 0, name: "", base_url: "", api_key: "", model: "", max_tokens: 4096, temperature: 0.7,
 };
 
-// 顶部 tab：Agent（ACP 直连，免配置推荐路径）+ 外观 + AI 服务商（高级）
+// 顶部 tab：Agent（ACP 直连，免配置推荐路径）+ 外观 + 导入 + AI 服务商（高级）
 const TABS = [
   { id: "agent", label: "Agent" },
   { id: "appearance", label: "外观" },
+  { id: "import", label: "导入" },
   { id: "provider", label: "AI 服务商" },
 ] as const;
 type SettingsTab = (typeof TABS)[number]["id"];
@@ -134,6 +136,7 @@ export function SettingsModal() {
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {tab === "agent" && <AgentsPane />}
           {tab === "appearance" && <AppearancePane />}
+          {tab === "import" && <ImportPane />}
           {tab === "provider" && (
             <>
           {/* 服务商列表：点击编辑，激活项 accent 边 + 「使用中」徽章 */}
