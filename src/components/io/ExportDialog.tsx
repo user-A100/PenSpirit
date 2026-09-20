@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import { FileDown, X } from "lucide-react";
+import { FileDown } from "lucide-react";
 import { api, type ChapterMeta } from "../../lib/tauri";
+import { Modal } from "../ui/Modal";
 
 // M2-T8 导出对话框：勾选章节 → 选格式 → 选保存路径。
 // 默认全选（导出整本是最常见诉求）；输出顺序由 Rust 侧按书内章节序决定，
@@ -57,26 +58,13 @@ export function ExportDialog(props: {
   const allPicked = picked.size === props.chapters.length && props.chapters.length > 0;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      onClick={props.onClose}
-      data-testid="export-backdrop"
+    <Modal
+      open
+      onClose={props.onClose}
+      title="导出"
+      widthClass="max-w-lg"
+      testId="export-backdrop"
     >
-      <div
-        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-[color:var(--border-subtle)] pl-4 pr-2">
-          <div className="text-sm font-semibold text-[color:var(--text-primary)]">导出</div>
-          <button
-            onClick={props.onClose}
-            title="关闭"
-            className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
-          >
-            <X size={15} />
-          </button>
-        </div>
-
         {/* 格式与选项 */}
         <div className="flex shrink-0 flex-wrap items-center gap-4 border-b border-[color:var(--border-subtle)] px-4 py-3">
           <div className="flex items-center gap-1">
@@ -162,7 +150,6 @@ export function ExportDialog(props: {
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

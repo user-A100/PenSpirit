@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
-import { Check, Plus, X } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 import { useSettings } from "../../stores/settings";
 import { ProviderProfile } from "../../lib/tauri";
 import { AgentsPane } from "./AgentsPane";
 import { AppearancePane } from "./AppearancePane";
+import { Button } from "../ui/Button";
+import { Input } from "../ui/Input";
+import { Modal } from "../ui/Modal";
 
 const EMPTY: ProviderProfile = {
   id: 0, name: "", base_url: "", api_key: "", model: "", max_tokens: 4096, temperature: 0.7,
@@ -43,15 +46,13 @@ function Field(props: {
   return (
     <label className="block">
       <span className="mb-1 block text-xs text-[color:var(--text-secondary)]">{props.label}</span>
-      <input
+      <Input
         type={props.type ?? "text"}
         value={props.value}
         step={props.step}
         placeholder={props.placeholder}
+        invalid={!!props.error}
         onChange={(e) => props.onChange(e.target.value)}
-        className={`w-full rounded-md border bg-[var(--bg-elevated)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)] ${
-          props.error ? "border-[color:var(--danger)]" : "border-[color:var(--border-subtle)]"
-        }`}
       />
       {props.error && <span className="mt-1 block text-xs text-[color:var(--danger)]">{props.error}</span>}
     </label>
@@ -65,17 +66,14 @@ export function SettingsModal() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [busy, setBusy] = useState(false);
 
-  // 打开时刷新列表并回到首个 tab + 「新增」表单；Esc 关闭
+  // 打开时刷新列表并回到首个 tab + 「新增」表单（Esc 关闭由 Modal 承担）
   useEffect(() => {
     if (!modalOpen) return;
     setTab("agent");
     setForm(EMPTY);
     setErrors({});
     load();
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [modalOpen, load, close]);
+  }, [modalOpen, load]);
 
   if (!modalOpen) return null;
 
@@ -115,45 +113,25 @@ export function SettingsModal() {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      onClick={close}
-      data-testid="settings-backdrop"
-    >
-      <div
-        className="flex max-h-[85vh] w-full max-w-xl flex-col rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* 标题栏 */}
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-[color:var(--border-subtle)] pl-4 pr-2">
-          <div className="text-sm font-semibold text-[color:var(--text-primary)]">设置</div>
+    <Modal open={modalOpen} onClose={close} title="设置" testId="settings-backdrop">
+      {/* 顶部 tab */}
+      <div className="flex shrink-0 gap-1 border-b border-[color:var(--border-subtle)] px-3">
+        {TABS.map((t) => (
           <button
-            onClick={close}
-            title="关闭"
-            className="rounded-md p-1.5 text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors duration-[var(--dur-md)] ${
+              tab === t.id
+                ? "border-[color:var(--accent)] text-[color:var(--text-primary)]"
+                : "border-transparent text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)]"
+            }`}
           >
-            <X size={15} />
+            {t.label}
           </button>
-        </div>
+        ))}
+      </div>
 
-        {/* 顶部 tab */}
-        <div className="flex shrink-0 gap-1 border-b border-[color:var(--border-subtle)] px-3">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors duration-150 ${
-                tab === t.id
-                  ? "border-[color:var(--accent)] text-[color:var(--text-primary)]"
-                  : "border-transparent text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)]"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {tab === "agent" && <AgentsPane />}
           {tab === "appearance" && <AppearancePane />}
           {tab === "provider" && (
@@ -230,37 +208,27 @@ export function SettingsModal() {
         {/* 底部操作：仅服务商 tab（外观 tab 实时生效，无保存按钮） */}
         {tab === "provider" && (
         <div className="flex shrink-0 items-center gap-2 border-t border-[color:var(--border-subtle)] p-3">
-          <button
-            onClick={handleSave}
-            disabled={busy}
-            className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
+          <Button variant="primary" onClick={handleSave} disabled={busy}>
             保存
-          </button>
+          </Button>
           {editing && (
-            <button
+            <Button
               onClick={() => activate(form.id)}
               disabled={busy || activeProviderId === form.id}
               title={activeProviderId === form.id ? "当前已是使用中的服务商" : "将 AI 写作切换到该服务商"}
-              className="flex items-center gap-1.5 rounded-md border border-[color:var(--border-strong)] px-3 py-1.5 text-sm text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Check size={14} />
               {activeProviderId === form.id ? "使用中" : "设为使用中"}
-            </button>
+            </Button>
           )}
           <span className="flex-1" />
           {editing && (
-            <button
-              onClick={handleRemove}
-              disabled={busy}
-              className="rounded-md px-3 py-1.5 text-sm text-[color:var(--danger)] transition-colors duration-150 hover:bg-[var(--bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
+            <Button variant="danger" onClick={handleRemove} disabled={busy}>
               删除
-            </button>
+            </Button>
           )}
         </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

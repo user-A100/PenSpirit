@@ -18,6 +18,8 @@
   --text-faint: #6b6b74;
   /* 编辑器正文（衬线区，随主题） */
   --prose-fg: #e4e4e8;
+  /* 选中标签页浮卡底色（Zen 选中项浮纸卡手法） */
+  --tab-selected-bg: rgba(255, 255, 255, 0.2);
   /* 强调与状态 */
   --accent: #7c6ff0;
   --accent-hover: #8f83f5;
@@ -25,6 +27,22 @@
   --success: #4ade80;
   --danger: #f87171;
   --warning: #fbbf24;
+}
+
+/* Zen 结构 token：圆角/阴影/动效时长（zen-theme.css 规格；不随主题切换） */
+:root {
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --shadow-pop: 0 3px 8px rgba(0, 0, 0, 0.24);
+  --dur-fast: 0.1s;
+  --dur-md: 0.15s;
+}
+
+/* 弹窗/浮卡入场：Zen zen-dialog-fade-in（下移 10px 淡入，0.15s ease） */
+@keyframes zen-pop-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 html, body, #root { height: 100%; margin: 0; }

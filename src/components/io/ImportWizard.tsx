@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FileUp, X } from "lucide-react";
+import { FileUp } from "lucide-react";
 import { api, type ParsedChapter } from "../../lib/tauri";
+import { Modal } from "../ui/Modal";
 
 // M2-T8 导入向导：选文件 → Rust 侧编码检测 + 分章 → 勾选 → 批量落库。
 // 卷信息（volume）只用于这里的分组展示——chapters 表没有卷字段，不落库。
@@ -88,26 +89,13 @@ export function ImportWizard(props: {
   const volumes = [...new Set(items.map((c) => c.volume))];
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      onClick={props.onClose}
-      data-testid="import-backdrop"
+    <Modal
+      open
+      onClose={props.onClose}
+      title="导入"
+      widthClass="max-w-lg"
+      testId="import-backdrop"
     >
-      <div
-        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-[color:var(--border-subtle)] pl-4 pr-2">
-          <div className="text-sm font-semibold text-[color:var(--text-primary)]">导入</div>
-          <button
-            onClick={props.onClose}
-            title="关闭"
-            className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
-          >
-            <X size={15} />
-          </button>
-        </div>
-
         <div className="flex shrink-0 items-center gap-2 border-b border-[color:var(--border-subtle)] px-4 py-3">
           <button
             onClick={() => void choose()}
@@ -202,7 +190,6 @@ export function ImportWizard(props: {
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

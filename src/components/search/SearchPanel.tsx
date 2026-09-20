@@ -3,6 +3,7 @@ import { CornerDownLeft, Search, X } from "lucide-react";
 import { useSearch } from "../../stores/search";
 import { useWorkspace } from "../../stores/workspace";
 import type { SearchHit } from "../../lib/tauri";
+import { Modal } from "../ui/Modal";
 
 // M2-T9 全书搜索结果面板（Ctrl+Shift+F 唤起，Esc 关闭）。
 // 输入 300ms 防抖后查询；结果按章分组，点击命中跳章并定位到该行。
@@ -27,16 +28,11 @@ export function SearchPanel() {
   const bookId = useWorkspace((s) => s.currentBookId);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 打开时聚焦；Esc 关闭
+  // 打开时聚焦（Esc 关闭由 Modal 承担）
   useEffect(() => {
     if (!open) return;
     inputRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closePanel();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, closePanel]);
+  }, [open]);
 
   // 300ms 防抖：输入停顿后才真正查询（Rust 侧是全书线性扫描）
   useEffect(() => {
@@ -56,15 +52,14 @@ export function SearchPanel() {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-20"
-      onClick={closePanel}
-      data-testid="search-backdrop"
+    <Modal
+      open={open}
+      onClose={closePanel}
+      align="top"
+      widthClass="max-w-2xl"
+      maxHeightClass="max-h-[70vh]"
+      testId="search-backdrop"
     >
-      <div
-        className="flex max-h-[70vh] w-full max-w-2xl flex-col rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
         <div className="flex shrink-0 items-center gap-2 border-b border-[color:var(--border-subtle)] px-3 py-2">
           <Search size={14} className="shrink-0 text-[color:var(--text-faint)]" />
           <input
@@ -138,7 +133,6 @@ export function SearchPanel() {
           <CornerDownLeft size={11} />
           点击结果跳转到该章并定位
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

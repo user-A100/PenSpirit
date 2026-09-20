@@ -1,4 +1,4 @@
-// 主题定义：八套完整配色，每套覆盖 styles.css :root 的全部 16 个 CSS 变量。
+// 主题定义：十套完整配色，每套覆盖 styles.css :root 的全部 17 个 CSS 变量。
 // styles.css 的 :root 即默认主题（bixian-dark）的值；其余主题由 ThemeProvider
 // 注入 <style id="bixian-theme"> 覆盖（Agentero applyUiTheme 手法）。
 
@@ -8,7 +8,7 @@ export const THEME_STYLE_ID = "bixian-theme";
 /** 默认主题 id：与 styles.css :root 的值保持一致，注入时直接移除覆盖节点 */
 export const DEFAULT_THEME_ID = "bixian-dark";
 
-/** 全部主题变量键（16 个）。styles.css :root 新增变量时此处与各主题需同步补齐 */
+/** 全部主题变量键（17 个）。styles.css :root 新增变量时此处与各主题需同步补齐 */
 export const THEME_VAR_KEYS = [
   "--bg-base",
   "--bg-panel",
@@ -26,6 +26,7 @@ export const THEME_VAR_KEYS = [
   "--danger",
   "--warning",
   "--prose-fg",
+  "--tab-selected-bg",
 ] as const;
 
 export type ThemeVarKey = (typeof THEME_VAR_KEYS)[number];
@@ -61,6 +62,7 @@ const bixianDark: ThemeDef = {
     "--danger": "#f87171",
     "--warning": "#fbbf24",
     "--prose-fg": "#e4e4e8",
+    "--tab-selected-bg": "rgba(255, 255, 255, 0.2)",
   },
 };
 
@@ -85,6 +87,7 @@ const bixianLight: ThemeDef = {
     "--danger": "#dc2626",
     "--warning": "#b45309",
     "--prose-fg": "#2a2c33",
+    "--tab-selected-bg": "rgba(255, 255, 255, 0.85)",
   },
 };
 
@@ -109,6 +112,7 @@ const ink: ThemeDef = {
     "--danger": "#ff8a8a",
     "--warning": "#fcd34d",
     "--prose-fg": "#e8e8e8",
+    "--tab-selected-bg": "rgba(255, 255, 255, 0.2)",
   },
 };
 
@@ -134,6 +138,7 @@ const parchment: ThemeDef = {
     "--danger": "#b3362b",
     "--warning": "#9a6700",
     "--prose-fg": "#43382a",
+    "--tab-selected-bg": "rgba(255, 255, 255, 0.85)",
   },
 };
 
@@ -158,6 +163,7 @@ const matcha: ThemeDef = {
     "--danger": "#b3271e",
     "--warning": "#946200",
     "--prose-fg": "#333d33",
+    "--tab-selected-bg": "rgba(255, 255, 255, 0.85)",
   },
 };
 
@@ -182,6 +188,7 @@ const midnightBlue: ThemeDef = {
     "--danger": "#ff8a80",
     "--warning": "#fbbf24",
     "--prose-fg": "#dde4f0",
+    "--tab-selected-bg": "rgba(255, 255, 255, 0.2)",
   },
 };
 
@@ -211,6 +218,7 @@ const maple: ThemeDef = {
     "--danger": "#bd5151",
     "--warning": "#c77b23",
     "--prose-fg": "#332f28",
+    "--tab-selected-bg": "rgba(255, 255, 255, 0.85)",
   },
 };
 
@@ -238,6 +246,88 @@ const mapleNight: ThemeDef = {
     "--danger": "#b47777",
     "--warning": "#b89c72",
     "--prose-fg": "#b5bbc0",
+    "--tab-selected-bg": "rgba(255, 255, 255, 0.2)",
+  },
+};
+
+// —— Zen 主题对（墨岩/纸白）——
+// 移植自 Zen 浏览器默认配色体系：整盘颜色由单一主色按 color-mix 配方派生
+// （zen-browser/desktop src/zen/common/styles/zen-theme.css，参考 .tmp-zen-ref/）。
+// 运行时无 color-mix 兼容负担，这里把配方预计算成定值。
+const ZEN_PRIMARY = "#5b8def";
+
+function hexChannels(h: string): number[] {
+  const n = parseInt(h.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function channelsToHex(ch: number[]): string {
+  return `#${ch.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** 等价 CSS color-mix(in srgb, a tA%, b)：sRGB 通道插值，tA 为 a 的权重 */
+function mix(a: string, b: string, tA: number): string {
+  const pa = hexChannels(a);
+  const pb = hexChannels(b);
+  return channelsToHex(pa.map((v, i) => v * tA + pb[i] * (1 - tA)));
+}
+
+/** hex → rgba() 字符串 */
+function rgba(h: string, alpha: number): string {
+  const [r, g, b] = hexChannels(h);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Zen 深色：石墨底 + 主色微染；边框为主色压深后的两次混入
+const zenInk: ThemeDef = {
+  id: "zenInk",
+  name: "墨岩",
+  dark: true,
+  vars: {
+    "--bg-base": "#1b1b1b",
+    "--bg-panel": "#1f1f1f",
+    "--bg-elevated": mix(ZEN_PRIMARY, "#1b1b1b", 0.05),
+    "--bg-hover": mix("#ffffff", "#1b1b1b", 0.09),
+    "--border-subtle": mix(mix(ZEN_PRIMARY, "#101010", 0.3), "#4f4f4f", 0.2),
+    "--border-strong": mix(mix(ZEN_PRIMARY, "#101010", 0.3), "#6e6e6e", 0.35),
+    "--text-primary": "#d4d4d4",
+    "--text-secondary": "#9a9a9a",
+    "--text-faint": "#6b6b6b",
+    "--accent": ZEN_PRIMARY,
+    "--accent-hover": mix(ZEN_PRIMARY, "#ffffff", 0.85),
+    "--accent-dim": rgba(ZEN_PRIMARY, 0.16),
+    "--success": "#4ade80",
+    "--danger": "#f87171",
+    "--warning": "#fbbf24",
+    "--prose-fg": "#d8d8d8",
+    "--tab-selected-bg": "rgba(255, 255, 255, 0.2)",
+  },
+};
+
+// Zen 浅色：暖白纸面；浅色模式下主色先压暗再参与边框/悬浮配方
+const zenPrimaryLight = mix(ZEN_PRIMARY, "#101010", 0.4);
+const zenPaper: ThemeDef = {
+  id: "zenPaper",
+  name: "纸白",
+  dark: false,
+  vars: {
+    "--bg-base": mix(ZEN_PRIMARY, "#f4f4f4", 0.03),
+    "--bg-panel": mix(ZEN_PRIMARY, "#ffffff", 0.02),
+    "--bg-elevated": "#ffffff",
+    "--bg-hover": mix("#000000", "#fcfdfe", 0.08),
+    "--border-subtle": mix(mix(zenPrimaryLight, "#ffffff", 0.2), "#ffffff", 0.5),
+    "--border-strong": mix(zenPrimaryLight, "#ffffff", 0.55),
+    "--text-primary": "#1f2023",
+    "--text-secondary": "#4d545f",
+    "--text-faint": "#8d939d",
+    "--accent": zenPrimaryLight,
+    "--accent-hover": mix(ZEN_PRIMARY, "#101010", 0.45),
+    "--accent-dim": rgba(zenPrimaryLight, 0.1),
+    "--success": "#15803d",
+    "--danger": "#dc2626",
+    "--warning": "#b45309",
+    "--prose-fg": "#26282d",
+    "--tab-selected-bg": "rgba(255, 255, 255, 0.85)",
   },
 };
 
@@ -250,6 +340,8 @@ export const THEMES: ThemeDef[] = [
   midnightBlue,
   maple,
   mapleNight,
+  zenInk,
+  zenPaper,
 ];
 
 export function findTheme(id: string): ThemeDef | undefined {

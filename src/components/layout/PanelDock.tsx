@@ -34,7 +34,7 @@ export function PanelDock() {
 
   return (
     <div className="flex h-full flex-col bg-[var(--bg-panel)]">
-      {/* 标签栏 36px：图标 + 文字，激活态底部 2px accent 条 */}
+      {/* 标签栏 36px：Zen 选中态=浮纸卡（--tab-selected-bg + 单层阴影） */}
       <div className="flex h-9 shrink-0 border-b border-[color:var(--border-subtle)]">
         {panels.map((p) => {
           const active = p.id === activePanel.id;
@@ -43,20 +43,20 @@ export function PanelDock() {
             <button
               key={p.id}
               onClick={() => setTab(p.id)}
-              className={`relative flex min-w-0 flex-1 items-center justify-center gap-1 px-1 text-xs transition-colors duration-150 ${
+              className={`relative flex min-w-0 flex-1 items-center justify-center gap-1 px-1 text-xs transition-colors duration-[var(--dur-md)] ${
                 active
                   ? "text-[color:var(--text-primary)]"
                   : "text-[color:var(--text-faint)] hover:text-[color:var(--text-secondary)]"
               }`}
             >
-              <Icon size={14} className="shrink-0" />
-              <span className="truncate">{p.label}</span>
               {active && (
                 <span
                   aria-hidden
-                  className="absolute inset-x-3 bottom-0 h-0.5 bg-[color:var(--accent)]"
+                  className="absolute inset-x-1 inset-y-1 rounded-[var(--radius-sm)] bg-[var(--tab-selected-bg)] [box-shadow:var(--shadow-pop)]"
                 />
               )}
+              <Icon size={14} className="relative shrink-0" />
+              <span className="relative truncate">{p.label}</span>
             </button>
           );
         })}

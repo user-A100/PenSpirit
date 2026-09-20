@@ -50,20 +50,20 @@ beforeEach(() => {
 });
 
 describe("主题定义", () => {
-  it("八套主题、id 唯一、首项为默认深色", () => {
-    expect(THEMES).toHaveLength(8);
+  it("十套主题、id 唯一、首项为默认深色", () => {
+    expect(THEMES).toHaveLength(10);
     const ids = THEMES.map((t) => t.id);
-    expect(new Set(ids).size).toBe(8);
+    expect(new Set(ids).size).toBe(10);
     expect(THEMES[0].id).toBe(DEFAULT_THEME_ID);
     expect(THEMES[0].dark).toBe(true);
   });
 
-  it("明暗倾向：浅色系恰好为 light/maple/matcha/parchment", () => {
+  it("明暗倾向：浅色系恰好为 light/maple/matcha/parchment/zenPaper", () => {
     const light = THEMES.filter((t) => !t.dark).map((t) => t.id).sort();
-    expect(light).toEqual(["bixian-light", "maple", "matcha", "parchment"]);
+    expect(light).toEqual(["bixian-light", "maple", "matcha", "parchment", "zenPaper"]);
   });
 
-  it("每套主题完整覆盖全部 16 个变量且值非空", () => {
+  it("每套主题完整覆盖全部 17 个变量且值非空", () => {
     for (const t of THEMES) {
       expect(Object.keys(t.vars).sort()).toEqual([...THEME_VAR_KEYS].sort());
       for (const v of Object.values(t.vars)) expect(v.trim().length).toBeGreaterThan(0);

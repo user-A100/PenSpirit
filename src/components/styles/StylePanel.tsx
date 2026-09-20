@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Check, Eye, Plus, Trash2, Upload, X } from "lucide-react";
+import { Check, Eye, Plus, Trash2, Upload } from "lucide-react";
 import { StyleCard } from "../../lib/tauri";
 import { parseTags, toTagsJson, useStyles } from "../../stores/styles";
 import { useWorkspace } from "../../stores/workspace";
+import { Modal } from "../ui/Modal";
 
 interface FormState {
   id: number; name: string; prompt_md: string; sample_md: string; tagsText: string;
@@ -244,30 +245,18 @@ export function StylePanel() {
 
       {/* 样章预览模态 */}
       {preview && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-          onClick={() => setPreview(null)}
-          data-testid="style-preview-backdrop"
+        <Modal
+          open
+          onClose={() => setPreview(null)}
+          title={`样章预览 · ${preview.name}`}
+          widthClass="max-w-lg"
+          maxHeightClass="max-h-[80vh]"
+          testId="style-preview-backdrop"
         >
-          <div
-            className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex h-12 shrink-0 items-center justify-between border-b border-[color:var(--border-subtle)] pl-4 pr-2">
-              <div className="truncate text-sm font-semibold text-[color:var(--text-primary)]">样章预览 · {preview.name}</div>
-              <button
-                onClick={() => setPreview(null)}
-                title="关闭"
-                className="rounded-md p-1.5 text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
-              >
-                <X size={15} />
-              </button>
-            </div>
             <div className="flex-1 overflow-y-auto whitespace-pre-wrap p-4 text-sm leading-relaxed text-[color:var(--text-secondary)]">
               {preview.sample_md}
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

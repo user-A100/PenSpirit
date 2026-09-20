@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FileUp, ScanSearch, X } from "lucide-react";
+import { FileUp, ScanSearch } from "lucide-react";
 import { api, type SensitiveHit } from "../../lib/tauri";
+import { Modal } from "../ui/Modal";
 
 // M2-T11 敏感词检测：手动检查当前章 + 词库管理（一行一词 / 从 txt 导入）。
 // 只报告，不改正文——是否修改由作者判断。
@@ -71,26 +72,13 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      onClick={props.onClose}
-      data-testid="sensitive-backdrop"
+    <Modal
+      open
+      onClose={props.onClose}
+      title="敏感词检查"
+      widthClass="max-w-lg"
+      testId="sensitive-backdrop"
     >
-      <div
-        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-[color:var(--border-subtle)] pl-4 pr-2">
-          <div className="text-sm font-semibold text-[color:var(--text-primary)]">敏感词检查</div>
-          <button
-            onClick={props.onClose}
-            title="关闭"
-            className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
-          >
-            <X size={15} />
-          </button>
-        </div>
-
         <div className="flex shrink-0 items-center gap-2 border-b border-[color:var(--border-subtle)] px-4 py-3">
           <button
             onClick={() => void scan()}
@@ -172,7 +160,6 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
             全部忽略
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
