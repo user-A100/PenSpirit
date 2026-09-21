@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useMaterials } from "../../stores/materials";
 import { Badge } from "../ui/Badge";
+import { Card } from "../ui/Card";
 
 // 素材库工作区（M4 一级视图主体，全局不分书）。
 // 搜索（标题/分类/内容/标签）+ 按分类分组卡片 + 新建/编辑/删除。
@@ -145,17 +146,14 @@ export function MaterialsWorkspace() {
                 <span className="text-[11px] text-[color:var(--text-faint)]">{g.items.length}</span>
                 <span className="h-px flex-1 bg-[color:var(--border-subtle)]" />
               </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {g.items.map((m) => (
-                  <div
-                    key={m.id}
-                    className="group flex flex-col gap-1 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] p-3"
-                  >
+                  <Card key={m.id} interactive className="flex flex-col gap-2">
                     <div className="flex items-start gap-1">
                       <span className="min-w-0 flex-1 truncate text-sm font-medium text-[color:var(--text-primary)]" title={m.title}>
                         {m.title}
                       </span>
-                      <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                      <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity duration-[var(--dur-fast)] group-hover:opacity-100">
                         <button
                           title="编辑"
                           onClick={() =>
@@ -163,7 +161,7 @@ export function MaterialsWorkspace() {
                           }
                           className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
                         >
-                          <Pencil size={12} />
+                          <Pencil size={14} />
                         </button>
                         {confirmDelId === m.id ? (
                           <button
@@ -171,7 +169,7 @@ export function MaterialsWorkspace() {
                               void remove(m.id);
                               setConfirmDelId(null);
                             }}
-                            className="rounded bg-[color:var(--danger)]/15 px-1.5 text-[11px] text-[color:var(--danger)] transition-colors duration-150 hover:bg-[color:var(--danger)]/25"
+                            className="rounded bg-[color:var(--danger)]/15 px-1.5 py-1 text-xs text-[color:var(--danger)] transition-colors duration-150 hover:bg-[color:var(--danger)]/25"
                           >
                             确认
                           </button>
@@ -181,7 +179,7 @@ export function MaterialsWorkspace() {
                             onClick={() => setConfirmDelId(m.id)}
                             className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
                           >
-                            <Trash2 size={12} />
+                            <Trash2 size={14} />
                           </button>
                         )}
                       </div>
@@ -198,7 +196,7 @@ export function MaterialsWorkspace() {
                         ))}
                       </div>
                     )}
-                  </div>
+                  </Card>
                 ))}
               </div>
             </section>
