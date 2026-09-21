@@ -12,7 +12,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { api, type ChapterMeta } from "../../lib/tauri";
 
 function ch(id: number, title: string, wordCount: number): ChapterMeta {
-  return { id, book_id: 1, file_path: "", title, sort_key: id, word_count: wordCount, created_at: "", updated_at: "" };
+  return { id, book_id: 1, file_path: "", title, sort_key: id, word_count: wordCount, created_at: "", updated_at: "", synopsis: "", label_id: null, status_id: null, target_words: null };
 }
 
 const CHAPTERS = [ch(11, "序章", 100), ch(12, "第一章 初见", 200)];

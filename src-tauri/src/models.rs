@@ -34,12 +34,105 @@ pub struct ChapterMeta {
     /// 软删前的原相对路径（恢复时移回）
     #[serde(default)]
     pub orig_file_path: Option<String>,
+    /// 大纲梗概（独立于正文的展示字段，卡片墙/大纲列用，导出不带）
+    #[serde(default)]
+    pub synopsis: String,
+    /// 彩色标签（书内定义，单选；None = 未打标）
+    #[serde(default)]
+    pub label_id: Option<i64>,
+    /// 写作状态（书内定义，单选；None = 未设置）
+    #[serde(default)]
+    pub status_id: Option<i64>,
+    /// 本章目标字数（None = 未设置）
+    #[serde(default)]
+    pub target_words: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChapterContent {
     pub meta: ChapterMeta,
     pub content: String,
+}
+
+/// 章节元数据部分更新：字段缺失 = 不动；字段为 null = 清空。
+/// Option<Option<T>> 序列化约定——外层 None（缺省）跳过，Some(None)（JSON null）清空。
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ChapterMetaUpdate {
+    #[serde(default)]
+    pub synopsis: Option<String>,
+    #[serde(default)]
+    pub label_id: Option<Option<i64>>,
+    #[serde(default)]
+    pub status_id: Option<Option<i64>>,
+    #[serde(default)]
+    pub target_words: Option<Option<i64>>,
+}
+
+/// 彩色标签定义（书内；章单选引用）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Label {
+    pub id: i64,
+    pub book_id: i64,
+    pub title: String,
+    pub color: String,
+    pub sort_key: i64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct LabelInput {
+    pub id: Option<i64>,
+    pub book_id: i64,
+    pub title: String,
+    pub color: String,
+}
+
+/// 写作状态定义（书内；章单选引用；无颜色）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Status {
+    pub id: i64,
+    pub book_id: i64,
+    pub title: String,
+    pub sort_key: i64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct StatusInput {
+    pub id: Option<i64>,
+    pub book_id: i64,
+    pub title: String,
+}
+
+/// 关键词（书内去重；章多对多引用）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Keyword {
+    pub id: i64,
+    pub book_id: i64,
+    pub title: String,
+    pub color: String,
+    pub created_at: String,
+}
+
+/// 章节模板：is_default 者在建新章时自动作为初始正文
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChapterTemplate {
+    pub id: i64,
+    pub book_id: i64,
+    pub name: String,
+    pub content: String,
+    pub is_default: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ChapterTemplateInput {
+    pub id: Option<i64>,
+    pub book_id: i64,
+    pub name: String,
+    pub content: String,
+    pub is_default: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -408,4 +501,33 @@ pub struct BgImage {
     /// 入库文件绝对路径（前端 convertFileSrc 转 asset 协议）
     pub path: String,
     pub name: String,
+}
+
+/// wiki 出链（M7 批次3，按需扫描派生不落库）：`[[target]]` → 同书章题精确匹配消解。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WikiLink {
+    pub from_id: i64,
+    pub from_title: String,
+    pub target: String,
+    pub to_id: Option<i64>,
+    pub to_title: Option<String>,
+    pub snippet: String,
+}
+
+/// 反向链接：哪些章链到本章（自引除外）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Backlink {
+    pub from_id: i64,
+    pub from_title: String,
+    pub snippet: String,
+}
+
+/// 人物提及计数：姓名与别名同权，逐章聚合；零提及不返回
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharacterMention {
+    pub character_id: i64,
+    pub name: String,
+    pub chapter_id: i64,
+    pub chapter_title: String,
+    pub count: i64,
 }

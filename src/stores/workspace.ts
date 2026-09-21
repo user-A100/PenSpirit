@@ -11,6 +11,8 @@ interface WorkspaceState {
   createBook: (title: string) => Promise<void>;
   createChapter: (title: string) => Promise<void>;
   selectChapter: (id: number) => Promise<void>;
+  /** 乐观重排当前书章节（侧栏/卡片墙拖拽），失败回滚重拉 */
+  reorderChapters: (ids: number[]) => Promise<void>;
   /** 重取当前书章节列表（不动选中章），回收站恢复后刷新用 */
   reloadChapters: () => Promise<void>;
 }
@@ -52,6 +54,18 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     set({ currentChapterId: id });
     const full = await api.readChapter(id);
     set({ chapterContent: full.content });
+  },
+  reorderChapters: async (ids) => {
+    const bookId = get().currentBookId;
+    if (bookId == null) return;
+    const prev = get().chapters;
+    const pos = new Map(ids.map((id, i) => [id, i]));
+    set({ chapters: [...prev].sort((a, b) => (pos.get(a.id) ?? 0) - (pos.get(b.id) ?? 0)) });
+    try {
+      await api.reorderChapters(ids);
+    } catch (e) {
+      set({ chapters: prev, error: String(e) });
+    }
   },
   reloadChapters: async () => {
     const bookId = get().currentBookId;

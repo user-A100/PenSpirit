@@ -28,3 +28,9 @@ dist-ssr
 
 # M5 核验脚本的生成态
 scripts/m5-verify/ids.json
+
+# Scrivener 逆向分析的解包产物
+.tmp-scriv/
+
+# M6 核验脚本的生成态
+.tmp-m6/

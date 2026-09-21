@@ -1,8 +1,21 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export interface Book { id: number; slug: string; title: string; created_at: string; updated_at: string; target_words: number | null }
-export interface ChapterMeta { id: number; book_id: number; file_path: string; title: string; sort_key: number; word_count: number; created_at: string; updated_at: string }
+export interface ChapterMeta {
+  id: number; book_id: number; file_path: string; title: string; sort_key: number; word_count: number; created_at: string; updated_at: string;
+  synopsis: string; label_id: number | null; status_id: number | null; target_words: number | null;
+}
 export interface ChapterContent { meta: ChapterMeta; content: string }
+
+// ---- M7 批次1：章节元数据（标签/状态/关键词） ----
+export interface Label { id: number; book_id: number; title: string; color: string; sort_key: number; created_at: string }
+export interface Status { id: number; book_id: number; title: string; sort_key: number; created_at: string }
+export interface Keyword { id: number; book_id: number; title: string; color: string; created_at: string }
+/** 部分更新：undefined = 不动；null = 清空 */
+export interface ChapterMetaUpdate { synopsis?: string | null; label_id?: number | null; status_id?: number | null; target_words?: number | null }
+// ---- M7 批次2：章节模板 ----
+export interface ChapterTemplate { id: number; book_id: number; name: string; content: string; is_default: boolean; created_at: string; updated_at: string }
+export interface ChapterTemplateInput { id: number | null; book_id: number; name: string; content: string; is_default: boolean }
 
 // ---- M1：字段名与 Rust 结构体 snake_case 对齐 ----
 export interface ProviderProfile { id: number; name: string; base_url: string; api_key: string; model: string; max_tokens: number; temperature: number }
@@ -131,6 +144,17 @@ export interface PlaceInput {
   linked_character_ids: string; x: number; y: number;
 }
 
+// ---- M7 批次3：wiki 双链与人物提及（md 正文里 [[章题]] 纯文本，扫描派生不落库） ----
+export interface WikiLink {
+  from_id: number; from_title: string; target: string;
+  to_id: number | null; to_title: string | null; snippet: string;
+}
+export interface Backlink { from_id: number; from_title: string; snippet: string }
+export interface CharacterMention {
+  character_id: number; name: string;
+  chapter_id: number; chapter_title: string; count: number;
+}
+
 export const api = {
   listBooks: () => invoke<Book[]>("list_books"),
   createBook: (title: string) => invoke<Book>("create_book", { title }),
@@ -139,6 +163,34 @@ export const api = {
   createChapter: (bookId: number, title: string) => invoke<ChapterMeta>("create_chapter", { bookId, title }),
   renameChapter: (id: number, newTitle: string) => invoke<ChapterMeta>("rename_chapter", { id, newTitle }),
   deleteChapter: (id: number) => invoke<void>("delete_chapter", { id }),
+  // ---- M7 批次1：章节元数据 ----
+  labelsList: (bookId: number) => invoke<Label[]>("labels_list", { bookId }),
+  labelUpsert: (input: { id: number | null; book_id: number; title: string; color: string }) =>
+    invoke<Label>("label_upsert", { input }),
+  labelDelete: (id: number) => invoke<void>("label_delete", { id }),
+  statusesList: (bookId: number) => invoke<Status[]>("statuses_list", { bookId }),
+  statusUpsert: (input: { id: number | null; book_id: number; title: string }) =>
+    invoke<Status>("status_upsert", { input }),
+  statusDelete: (id: number) => invoke<void>("status_delete", { id }),
+  keywordsList: (bookId: number) => invoke<Keyword[]>("keywords_list", { bookId }),
+  keywordCreate: (bookId: number, title: string) => invoke<Keyword>("keyword_create", { bookId, title }),
+  keywordDelete: (id: number) => invoke<void>("keyword_delete", { id }),
+  chapterUpdateMeta: (id: number, update: ChapterMetaUpdate) =>
+    invoke<ChapterMeta>("chapter_update_meta", { id, update }),
+  keywordsForChapter: (chapterId: number) => invoke<Keyword[]>("keywords_for_chapter", { chapterId }),
+  chapterSetKeywords: (chapterId: number, keywordIds: number[]) =>
+    invoke<Keyword[]>("chapter_set_keywords", { chapterId, keywordIds }),
+  // ---- M7 批次2：章节重排与模板 ----
+  reorderChapters: (ids: number[]) => invoke<void>("reorder_chapters", { ids }),
+  templatesList: (bookId: number) => invoke<ChapterTemplate[]>("templates_list", { bookId }),
+  templateUpsert: (input: ChapterTemplateInput) => invoke<ChapterTemplate>("template_upsert", { input }),
+  templateDelete: (id: number) => invoke<void>("template_delete", { id }),
+  templateSetDefault: (id: number, isDefault: boolean) =>
+    invoke<ChapterTemplate>("template_set_default", { id, isDefault }),
+  // ---- M7 批次3：wiki 双链与人物提及（[[章题]] 纯文本扫描派生） ----
+  linksScan: (bookId: number) => invoke<WikiLink[]>("links_scan", { bookId }),
+  chapterBacklinks: (chapterId: number) => invoke<Backlink[]>("chapter_backlinks", { chapterId }),
+  characterMentions: (bookId: number) => invoke<CharacterMention[]>("character_mentions", { bookId }),
   readChapter: (id: number) => invoke<ChapterContent>("read_chapter", { id }),
   writeChapter: (id: number, content: string) => invoke<ChapterMeta>("write_chapter", { id, content }),
   rescanLibrary: () => invoke<number>("rescan_library"),

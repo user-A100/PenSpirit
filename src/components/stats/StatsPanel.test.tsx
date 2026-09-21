@@ -49,8 +49,8 @@ const RANGE: DailyStat[] = [
 const BOOK1: Book = { id: 1, slug: "xianlu", title: "仙路", created_at: "", updated_at: "", target_words: 100000 };
 const BOOK2: Book = { id: 2, slug: "wuxiang", title: "无目标之书", created_at: "", updated_at: "", target_words: null };
 const CHS_1: ChapterMeta[] = [
-  { id: 11, book_id: 1, file_path: "", title: "一", sort_key: 1, word_count: 15000, created_at: "", updated_at: "" },
-  { id: 12, book_id: 1, file_path: "", title: "二", sort_key: 2, word_count: 5000, created_at: "", updated_at: "" },
+  { id: 11, book_id: 1, file_path: "", title: "一", sort_key: 1, word_count: 15000, created_at: "", updated_at: "", synopsis: "", label_id: null, status_id: null, target_words: null },
+  { id: 12, book_id: 1, file_path: "", title: "二", sort_key: 2, word_count: 5000, created_at: "", updated_at: "", synopsis: "", label_id: null, status_id: null, target_words: null },
 ];
 
 function resetStore() {

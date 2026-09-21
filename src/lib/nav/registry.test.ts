@@ -16,16 +16,16 @@ describe("navRegistry", () => {
     localStorage.clear();
   });
 
-  it("内置注册 write/bump/read/styles/stats/materials/graph 七个一级视图", async () => {
+  it("内置注册 write/bump/read/styles/stats/materials/graph/structure 八个一级视图", async () => {
     const { registry, useUiNav } = await freshNav();
     const ids = registry.getViews().map((v) => v.id);
-    expect(ids).toEqual(["write", "bump", "read", "styles", "stats", "materials", "graph"]);
+    expect(ids).toEqual(["write", "bump", "read", "styles", "stats", "materials", "graph", "structure"]);
 
     const write = registry.getView("write")!;
     expect(write.label).toBe("写作");
     expect(write.icon).toBeDefined();
     expect(write.Component).toBeDefined();
-    expect(write.dockPanels.map((p) => p.label)).toEqual(["大纲", "人物", "伏笔", "情节块"]);
+    expect(write.dockPanels.map((p) => p.label)).toEqual(["元数据", "大纲", "人物", "伏笔", "情节块"]);
 
     const bump = registry.getView("bump")!;
     expect(bump.label).toBe("碰碰车");
@@ -37,6 +37,9 @@ describe("navRegistry", () => {
     expect(registry.getView("materials")!.label).toBe("素材库");
     // M5：图谱（家族树/关系网络/世界地图）
     expect(registry.getView("graph")!.label).toBe("图谱");
+    // M7：结构（卡片墙/大纲列/串烧 + 章节模板）
+    expect(registry.getView("structure")!.label).toBe("结构");
+    expect(registry.getView("structure")!.dockPanels).toEqual([]);
     expect(useUiNav.getState().activeView).toBe("write"); // 自愈无副作用
   });
 
@@ -59,7 +62,7 @@ describe("navRegistry", () => {
     const { registry } = await freshNav();
     const snapshot = registry.getViews() as mutableViews;
     snapshot.pop();
-    expect(registry.getViews()).toHaveLength(7);
+    expect(registry.getViews()).toHaveLength(8);
   });
 
   it("持久化了未注册的视图 id 时回退 write 并写回存储", async () => {

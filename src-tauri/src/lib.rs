@@ -7,6 +7,7 @@ pub mod db;
 pub mod error;
 pub mod fs_service;
 pub mod history;
+pub mod links;
 pub mod llm;
 pub mod models;
 pub mod porting;
@@ -70,6 +71,26 @@ pub fn run() {
             commands::create_chapter,
             commands::rename_chapter,
             commands::delete_chapter,
+            commands::labels_list,
+            commands::label_upsert,
+            commands::label_delete,
+            commands::statuses_list,
+            commands::status_upsert,
+            commands::status_delete,
+            commands::keywords_list,
+            commands::keyword_create,
+            commands::keyword_delete,
+            commands::chapter_update_meta,
+            commands::keywords_for_chapter,
+            commands::chapter_set_keywords,
+            commands::reorder_chapters,
+            commands::links_scan,
+            commands::chapter_backlinks,
+            commands::character_mentions,
+            commands::templates_list,
+            commands::template_upsert,
+            commands::template_delete,
+            commands::template_set_default,
             commands::read_chapter,
             commands::write_chapter,
             commands::rescan_library,

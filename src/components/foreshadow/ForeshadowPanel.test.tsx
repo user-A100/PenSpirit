@@ -27,6 +27,10 @@ const CHS: ChapterMeta[] = NUMS.map((title, i) => ({
   word_count: 0,
   created_at: "",
   updated_at: "",
+  synopsis: "",
+  label_id: null,
+  status_id: null,
+  target_words: null,
 }));
 
 function fs(p: Partial<Foreshadow> & Pick<Foreshadow, "id" | "title">): Foreshadow {

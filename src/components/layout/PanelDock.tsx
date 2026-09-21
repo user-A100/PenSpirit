@@ -4,6 +4,7 @@ import { ForeshadowPanel } from "../foreshadow/ForeshadowPanel";
 import { CharactersPanel } from "../characters/CharactersPanel";
 import { OutlineDockPanel } from "../outline/OutlineDockPanel";
 import { PlotBlocksPanel } from "../plot/PlotBlocksPanel";
+import { MetaDockPanel } from "../meta/MetaDockPanel";
 import { getView } from "../../lib/nav/registry";
 import { useUiNav } from "../../lib/nav/uiStore";
 
@@ -12,6 +13,7 @@ import { useUiNav } from "../../lib/nav/uiStore";
 const PANEL_EMPTY_TEXT: Record<string, string> = {};
 
 const PANEL_COMPONENTS: Record<string, ComponentType> = {
+  meta: MetaDockPanel,
   foreshadow: ForeshadowPanel,
   outline: OutlineDockPanel,
   characters: CharactersPanel,

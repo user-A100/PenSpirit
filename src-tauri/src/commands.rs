@@ -4,7 +4,8 @@ use crate::error::{AppError, AppResult};
 use crate::bump;
 use crate::fs_service;
 use crate::history;
-use crate::models::{BgImage, Book, BumpWord, ChapterContent, ChapterMeta, Character, CharacterInput, CharacterRelation, CharacterRelationInput, DailyStat, Foreshadow, ForeshadowInput, Idea, Map, Material, MaterialInput, Outline, OutlineInput, Place, PlaceInput, PlotBlock, PlotBlockInput};
+use crate::links;
+use crate::models::{Backlink, BgImage, Book, BumpWord, ChapterContent, ChapterMeta, ChapterMetaUpdate, ChapterTemplate, ChapterTemplateInput, Character, CharacterInput, CharacterMention, CharacterRelation, CharacterRelationInput, DailyStat, Foreshadow, ForeshadowInput, Idea, Keyword, Label, LabelInput, Map, Material, MaterialInput, Outline, OutlineInput, Place, PlaceInput, PlotBlock, PlotBlockInput, Status, StatusInput, WikiLink};
 use crate::porting;
 use crate::repo;
 use crate::search;
@@ -33,7 +34,12 @@ pub fn create_book_inner(s: &AppState, title: &str) -> AppResult<Book> {
         fs_service::unique_slug(&s.root, &fs_service::slugify(title))
     };
     fs_service::create_book_dir(&s.root, &slug, title)?;
-    let book = lock(s).and_then(|conn| repo::books::create(&*conn, title, &slug))?;
+    let book = {
+        let conn = lock(s)?;
+        let book = repo::books::create(&*conn, title, &slug)?;
+        repo::meta::seed_defaults(&*conn, book.id)?;
+        book
+    };
     Ok(book)
 }
 
@@ -51,14 +57,37 @@ pub fn create_chapter_inner(s: &AppState, book_id: i64, title: &str) -> AppResul
     if title.is_empty() {
         return Err(AppError::Invalid("章节标题不能为空".into()));
     }
-    let (slug, index) = {
+    let (slug, index, tpl_content) = {
         let conn = lock(s)?;
         let book = repo::books::get(&*conn, book_id)?;
-        (book.slug, repo::chapters::next_index(&*conn, book_id)?)
+        let index = repo::chapters::next_index(&*conn, book_id)?;
+        // 书的默认模板作为新章初始正文（Scrivener DefaultChildTemplateUUID 的对应物）
+        let tpl = repo::chapter_templates::get_default(&*conn, book_id)?
+            .map(|t| t.content)
+            .unwrap_or_default();
+        (book.slug, index, tpl)
     };
     let rel = fs_service::chapter_rel_path(&slug, index, title);
-    fs_service::write_chapter(&s.root, &rel, "")?;
+    fs_service::write_chapter(&s.root, &rel, &tpl_content)?;
     lock(s).and_then(|conn| repo::chapters::create(&*conn, book_id, &rel, title))
+}
+
+/// 批量重排章节（侧栏/卡片墙拖拽后调用）；清单必须同书，否则整批拒绝。
+pub fn reorder_chapters_inner(s: &AppState, ids: &[i64]) -> AppResult<()> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let conn = lock(s)?;
+    let placeholders = vec!["?"; ids.len()].join(",");
+    let distinct: i64 = conn.query_row(
+        &format!("SELECT COUNT(DISTINCT book_id) FROM chapters WHERE id IN ({placeholders})"),
+        rusqlite::params_from_iter(ids.iter()),
+        |r| r.get(0),
+    )?;
+    if distinct > 1 {
+        return Err(AppError::Invalid("章节清单跨书，拒绝重排".into()));
+    }
+    repo::chapters::reorder(&*conn, ids)
 }
 
 pub fn rename_chapter_inner(s: &AppState, id: i64, new_title: &str) -> AppResult<ChapterMeta> {
@@ -196,6 +225,188 @@ pub fn rename_chapter(s: State<AppState>, id: i64, new_title: String) -> AppResu
 #[tauri::command]
 pub fn delete_chapter(s: State<AppState>, id: i64) -> AppResult<()> {
     delete_chapter_inner(&s, id)
+}
+
+// ---- M7 批次1：章节元数据（标签/状态/关键词/梗概/目标） ----
+
+pub fn labels_list_inner(s: &AppState, book_id: i64) -> AppResult<Vec<Label>> {
+    repo::meta::labels_list(&*lock(s)?, book_id)
+}
+
+pub fn label_upsert_inner(s: &AppState, input: &LabelInput) -> AppResult<Label> {
+    repo::meta::label_upsert(&*lock(s)?, input)
+}
+
+pub fn label_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    repo::meta::label_delete(&*lock(s)?, id)
+}
+
+pub fn statuses_list_inner(s: &AppState, book_id: i64) -> AppResult<Vec<Status>> {
+    repo::meta::statuses_list(&*lock(s)?, book_id)
+}
+
+pub fn status_upsert_inner(s: &AppState, input: &StatusInput) -> AppResult<Status> {
+    repo::meta::status_upsert(&*lock(s)?, input)
+}
+
+pub fn status_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    repo::meta::status_delete(&*lock(s)?, id)
+}
+
+pub fn keywords_list_inner(s: &AppState, book_id: i64) -> AppResult<Vec<Keyword>> {
+    repo::meta::keywords_list(&*lock(s)?, book_id)
+}
+
+pub fn keyword_create_inner(s: &AppState, book_id: i64, title: &str, color: Option<&str>) -> AppResult<Keyword> {
+    repo::meta::keyword_create(&*lock(s)?, book_id, title, color)
+}
+
+pub fn keyword_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    repo::meta::keyword_delete(&*lock(s)?, id)
+}
+
+pub fn chapter_update_meta_inner(s: &AppState, id: i64, update: &ChapterMetaUpdate) -> AppResult<ChapterMeta> {
+    repo::chapters::update_meta(&*lock(s)?, id, update)
+}
+
+pub fn keywords_for_chapter_inner(s: &AppState, chapter_id: i64) -> AppResult<Vec<Keyword>> {
+    repo::meta::keywords_for_chapter(&*lock(s)?, chapter_id)
+}
+
+pub fn chapter_set_keywords_inner(s: &AppState, chapter_id: i64, keyword_ids: &[i64]) -> AppResult<Vec<Keyword>> {
+    repo::meta::chapter_set_keywords(&*lock(s)?, chapter_id, keyword_ids)
+}
+
+#[tauri::command]
+pub fn labels_list(s: State<AppState>, book_id: i64) -> AppResult<Vec<Label>> {
+    labels_list_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn label_upsert(s: State<AppState>, input: LabelInput) -> AppResult<Label> {
+    label_upsert_inner(&s, &input)
+}
+
+#[tauri::command]
+pub fn label_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    label_delete_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn statuses_list(s: State<AppState>, book_id: i64) -> AppResult<Vec<Status>> {
+    statuses_list_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn status_upsert(s: State<AppState>, input: StatusInput) -> AppResult<Status> {
+    status_upsert_inner(&s, &input)
+}
+
+#[tauri::command]
+pub fn status_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    status_delete_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn keywords_list(s: State<AppState>, book_id: i64) -> AppResult<Vec<Keyword>> {
+    keywords_list_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn keyword_create(s: State<AppState>, book_id: i64, title: String, color: Option<String>) -> AppResult<Keyword> {
+    keyword_create_inner(&s, book_id, &title, color.as_deref())
+}
+
+#[tauri::command]
+pub fn keyword_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    keyword_delete_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn chapter_update_meta(s: State<AppState>, id: i64, update: ChapterMetaUpdate) -> AppResult<ChapterMeta> {
+    chapter_update_meta_inner(&s, id, &update)
+}
+
+#[tauri::command]
+pub fn keywords_for_chapter(s: State<AppState>, chapter_id: i64) -> AppResult<Vec<Keyword>> {
+    keywords_for_chapter_inner(&s, chapter_id)
+}
+
+#[tauri::command]
+pub fn chapter_set_keywords(s: State<AppState>, chapter_id: i64, keyword_ids: Vec<i64>) -> AppResult<Vec<Keyword>> {
+    chapter_set_keywords_inner(&s, chapter_id, &keyword_ids)
+}
+
+// ---- M7 批次2：章节重排与章节模板 ----
+
+pub fn templates_list_inner(s: &AppState, book_id: i64) -> AppResult<Vec<ChapterTemplate>> {
+    repo::chapter_templates::list_by_book(&*lock(s)?, book_id)
+}
+
+pub fn template_upsert_inner(s: &AppState, input: &ChapterTemplateInput) -> AppResult<ChapterTemplate> {
+    repo::chapter_templates::upsert(&*lock(s)?, input)
+}
+
+pub fn template_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    repo::chapter_templates::delete(&*lock(s)?, id)
+}
+
+pub fn template_set_default_inner(s: &AppState, id: i64, is_default: bool) -> AppResult<ChapterTemplate> {
+    repo::chapter_templates::set_default(&*lock(s)?, id, is_default)
+}
+
+#[tauri::command]
+pub fn reorder_chapters(s: State<AppState>, ids: Vec<i64>) -> AppResult<()> {
+    reorder_chapters_inner(&s, &ids)
+}
+
+// ---- M7 批次3：wiki 双链与人物提及（链接以 [[章题]] 纯文本活在正文，按需扫描派生） ----
+
+pub fn links_scan_inner(s: &AppState, book_id: i64) -> AppResult<Vec<WikiLink>> {
+    links::scan_book(s, book_id)
+}
+
+pub fn chapter_backlinks_inner(s: &AppState, chapter_id: i64) -> AppResult<Vec<Backlink>> {
+    links::backlinks_for(s, chapter_id)
+}
+
+pub fn character_mentions_inner(s: &AppState, book_id: i64) -> AppResult<Vec<CharacterMention>> {
+    links::mentions(s, book_id)
+}
+
+#[tauri::command]
+pub fn links_scan(s: State<AppState>, book_id: i64) -> AppResult<Vec<WikiLink>> {
+    links_scan_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn chapter_backlinks(s: State<AppState>, chapter_id: i64) -> AppResult<Vec<Backlink>> {
+    chapter_backlinks_inner(&s, chapter_id)
+}
+
+#[tauri::command]
+pub fn character_mentions(s: State<AppState>, book_id: i64) -> AppResult<Vec<CharacterMention>> {
+    character_mentions_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn templates_list(s: State<AppState>, book_id: i64) -> AppResult<Vec<ChapterTemplate>> {
+    templates_list_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn template_upsert(s: State<AppState>, input: ChapterTemplateInput) -> AppResult<ChapterTemplate> {
+    template_upsert_inner(&s, &input)
+}
+
+#[tauri::command]
+pub fn template_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    template_delete_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn template_set_default(s: State<AppState>, id: i64, is_default: bool) -> AppResult<ChapterTemplate> {
+    template_set_default_inner(&s, id, is_default)
 }
 
 #[tauri::command]

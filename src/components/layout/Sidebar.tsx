@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BookOpen, FileDown, FileText, FileUp, PanelLeftClose, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
+import { useMeta } from "../../stores/meta";
 import { TrashPanel } from "../sidebar/TrashPanel";
 import { StatsBadge } from "../sidebar/StatsBadge";
 import { ImportWizard } from "../io/ImportWizard";
@@ -55,13 +56,15 @@ function InlineInput(props: {
 }
 
 export function Sidebar() {
-  const { books, chapters, currentBookId, currentChapterId, loadBooks, selectBook, createBook, createChapter, selectChapter, reloadChapters } = useWorkspace();
+  const { books, chapters, currentBookId, currentChapterId, loadBooks, selectBook, createBook, createChapter, selectChapter, reloadChapters, reorderChapters } = useWorkspace();
+  const labels = useMeta((s) => s.labels);
   const toggleSidebar = useUiNav((s) => s.toggleSidebar);
   const [newBook, setNewBook] = useState("");
   const [newChapter, setNewChapter] = useState("");
   const [trashOpen, setTrashOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [dragId, setDragId] = useState<number | null>(null);
 
   useEffect(() => { loadBooks(); }, [loadBooks]);
 
@@ -148,14 +151,37 @@ export function Sidebar() {
         <div className="mb-1.5 px-2 text-xs text-[color:var(--text-faint)]">章节</div>
         {chapters.map((c) => {
           const active = currentChapterId === c.id;
+          // Scrivener 式标签色点：章打了标签时替换默认文件图标色
+          const label = labels.find((l) => l.id === c.label_id) ?? null;
           return (
             <div
               key={c.id}
+              draggable
+              onDragStart={() => setDragId(c.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragId != null && dragId !== c.id) {
+                  const ids = chapters.map((x) => x.id);
+                  const from = ids.indexOf(dragId);
+                  const to = ids.indexOf(c.id);
+                  if (from >= 0 && to >= 0) {
+                    ids.splice(to, 0, ids.splice(from, 1)[0]);
+                    void reorderChapters(ids);
+                  }
+                }
+                setDragId(null);
+              }}
+              onDragEnd={() => setDragId(null)}
               onClick={() => selectChapter(c.id)}
-              className={`relative flex cursor-pointer items-center gap-2 rounded-md py-1.5 pl-5 pr-2 transition-colors duration-150 ${rowTone(active)}`}
+              className={`relative flex cursor-pointer items-center gap-2 rounded-md py-1.5 pl-5 pr-2 transition-colors duration-150 ${rowTone(active)} ${dragId === c.id ? "opacity-40" : ""}`}
             >
               {active && <ActiveBar />}
-              <FileText size={14} className={active ? "shrink-0 text-[color:var(--accent)]" : "shrink-0"} />
+              <FileText
+                size={14}
+                className={`shrink-0 ${label ? "" : active ? "text-[color:var(--accent)]" : ""}`}
+                style={label ? { color: label.color } : undefined}
+              />
               <span className="min-w-0 flex-1 truncate">{c.title}</span>
               <span className="shrink-0 text-xs text-[color:var(--text-faint)]">{c.word_count} 字</span>
             </div>

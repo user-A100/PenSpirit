@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection};
 
 use crate::error::{AppError, AppResult};
-use crate::models::ChapterMeta;
+use crate::models::{ChapterMeta, ChapterMetaUpdate};
 
 fn from_row(row: &rusqlite::Row) -> rusqlite::Result<ChapterMeta> {
     Ok(ChapterMeta {
@@ -15,10 +15,14 @@ fn from_row(row: &rusqlite::Row) -> rusqlite::Result<ChapterMeta> {
         updated_at: row.get(7)?,
         deleted_at: row.get(8)?,
         orig_file_path: row.get(9)?,
+        synopsis: row.get(10)?,
+        label_id: row.get(11)?,
+        status_id: row.get(12)?,
+        target_words: row.get(13)?,
     })
 }
 
-const COLS: &str = "id, book_id, file_path, title, sort_key, word_count, created_at, updated_at, deleted_at, orig_file_path";
+const COLS: &str = "id, book_id, file_path, title, sort_key, word_count, created_at, updated_at, deleted_at, orig_file_path, synopsis, label_id, status_id, target_words";
 
 pub fn list_by_book(conn: &Connection, book_id: i64) -> AppResult<Vec<ChapterMeta>> {
     let mut stmt = conn.prepare(&format!(
@@ -68,6 +72,69 @@ pub fn touch_content(conn: &Connection, id: i64, word_count: i64) -> AppResult<C
         "UPDATE chapters SET word_count = ?2, updated_at = datetime('now') WHERE id = ?1",
         params![id, word_count],
     )?;
+    get(conn, id)
+}
+
+/// 批量重排（拖拽后落 sort_key）：传入有序 id 列表，按位写 sort_key。
+/// 不触碰 updated_at（排序不是内容变更）。
+pub fn reorder(conn: &Connection, ids: &[i64]) -> AppResult<()> {
+    for (i, id) in ids.iter().enumerate() {
+        conn.execute(
+            "UPDATE chapters SET sort_key = ?2 WHERE id = ?1",
+            params![id, i as f64],
+        )?;
+    }
+    Ok(())
+}
+
+/// 元数据部分更新：只写出现的字段；不触碰 updated_at（那是正文时间戳）。
+/// label/status 引用必须与章同书（Some(id) 时校验），防止跨书挂错定义。
+pub fn update_meta(conn: &Connection, id: i64, u: &ChapterMetaUpdate) -> AppResult<ChapterMeta> {
+    let ch = get(conn, id)?;
+    if let Some(syn) = &u.synopsis {
+        conn.execute(
+            "UPDATE chapters SET synopsis = ?2 WHERE id = ?1",
+            params![id, syn.trim()],
+        )?;
+    }
+    if let Some(l) = u.label_id {
+        match l {
+            None => conn.execute("UPDATE chapters SET label_id = NULL WHERE id = ?1", [id])?,
+            Some(lid) => {
+                let ok: bool = conn.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM labels WHERE id = ?1 AND book_id = ?2)",
+                    params![lid, ch.book_id],
+                    |r| r.get(0),
+                )?;
+                if !ok {
+                    return Err(AppError::Invalid(format!("标签 #{lid} 不属于本章所在书")));
+                }
+                conn.execute("UPDATE chapters SET label_id = ?2 WHERE id = ?1", params![id, lid])?
+            }
+        };
+    }
+    if let Some(st) = u.status_id {
+        match st {
+            None => conn.execute("UPDATE chapters SET status_id = NULL WHERE id = ?1", [id])?,
+            Some(sid) => {
+                let ok: bool = conn.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM statuses WHERE id = ?1 AND book_id = ?2)",
+                    params![sid, ch.book_id],
+                    |r| r.get(0),
+                )?;
+                if !ok {
+                    return Err(AppError::Invalid(format!("状态 #{sid} 不属于本章所在书")));
+                }
+                conn.execute("UPDATE chapters SET status_id = ?2 WHERE id = ?1", params![id, sid])?
+            }
+        };
+    }
+    if let Some(tw) = u.target_words {
+        conn.execute(
+            "UPDATE chapters SET target_words = ?2 WHERE id = ?1",
+            params![id, tw],
+        )?;
+    }
     get(conn, id)
 }
 

@@ -12,6 +12,7 @@ vi.mock("../lib/tauri", () => {
       listChapters: vi.fn().mockResolvedValue(chapters),
       createChapter: vi.fn().mockResolvedValue(chapters[0]),
       readChapter: vi.fn().mockResolvedValue({ meta: chapters[0], content: "" }),
+      reorderChapters: vi.fn().mockResolvedValue(undefined),
     },
   };
 });
@@ -64,5 +65,28 @@ describe("workspace store", () => {
     await useWorkspace.getState().selectChapter(11);
     expect(useWorkspace.getState().currentChapterId).toBe(11);
     expect(useWorkspace.getState().chapterContent).toBe("");
+  });
+
+  it("reorderChapters 按传入 id 序乐观重排并调 API", async () => {
+    useWorkspace.setState({ currentBookId: 1, chapters: [
+      { id: 11, book_id: 1, file_path: "", title: "一", sort_key: 1, word_count: 0, created_at: "", updated_at: "", synopsis: "", label_id: null, status_id: null, target_words: null },
+      { id: 12, book_id: 1, file_path: "", title: "二", sort_key: 2, word_count: 0, created_at: "", updated_at: "", synopsis: "", label_id: null, status_id: null, target_words: null },
+      { id: 13, book_id: 1, file_path: "", title: "三", sort_key: 3, word_count: 0, created_at: "", updated_at: "", synopsis: "", label_id: null, status_id: null, target_words: null },
+    ] });
+    await useWorkspace.getState().reorderChapters([13, 11, 12]);
+    expect(useWorkspace.getState().chapters.map((c) => c.title)).toEqual(["三", "一", "二"]);
+  });
+
+  it("reorderChapters 失败回滚到重排前", async () => {
+    const { api } = await import("../lib/tauri");
+    (api.reorderChapters as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("boom"));
+    const before = [
+      { id: 11, book_id: 1, file_path: "", title: "一", sort_key: 1, word_count: 0, created_at: "", updated_at: "", synopsis: "", label_id: null, status_id: null, target_words: null },
+      { id: 12, book_id: 1, file_path: "", title: "二", sort_key: 2, word_count: 0, created_at: "", updated_at: "", synopsis: "", label_id: null, status_id: null, target_words: null },
+    ];
+    useWorkspace.setState({ currentBookId: 1, chapters: before });
+    await useWorkspace.getState().reorderChapters([12, 11]);
+    expect(useWorkspace.getState().chapters.map((c) => c.title)).toEqual(["一", "二"]);
+    expect(useWorkspace.getState().error).toBeTruthy();
   });
 });

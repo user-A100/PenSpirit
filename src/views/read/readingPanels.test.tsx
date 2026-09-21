@@ -14,6 +14,7 @@ function ch(id: number, title: string): ChapterMeta {
   return {
     id, book_id: 1, title, sort_key: id, word_count: 100,
     file_path: `book/manuscript/${id}.md`, created_at: "", updated_at: "",
+    synopsis: "", label_id: null, status_id: null, target_words: null,
   };
 }
 const CHAPTERS = [ch(11, "风雪夜"), ch(12, "Storm Harbour"), ch(13, "归途")];

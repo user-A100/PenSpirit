@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { BarChart3, Blocks, BookOpen, CircleDot, Flag, Library, ListTree, Network, PenLine, Sparkles, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, Blocks, BookOpen, CircleDot, Flag, LayoutGrid, Library, ListTree, Network, PenLine, Sparkles, Tag, Users, type LucideIcon } from "lucide-react";
 import { BumpView } from "../../views/BumpView";
 import { WriteView } from "../../views/WriteView";
 import { ReadView } from "../../views/read/ReadView";
@@ -7,6 +7,7 @@ import { MaterialsView } from "../../views/MaterialsView";
 import { StatsView } from "../../views/StatsView";
 import { StylesView } from "../../views/StylesView";
 import { GraphView } from "../../views/GraphView";
+import { StructureView } from "../../views/StructureView";
 import { useUiNav } from "./uiStore";
 
 // 一级视图注册表（仿 Agentero 命令式注册）：Ribbon/App/PanelDock 均从此读取导航结构，
@@ -49,6 +50,7 @@ registerView({
   icon: PenLine,
   Component: WriteView,
   dockPanels: [
+    { id: "meta", label: "元数据", icon: Tag },
     { id: "outline", label: "大纲", icon: ListTree },
     { id: "characters", label: "人物", icon: Users },
     { id: "foreshadow", label: "伏笔", icon: Flag },
@@ -103,6 +105,15 @@ registerView({
   label: "图谱",
   icon: Network,
   Component: GraphView,
+  dockPanels: [],
+});
+
+// M7 批次2 结构：卡片墙/大纲列/串烧 三视图 + 章节模板管理
+registerView({
+  id: "structure",
+  label: "结构",
+  icon: LayoutGrid,
+  Component: StructureView,
   dockPanels: [],
 });
 

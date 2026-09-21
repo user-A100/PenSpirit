@@ -14,7 +14,7 @@ vi.mock("../../lib/tauri", () => ({
 }));
 
 function ch(id: number, title: string): ChapterMeta {
-  return { id, book_id: 1, title, sort_key: id, word_count: 0, file_path: "", created_at: "", updated_at: "" };
+  return { id, book_id: 1, title, sort_key: id, word_count: 0, file_path: "", created_at: "", updated_at: "", synopsis: "", label_id: null, status_id: null, target_words: null };
 }
 
 function o(partial: Partial<Outline> & Pick<Outline, "id" | "kind">): Outline {
