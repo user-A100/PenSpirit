@@ -52,12 +52,25 @@ describe("GraphView", () => {
     });
   });
 
-  it("三个 tab，默认家族树占位", () => {
+  it("三个 tab，默认家族树渲染角色节点", () => {
     render(<GraphView />);
     expect(screen.getByTestId("graph-tab-tree")).toBeTruthy();
     expect(screen.getByTestId("graph-tab-network")).toBeTruthy();
     expect(screen.getByTestId("graph-tab-map")).toBeTruthy();
-    expect(screen.getByTestId("graph-tree-placeholder")).toBeTruthy();
+    expect(screen.getByTestId("tree-node-1")).toBeTruthy();
+    expect(screen.getByTestId("tree-node-2")).toBeTruthy();
+  });
+
+  it("家族树：无家族边时全员未入谱，成环时出警示", () => {
+    // 默认无关系 → 三角色未入谱行
+    const { unmount } = render(<GraphView />);
+    expect(screen.getByTestId("tree-canvas")).toBeTruthy();
+    unmount();
+
+    // 1↔2 互为父母成环 → 顶部孤岛警示
+    state.rels = [rel(5, 1, 2, "父母"), rel(6, 2, 1, "父母")];
+    render(<GraphView />);
+    expect(screen.getByTestId("tree-island-warning")).toBeTruthy();
   });
 
   it("关系网络渲染角色节点与关系边", () => {
