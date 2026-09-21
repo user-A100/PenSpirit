@@ -140,7 +140,7 @@ export function StatsPanel() {
         {/* 指标卡 */}
         <section>
           <div className={SECTION}>指标 · 全书聚合</div>
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-2 gap-3">
             <StatCard label="今日" value={fmtWords(todayWords)} icon={CalendarDays} sub={`${todayMinutes} 活跃分钟`} />
             <StatCard label="本周" value={fmtWords(week)} sub="近 7 天合计" />
             <StatCard label="30 天" value={fmtWords(month)} sub="近 30 天合计" />
@@ -172,7 +172,7 @@ export function StatsPanel() {
         {/* 每书进度 */}
         <section>
           <div className={SECTION}>每书进度</div>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             {books.length === 0 && (
               <div className="rounded-md border border-[color:var(--border-subtle)] px-2.5 py-3 text-center text-xs text-[color:var(--text-faint)]">
                 还没有书
@@ -185,7 +185,7 @@ export function StatsPanel() {
                   : 0;
               const e = eta(b);
               return (
-                <div key={b.id} className="rounded-md border border-[color:var(--border-subtle)] px-2.5 py-2">
+                <div key={b.id} className="rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="min-w-0 truncate text-sm text-[color:var(--text-primary)]">{b.title}</span>
                     <span className="shrink-0 text-xs tabular-nums text-[color:var(--text-faint)]">
