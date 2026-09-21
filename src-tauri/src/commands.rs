@@ -4,7 +4,7 @@ use crate::error::{AppError, AppResult};
 use crate::bump;
 use crate::fs_service;
 use crate::history;
-use crate::models::{BgImage, Book, BumpWord, ChapterContent, ChapterMeta, Character, CharacterInput, DailyStat, Foreshadow, ForeshadowInput, Idea, Material, MaterialInput, Outline, OutlineInput, PlotBlock, PlotBlockInput};
+use crate::models::{BgImage, Book, BumpWord, ChapterContent, ChapterMeta, Character, CharacterInput, CharacterRelation, CharacterRelationInput, DailyStat, Foreshadow, ForeshadowInput, Idea, Material, MaterialInput, Outline, OutlineInput, PlotBlock, PlotBlockInput};
 use crate::porting;
 use crate::repo;
 use crate::search;
@@ -643,6 +643,41 @@ pub fn character_upsert(s: State<AppState>, input: CharacterInput) -> AppResult<
 #[tauri::command]
 pub fn character_delete(s: State<AppState>, id: i64) -> AppResult<()> {
     character_delete_inner(&s, id)
+}
+
+// ---------- M5 图谱：角色关系 ----------
+
+pub fn relations_list_inner(s: &AppState, book_id: i64) -> AppResult<Vec<CharacterRelation>> {
+    repo::relations::list_by_book(&*lock(s)?, book_id)
+}
+
+pub fn relation_upsert_inner(
+    s: &AppState,
+    input: &CharacterRelationInput,
+) -> AppResult<CharacterRelation> {
+    repo::relations::upsert(&*lock(s)?, input)
+}
+
+pub fn relation_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    repo::relations::delete(&*lock(s)?, id)
+}
+
+#[tauri::command]
+pub fn relations_list(s: State<AppState>, book_id: i64) -> AppResult<Vec<CharacterRelation>> {
+    relations_list_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn relation_upsert(
+    s: State<AppState>,
+    input: CharacterRelationInput,
+) -> AppResult<CharacterRelation> {
+    relation_upsert_inner(&s, &input)
+}
+
+#[tauri::command]
+pub fn relation_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    relation_delete_inner(&s, id)
 }
 
 #[tauri::command]

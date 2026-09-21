@@ -7,6 +7,7 @@ pub mod ideas;
 pub mod materials;
 pub mod outlines;
 pub mod plot_blocks;
+pub mod relations;
 pub mod sessions;
 pub mod settings;
 pub mod styles;

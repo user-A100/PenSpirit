@@ -248,6 +248,32 @@ pub struct CharacterInput {
     pub description: String,
 }
 
+/// 角色关系（character_relations 表）：source→target 单向一行；对称类型
+/// （配偶/兄弟/挚友…）由前端视为无向边，查询 source OR target。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharacterRelation {
+    pub id: i64,
+    pub book_id: i64,
+    pub source_id: i64,
+    pub target_id: i64,
+    /// 自由文本；预设：父母/子女/配偶/兄弟/师徒/仇敌/挚友
+    pub relation_type: String,
+    pub note: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// 关系入参：id=None 插入（重复 source+target+type 静默转更新 note），Some 更新。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharacterRelationInput {
+    pub id: Option<i64>,
+    pub book_id: i64,
+    pub source_id: i64,
+    pub target_id: i64,
+    pub relation_type: String,
+    pub note: String,
+}
+
 // ---------- M4 大纲体系 ----------
 
 /// 大纲条目（outlines 表）。三级：master=总纲（每书一篇）、
