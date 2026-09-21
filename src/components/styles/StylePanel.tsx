@@ -128,19 +128,19 @@ export function StylePanel() {
             新建，或用「导入 md」引入文风 skill
           </div>
         ) : (
-          <div className="mb-3 flex flex-col gap-1.5">
+          <div className="mb-3 flex flex-col gap-2">
             {styles.map((s) => {
               const tags = parseTags(s.tags);
               return (
                 <button
                   key={s.id}
                   onClick={() => setEditing(s.id)}
-                  className={`flex w-full flex-col rounded-md border px-2.5 py-1.5 text-left transition-colors duration-150 ${
+                  className={`flex w-full flex-col rounded-[var(--radius-md)] border px-3 py-2.5 text-left transition-colors duration-[var(--dur-md)] ${
                     s.id === activeStyleId
-                      ? "border-[color:var(--accent)]"
+                      ? "border-[color:var(--accent)] bg-[var(--accent-dim)]"
                       : s.id === editingId
                         ? "border-[color:var(--border-strong)]"
-                        : "border-[color:var(--border-subtle)] hover:bg-[var(--bg-hover)]"
+                        : "border-[color:var(--border-subtle)] hover:border-[color:var(--accent)]"
                   }`}
                 >
                   <span className="flex min-w-0 items-center gap-1.5">

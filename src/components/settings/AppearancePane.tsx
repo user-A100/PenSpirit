@@ -69,10 +69,10 @@ export function AppearancePane() {
               <button
                 key={t.id}
                 onClick={() => setColorTheme(t.id)}
-                className={`rounded-lg border p-2.5 text-left transition-colors duration-150 ${
+                className={`rounded-[var(--radius-md)] border p-3 text-left transition-colors duration-[var(--dur-md)] ${
                   active
                     ? "border-[color:var(--accent)] bg-[var(--accent-dim)]"
-                    : "border-[color:var(--border-subtle)] hover:bg-[var(--bg-hover)]"
+                    : "border-[color:var(--border-subtle)] hover:border-[color:var(--accent)]"
                 }`}
               >
                 {/* mini 预览：面板底 + 标题/正文示例 + 三个色块 */}
@@ -81,7 +81,7 @@ export function AppearancePane() {
                   className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-2"
                 >
                   <div className="mb-0.5 text-xs font-medium text-[var(--text-primary)]">章节标题</div>
-                  <div className="text-[10px] leading-relaxed text-[var(--text-secondary)]">
+                  <div className="text-[11px] leading-relaxed text-[var(--text-secondary)]">
                     山雨欲来风满楼，正是落笔时。
                   </div>
                   <div className="mt-1.5 flex items-center gap-1">

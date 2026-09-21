@@ -199,19 +199,19 @@ export function AgentsPane() {
           </button>
         </div>
       ) : (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {agents.map((a) => (
-            <div key={a.id} className="rounded-md border border-[color:var(--border-subtle)] px-2.5 py-2">
+            <div key={a.id} className="rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] px-3 py-2.5 transition-colors duration-[var(--dur-md)] hover:border-[color:var(--accent)]">
               <div className="flex items-center gap-2">
                 <StatusDot probe={a.last_probe} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className={`truncate text-sm ${a.enabled ? "text-[color:var(--text-primary)]" : "text-[color:var(--text-faint)]"}`}>{a.name}</span>
                     {a.is_default && (
-                      <span className="shrink-0 rounded-full bg-[var(--accent-dim)] px-2 py-0.5 text-[10px] text-[color:var(--accent)]">默认</span>
+                      <span className="shrink-0 rounded-full bg-[var(--accent-dim)] px-2 py-0.5 text-xs text-[color:var(--accent)]">默认</span>
                     )}
                   </div>
-                  <div className="truncate font-mono text-[10px] text-[color:var(--text-faint)]">
+                  <div className="truncate font-mono text-[11px] text-[color:var(--text-faint)]">
                     {a.command}
                     {a.args.length > 0 ? ` ${a.args.join(" ")}` : ""}
                   </div>

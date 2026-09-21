@@ -141,7 +141,7 @@ export function SettingsModal() {
             <>
           {/* 服务商列表：点击编辑，激活项 accent 边 + 「使用中」徽章 */}
           <div className="mb-1.5 text-xs text-[color:var(--text-faint)]">服务商</div>
-          <div className="mb-3 flex flex-col gap-1.5">
+          <div className="mb-3 flex flex-col gap-2">
             {providers.length === 0 && (
               <div className="rounded-md border border-[color:var(--border-subtle)] px-2.5 py-3 text-center text-xs text-[color:var(--text-faint)]">
                 尚未配置服务商，请在下方填写并保存
@@ -154,12 +154,12 @@ export function SettingsModal() {
                 <button
                   key={p.id}
                   onClick={() => { setForm(p); setErrors({}); }}
-                  className={`flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left transition-colors duration-150 ${
+                  className={`flex w-full items-center gap-2 rounded-[var(--radius-md)] border px-3 py-2.5 text-left transition-colors duration-[var(--dur-md)] ${
                     isActive
-                      ? "border-[color:var(--accent)]"
+                      ? "border-[color:var(--accent)] bg-[var(--accent-dim)]"
                       : isEditing
                         ? "border-[color:var(--border-strong)]"
-                        : "border-[color:var(--border-subtle)] hover:bg-[var(--bg-hover)]"
+                        : "border-[color:var(--border-subtle)] hover:border-[color:var(--accent)]"
                   }`}
                 >
                   <span className="min-w-0 flex-1">

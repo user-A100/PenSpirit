@@ -35,7 +35,7 @@ export function Badge({
     <span
       data-tone={tone}
       title={title}
-      className={`inline-flex items-center whitespace-nowrap rounded-full px-1.5 py-0.5 text-[11px] leading-none ${className}`}
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-1.5 py-0.5 text-xs leading-none ${className}`}
       style={{ color: c.fg, background: c.bg }}
     >
       {children}
