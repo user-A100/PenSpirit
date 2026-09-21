@@ -1,11 +1,12 @@
 import type { ComponentType } from "react";
-import { BarChart3, Blocks, BookOpen, CircleDot, Flag, Library, ListTree, PenLine, Sparkles, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, Blocks, BookOpen, CircleDot, Flag, Library, ListTree, Network, PenLine, Sparkles, Users, type LucideIcon } from "lucide-react";
 import { BumpView } from "../../views/BumpView";
 import { WriteView } from "../../views/WriteView";
 import { ReadView } from "../../views/read/ReadView";
 import { MaterialsView } from "../../views/MaterialsView";
 import { StatsView } from "../../views/StatsView";
 import { StylesView } from "../../views/StylesView";
+import { GraphView } from "../../views/GraphView";
 import { useUiNav } from "./uiStore";
 
 // 一级视图注册表（仿 Agentero 命令式注册）：Ribbon/App/PanelDock 均从此读取导航结构，
@@ -93,6 +94,15 @@ registerView({
   label: "素材库",
   icon: Library,
   Component: MaterialsView,
+  dockPanels: [],
+});
+
+// M5 图谱：家族树 / 关系网络 / 世界地图（画布类视图，ViewShell wide 不限宽）
+registerView({
+  id: "graph",
+  label: "图谱",
+  icon: Network,
+  Component: GraphView,
   dockPanels: [],
 });
 

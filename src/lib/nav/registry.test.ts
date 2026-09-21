@@ -16,10 +16,10 @@ describe("navRegistry", () => {
     localStorage.clear();
   });
 
-  it("内置注册 write/bump/read/styles/stats/materials 六个一级视图", async () => {
+  it("内置注册 write/bump/read/styles/stats/materials/graph 七个一级视图", async () => {
     const { registry, useUiNav } = await freshNav();
     const ids = registry.getViews().map((v) => v.id);
-    expect(ids).toEqual(["write", "bump", "read", "styles", "stats", "materials"]);
+    expect(ids).toEqual(["write", "bump", "read", "styles", "stats", "materials", "graph"]);
 
     const write = registry.getView("write")!;
     expect(write.label).toBe("写作");
@@ -35,6 +35,8 @@ describe("navRegistry", () => {
     expect(registry.getView("stats")!.label).toBe("统计");
     expect(registry.getView("styles")!.label).toBe("文风库");
     expect(registry.getView("materials")!.label).toBe("素材库");
+    // M5：图谱（家族树/关系网络/世界地图）
+    expect(registry.getView("graph")!.label).toBe("图谱");
     expect(useUiNav.getState().activeView).toBe("write"); // 自愈无副作用
   });
 
@@ -57,7 +59,7 @@ describe("navRegistry", () => {
     const { registry } = await freshNav();
     const snapshot = registry.getViews() as mutableViews;
     snapshot.pop();
-    expect(registry.getViews()).toHaveLength(6);
+    expect(registry.getViews()).toHaveLength(7);
   });
 
   it("持久化了未注册的视图 id 时回退 write 并写回存储", async () => {
