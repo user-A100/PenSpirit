@@ -42,6 +42,8 @@
   /* 背板缝隙：内容浮卡与窗口边框/导航条之间的留白
      （Zen --zen-element-separation，zen-split-view.css:99） */
   --sep: 8px;
+  /* 卡片/按钮焦点环（M6，kindling 手法：交互色 30% 洗色，从 accent 派生，主题免维护） */
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 /* 弹窗/浮卡入场：Zen zen-dialog-fade-in（下移 10px 淡入，0.15s ease） */
@@ -63,6 +65,12 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+/* 键盘焦点环（kindling app.css 同款）：鼠标点击不出环，Tab 导航可见 */
+:where(button, [role="button"]):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
 
 /* 写作视图三栏折叠（v4.12.4 实测：panel 级 collapse()/resize() 与 group 级
    setLayout() 在该布局下均静默无效——命令式 API 不可依赖；且 v4 在 Group 与
