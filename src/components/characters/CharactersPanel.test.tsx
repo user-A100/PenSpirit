@@ -88,4 +88,26 @@ describe("CharactersPanel", () => {
     expect(screen.getAllByText("1 关系")).toHaveLength(2);
     expect(api.relationsList).toHaveBeenCalledWith(1);
   });
+
+  it("人物卡默认收起描述（line-clamp-2），点卡身展开/再收起，chevron 随之旋转", async () => {
+    vi.mocked(api.charactersList).mockResolvedValue([
+      ch(1, "林晚", "主角", "晚娘", "身世成谜的少女。\n第二行。\n第三行。"),
+    ]);
+    render(<CharactersPanel />);
+    await waitFor(() => screen.getByText("林晚"));
+
+    expect(screen.getByText(/身世成谜的少女/).className).toContain("line-clamp-2");
+
+    const toggle = screen.getByRole("button", { name: /林晚/ });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText(/身世成谜的少女/).className).not.toContain("line-clamp-2");
+    expect(document.querySelector(".rotate-180")).not.toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByText(/身世成谜的少女/).className).toContain("line-clamp-2");
+  });
 });

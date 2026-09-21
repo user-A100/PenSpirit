@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pencil, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useCharacters } from "../../stores/characters";
 import { useRelations } from "../../stores/relations";
 import { useWorkspace } from "../../stores/workspace";
@@ -31,6 +31,8 @@ export function CharactersPanel() {
   const [aliases, setAliases] = useState("");
   const [desc, setDesc] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // 展开/收起（M6）：一次只展开一张卡，默认收起描述只留两行预览
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
     void load(currentBookId);
@@ -148,44 +150,76 @@ export function CharactersPanel() {
           还没有人物卡——「新建」登记第一个人物
         </div>
       ) : (
-        <div className="space-y-1.5">
-          {list.map((c) => (
-            <div
-              key={c.id}
-              className="rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] p-2.5"
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-[color:var(--text-primary)]">{c.name}</span>
-                {c.role && <Badge tone="purple">{c.role}</Badge>}
-                {relCount(c.id) > 0 && (
-                  <Badge tone="neutral" title="在图谱视图中点角色可编辑关系">
-                    {relCount(c.id)} 关系
-                  </Badge>
-                )}
-                <span className="flex-1" />
-                <button onClick={() => openEdit(c)} title="编辑" className={ICON_BTN}>
-                  <Pencil size={12} />
-                </button>
-                <button
-                  onClick={() => {
-                    if (window.confirm(`删除人物卡「${c.name}」？`)) void remove(c.id);
-                  }}
-                  title="删除"
-                  className={ICON_BTN}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-              {c.aliases && (
-                <div className="mt-1 text-[11px] text-[color:var(--text-faint)]">别名：{c.aliases}</div>
-              )}
-              {c.description && (
-                <div className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-[color:var(--text-secondary)]">
-                  {c.description}
+        <div className="space-y-2">
+          {list.map((c) => {
+            const expanded = expandedId === c.id;
+            return (
+              <div
+                key={c.id}
+                className="group rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] px-3 py-2.5 transition-colors duration-[var(--dur-md)] hover:border-[color:var(--accent)]"
+              >
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setExpandedId(expanded ? null : c.id)}
+                    aria-expanded={expanded}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-dim)] text-xs font-medium text-[color:var(--text-primary)]">
+                      {c.name.slice(0, 1)}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-[color:var(--text-primary)]">
+                      {c.name}
+                    </span>
+                    {c.role && <Badge tone="purple">{c.role}</Badge>}
+                    {relCount(c.id) > 0 && (
+                      <Badge tone="neutral" title="在图谱视图中点角色可编辑关系">
+                        {relCount(c.id)} 关系
+                      </Badge>
+                    )}
+                    <ChevronDown
+                      size={14}
+                      aria-hidden
+                      className={`shrink-0 text-[color:var(--text-faint)] transition-transform duration-[var(--dur-md)] ${expanded ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                  <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity duration-[var(--dur-fast)] group-hover:opacity-100">
+                    <button onClick={() => openEdit(c)} title="编辑" className={ICON_BTN}>
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`删除人物卡「${c.name}」？`)) void remove(c.id);
+                      }}
+                      title="删除"
+                      className={ICON_BTN}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+                {(c.aliases || c.description) && (
+                  <div
+                    className={
+                      expanded
+                        ? "mt-2 space-y-1 border-t border-[color:var(--border-subtle)] pt-2"
+                        : "mt-1.5 space-y-1"
+                    }
+                  >
+                    {c.aliases && (
+                      <div className="text-xs text-[color:var(--text-faint)]">别名：{c.aliases}</div>
+                    )}
+                    {c.description && (
+                      <div
+                        className={`whitespace-pre-wrap text-xs leading-relaxed text-[color:var(--text-secondary)] ${expanded ? "" : "line-clamp-2"}`}
+                      >
+                        {c.description}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
