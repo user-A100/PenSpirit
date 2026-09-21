@@ -25,3 +25,6 @@ dist-ssr
 
 # Zen 实机验证脚本的截图/日志暂存（scripts/zen-verify/）
 .tmp-zen-ref/
+
+# M5 核验脚本的生成态
+scripts/m5-verify/ids.json
