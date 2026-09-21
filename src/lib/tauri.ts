@@ -108,6 +108,29 @@ export interface PlotBlockInput {
 // ---- M3-T6：阅读背景图（文件存 {appData}/background/，经 asset 协议加载） ----
 export interface BgImage { id: string; path: string; name: string }
 
+// ---- M5 图谱：角色关系 / 世界地图（图片存 {appData}/maps/，经 asset 协议加载） ----
+export interface CharacterRelation {
+  id: number; book_id: number; source_id: number; target_id: number;
+  relation_type: string; note: string; created_at: string; updated_at: string;
+}
+export interface CharacterRelationInput {
+  id: number | null; book_id: number; source_id: number; target_id: number;
+  relation_type: string; note: string;
+}
+export interface WorldMap {
+  id: number; book_id: number; name: string; path: string;
+  created_at: string; updated_at: string;
+}
+export interface Place {
+  id: number; book_id: number; map_id: number; name: string; description: string;
+  linked_character_ids: string; x: number; y: number;
+  created_at: string; updated_at: string;
+}
+export interface PlaceInput {
+  id: number | null; map_id: number; name: string; description: string;
+  linked_character_ids: string; x: number; y: number;
+}
+
 export const api = {
   listBooks: () => invoke<Book[]>("list_books"),
   createBook: (title: string) => invoke<Book>("create_book", { title }),
@@ -207,6 +230,19 @@ export const api = {
   charactersList: (bookId: number) => invoke<Character[]>("characters_list", { bookId }),
   characterUpsert: (input: CharacterInput) => invoke<Character>("character_upsert", { input }),
   characterDelete: (id: number) => invoke<void>("character_delete", { id }),
+  // ---- M5 图谱：角色关系 / 世界地图 ----
+  relationsList: (bookId: number) => invoke<CharacterRelation[]>("relations_list", { bookId }),
+  relationUpsert: (input: CharacterRelationInput) =>
+    invoke<CharacterRelation>("relation_upsert", { input }),
+  relationDelete: (id: number) => invoke<void>("relation_delete", { id }),
+  mapsList: (bookId: number) => invoke<WorldMap[]>("maps_list", { bookId }),
+  mapImport: (bookId: number, name: string, srcPath: string) =>
+    invoke<WorldMap>("map_import", { bookId, name, srcPath }),
+  mapRename: (id: number, name: string) => invoke<WorldMap>("map_rename", { id, name }),
+  mapDelete: (id: number) => invoke<void>("map_delete", { id }),
+  placesList: (mapId: number) => invoke<Place[]>("places_list", { mapId }),
+  placeUpsert: (input: PlaceInput) => invoke<Place>("place_upsert", { input }),
+  placeDelete: (id: number) => invoke<void>("place_delete", { id }),
   outlinesList: (bookId: number) => invoke<Outline[]>("outlines_list", { bookId }),
   outlineUpsert: (input: OutlineInput) => invoke<Outline>("outline_upsert", { input }),
   outlineDelete: (id: number) => invoke<void>("outline_delete", { id }),
