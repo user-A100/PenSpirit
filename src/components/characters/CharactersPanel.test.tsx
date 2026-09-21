@@ -10,6 +10,7 @@ vi.mock("../../lib/tauri", () => ({
     charactersList: vi.fn(),
     characterUpsert: vi.fn(),
     characterDelete: vi.fn(),
+    relationsList: vi.fn(),
   },
 }));
 
@@ -20,6 +21,8 @@ function ch(id: number, name: string, role = "", aliases = "", description = "")
 describe("CharactersPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // 默认空关系；需要断言关系的用例在体内覆盖
+    vi.mocked(api.relationsList).mockResolvedValue([]);
     useWorkspace.setState({ books: [], chapters: [], currentBookId: 1, currentChapterId: null, chapterContent: null });
     useCharacters.setState({ bookId: null, list: [] });
     (window as unknown as { confirm: unknown }).confirm = vi.fn(() => true);
@@ -71,5 +74,18 @@ describe("CharactersPanel", () => {
 
     fireEvent.click(screen.getByTitle("删除"));
     await waitFor(() => expect(api.characterDelete).toHaveBeenCalledWith(3));
+  });
+
+  it("有关系的人物卡显示关系数 Badge", async () => {
+    vi.mocked(api.charactersList).mockResolvedValue([ch(1, "胡八一"), ch(2, "胖子")]);
+    vi.mocked(api.relationsList).mockResolvedValue([
+      { id: 5, book_id: 1, source_id: 1, target_id: 2, relation_type: "配偶", note: "", created_at: "", updated_at: "" },
+    ]);
+    render(<CharactersPanel />);
+    await waitFor(() => screen.getByText("胡八一"));
+
+    // 单条关系的两端（source/target）各计 1
+    expect(screen.getAllByText("1 关系")).toHaveLength(2);
+    expect(api.relationsList).toHaveBeenCalledWith(1);
   });
 });

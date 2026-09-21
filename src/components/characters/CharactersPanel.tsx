@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { useCharacters } from "../../stores/characters";
+import { useRelations } from "../../stores/relations";
 import { useWorkspace } from "../../stores/workspace";
 import { Badge } from "../ui/Badge";
 
 // 人物卡面板（M4，write 视图 dock 的 characters tab）——人物图谱的第一块底座：
 // 姓名必填，角色/别名（逗号分隔）/描述可选；别名供后续检索与图谱消歧用。
-// 关系网络/出场章节统计在 characters 表之上迭代（M4-A3/A4）。
+// 关系数 Badge（M5）随 useRelations 计数，编辑入口在图谱视图（点节点弹窗）。
 
 const INPUT =
   "w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 focus:border-[color:var(--accent)]";
@@ -20,6 +21,8 @@ export function CharactersPanel() {
   const load = useCharacters((s) => s.load);
   const upsert = useCharacters((s) => s.upsert);
   const remove = useCharacters((s) => s.remove);
+  const relList = useRelations((s) => s.list);
+  const loadRels = useRelations((s) => s.load);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -31,7 +34,11 @@ export function CharactersPanel() {
 
   useEffect(() => {
     void load(currentBookId);
-  }, [currentBookId, load]);
+    void loadRels(currentBookId);
+  }, [currentBookId, load, loadRels]);
+
+  const relCount = (charId: number) =>
+    relList.filter((r) => r.source_id === charId || r.target_id === charId).length;
 
   const openCreate = () => {
     setEditingId(null);
@@ -150,6 +157,11 @@ export function CharactersPanel() {
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-[color:var(--text-primary)]">{c.name}</span>
                 {c.role && <Badge tone="purple">{c.role}</Badge>}
+                {relCount(c.id) > 0 && (
+                  <Badge tone="neutral" title="在图谱视图中点角色可编辑关系">
+                    {relCount(c.id)} 关系
+                  </Badge>
+                )}
                 <span className="flex-1" />
                 <button onClick={() => openEdit(c)} title="编辑" className={ICON_BTN}>
                   <Pencil size={12} />
