@@ -207,7 +207,7 @@ export function BumpWorkspace() {
 
           {/* 碰撞结果大卡片 */}
           {drawn.length > 0 && (
-            <div className="rounded-xl border border-[color:var(--border-strong)] bg-[var(--bg-panel)] p-6 text-center">
+            <div className="rounded-[var(--radius-lg)] border border-[color:var(--border-strong)] bg-[var(--bg-elevated)] p-6 text-center">
               <div className="text-2xl font-semibold tracking-wide text-[color:var(--text-primary)]">
                 {drawn.join(" × ")}
               </div>
@@ -236,7 +236,7 @@ export function BumpWorkspace() {
           )}
 
           {drawn.length === 0 && words.length >= count && (
-            <div className="rounded-xl border border-dashed border-[color:var(--border-subtle)] px-6 py-12 text-center text-xs text-[color:var(--text-faint)]">
+            <div className="rounded-[var(--radius-lg)] border border-dashed border-[color:var(--border-subtle)] px-6 py-12 text-center text-xs text-[color:var(--text-faint)]">
               点「碰撞」抽一组词
             </div>
           )}
