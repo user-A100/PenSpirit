@@ -4,6 +4,7 @@ pub mod characters;
 pub mod chapters;
 pub mod foreshadows;
 pub mod ideas;
+pub mod maps;
 pub mod materials;
 pub mod outlines;
 pub mod plot_blocks;

@@ -274,6 +274,48 @@ pub struct CharacterRelationInput {
     pub note: String,
 }
 
+// ---------- M5 图谱：世界地图 ----------
+
+/// 世界地图（maps 表）：图片存 $APPDATA/maps/，DB 只存路径，
+/// 前端经 asset 协议（convertFileSrc）渲染。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Map {
+    pub id: i64,
+    pub book_id: i64,
+    pub name: String,
+    pub path: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// 地点（places 表）：pin 坐标为图面百分比 0~100，换图/缩放不失效。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Place {
+    pub id: i64,
+    pub book_id: i64,
+    pub map_id: i64,
+    pub name: String,
+    pub description: String,
+    /// 逗号分隔 character id
+    pub linked_character_ids: String,
+    pub x: f64,
+    pub y: f64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// 地点入参：id=None 插入、Some 更新；book_id 由 map 行派生（比计划更严：杜绝跨书脏数据）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlaceInput {
+    pub id: Option<i64>,
+    pub map_id: i64,
+    pub name: String,
+    pub description: String,
+    pub linked_character_ids: String,
+    pub x: f64,
+    pub y: f64,
+}
+
 // ---------- M4 大纲体系 ----------
 
 /// 大纲条目（outlines 表）。三级：master=总纲（每书一篇）、

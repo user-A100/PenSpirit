@@ -4,7 +4,7 @@ use crate::error::{AppError, AppResult};
 use crate::bump;
 use crate::fs_service;
 use crate::history;
-use crate::models::{BgImage, Book, BumpWord, ChapterContent, ChapterMeta, Character, CharacterInput, CharacterRelation, CharacterRelationInput, DailyStat, Foreshadow, ForeshadowInput, Idea, Material, MaterialInput, Outline, OutlineInput, PlotBlock, PlotBlockInput};
+use crate::models::{BgImage, Book, BumpWord, ChapterContent, ChapterMeta, Character, CharacterInput, CharacterRelation, CharacterRelationInput, DailyStat, Foreshadow, ForeshadowInput, Idea, Map, Material, MaterialInput, Outline, OutlineInput, Place, PlaceInput, PlotBlock, PlotBlockInput};
 use crate::porting;
 use crate::repo;
 use crate::search;
@@ -678,6 +678,127 @@ pub fn relation_upsert(
 #[tauri::command]
 pub fn relation_delete(s: State<AppState>, id: i64) -> AppResult<()> {
     relation_delete_inner(&s, id)
+}
+
+// ---------- M5 图谱：世界地图 ----------
+
+const MAP_ALLOWED_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "gif"];
+const MAP_MAX_BYTES: u64 = 10 * 1024 * 1024;
+
+fn maps_dir(s: &AppState) -> std::path::PathBuf {
+    // root = {appData}/library，其上级即 appData（与 background/ 同级）
+    s.config_dir().join("maps")
+}
+
+pub fn maps_list_inner(s: &AppState, book_id: i64) -> AppResult<Vec<Map>> {
+    repo::maps::list_maps_by_book(&*lock(s)?, book_id)
+}
+
+/// 校验源图（ext 白名单 + 10MB），复制进 maps/ 后建行；建行失败回滚删文件。
+pub fn map_import_inner(s: &AppState, book_id: i64, name: &str, src_path: &str) -> AppResult<Map> {
+    let src = std::path::Path::new(src_path);
+    if !src.is_file() {
+        return Err(AppError::NotFound("地图图片文件不存在".into()));
+    }
+    let ext = src
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    if !MAP_ALLOWED_EXTS.contains(&ext.as_str()) {
+        return Err(AppError::Invalid("仅支持 png / jpg / jpeg / webp / gif 图片".into()));
+    }
+    let meta = std::fs::metadata(src)?;
+    if meta.len() > MAP_MAX_BYTES {
+        return Err(AppError::Invalid("地图图片不能超过 10MB".into()));
+    }
+    // 名称入参为空时回退文件名（去非法字符）
+    let display = {
+        let n = name.trim();
+        if n.is_empty() {
+            bg_sanitize_name(src.file_stem().and_then(|n| n.to_str()).unwrap_or("地图"))
+        } else {
+            bg_sanitize_name(n)
+        }
+    };
+    let dir = maps_dir(s);
+    std::fs::create_dir_all(&dir)?;
+    // 文件名复用 bg 的纳秒序 hex id，天然唯一且不依赖 DB 自增号
+    let dest = dir.join(format!("{}-{display}.{ext}", next_bg_id()));
+    std::fs::copy(src, &dest)?;
+    let inserted = lock(s).and_then(|conn| {
+        repo::maps::insert_map(&*conn, book_id, &display, &dest.to_string_lossy())
+    });
+    if inserted.is_err() {
+        let _ = std::fs::remove_file(&dest);
+    }
+    inserted
+}
+
+pub fn map_rename_inner(s: &AppState, id: i64, name: &str) -> AppResult<Map> {
+    repo::maps::rename_map(&*lock(s)?, id, name)
+}
+
+pub fn map_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    let path = lock(s).and_then(|conn| repo::maps::delete_map(&*conn, id))?;
+    // 文件可能已缺失（历史残留），缺失不视为失败
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub fn places_list_inner(s: &AppState, map_id: i64) -> AppResult<Vec<Place>> {
+    repo::maps::list_places_by_map(&*lock(s)?, map_id)
+}
+
+pub fn place_upsert_inner(s: &AppState, input: &PlaceInput) -> AppResult<Place> {
+    repo::maps::upsert_place(&*lock(s)?, input)
+}
+
+pub fn place_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    repo::maps::delete_place(&*lock(s)?, id)
+}
+
+#[tauri::command]
+pub fn maps_list(s: State<AppState>, book_id: i64) -> AppResult<Vec<Map>> {
+    maps_list_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn map_import(
+    s: State<AppState>,
+    book_id: i64,
+    name: String,
+    src_path: String,
+) -> AppResult<Map> {
+    map_import_inner(&s, book_id, &name, &src_path)
+}
+
+#[tauri::command]
+pub fn map_rename(s: State<AppState>, id: i64, name: String) -> AppResult<Map> {
+    map_rename_inner(&s, id, &name)
+}
+
+#[tauri::command]
+pub fn map_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    map_delete_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn places_list(s: State<AppState>, map_id: i64) -> AppResult<Vec<Place>> {
+    places_list_inner(&s, map_id)
+}
+
+#[tauri::command]
+pub fn place_upsert(s: State<AppState>, input: PlaceInput) -> AppResult<Place> {
+    place_upsert_inner(&s, &input)
+}
+
+#[tauri::command]
+pub fn place_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    place_delete_inner(&s, id)
 }
 
 #[tauri::command]
