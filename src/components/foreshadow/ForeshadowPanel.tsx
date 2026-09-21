@@ -311,9 +311,12 @@ export function ForeshadowPanel() {
           visible.map((r) => {
             const open = isOpenState(r.state);
             return (
-              <div key={r.f.id} className="rounded-md border border-[color:var(--border-subtle)] px-2.5 py-2">
+              <div
+                key={r.f.id}
+                className="group rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] px-3 py-2.5 transition-colors duration-[var(--dur-md)] hover:border-[color:var(--accent)]"
+              >
                 <div className="flex items-center gap-1.5">
-                  <span className="min-w-0 flex-1 truncate text-xs text-[color:var(--text-primary)]" title={r.f.title}>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-[color:var(--text-primary)]" title={r.f.title}>
                     {r.f.title}
                   </span>
                   <Badge tone={FORESHADOW_TONE[r.state]} title={`紧急度 ${r.state}`}>
@@ -325,7 +328,7 @@ export function ForeshadowPanel() {
                     </Badge>
                   )}
                 </div>
-                <div className="mt-1 flex items-center gap-2 text-[11px] text-[color:var(--text-faint)]">
+                <div className="mt-1 flex items-center gap-2 text-xs text-[color:var(--text-faint)]">
                   <span>{`${chLabel(r.plantedIdx)}埋 → ${chLabel(r.targetIdx)}收`}</span>
                   {r.remaining != null && (
                     <span title="距计划回收的章数">
@@ -334,12 +337,12 @@ export function ForeshadowPanel() {
                   )}
                 </div>
                 {r.f.note && (
-                  <div className="mt-0.5 truncate text-[11px] text-[color:var(--text-faint)]" title={r.f.note}>
+                  <div className="mt-1 truncate text-xs text-[color:var(--text-faint)]" title={r.f.note}>
                     {r.f.note.split("\n")[0]}
                   </div>
                 )}
                 {/* 行内操作 */}
-                <div className="mt-1 flex items-center gap-0.5">
+                <div className="mt-1.5 flex items-center gap-0.5">
                   {open && (
                     <>
                       <button
@@ -350,14 +353,14 @@ export function ForeshadowPanel() {
                         }}
                         className={`${ICON_BTN} hover:text-[color:var(--success)]`}
                       >
-                        <Check size={12} />
+                        <Check size={14} />
                       </button>
                       <button
                         title="搁置"
                         onClick={() => void setStatus(r.f.id, "dropped", null)}
                         className={`${ICON_BTN} hover:text-[color:var(--warning)]`}
                       >
-                        <Pause size={12} />
+                        <Pause size={14} />
                       </button>
                     </>
                   )}
@@ -366,7 +369,7 @@ export function ForeshadowPanel() {
                     onClick={() => startEdit(r.f)}
                     className={`${ICON_BTN} hover:text-[color:var(--text-secondary)]`}
                   >
-                    <Pencil size={12} />
+                    <Pencil size={14} />
                   </button>
                   {confirmDelId === r.f.id ? (
                     <button
@@ -375,7 +378,7 @@ export function ForeshadowPanel() {
                         void remove(r.f.id);
                         setConfirmDelId(null);
                       }}
-                      className="rounded bg-[color:var(--danger)]/15 px-1.5 py-0.5 text-[11px] text-[color:var(--danger)] transition-colors duration-150 hover:bg-[color:var(--danger)]/25"
+                      className="rounded bg-[color:var(--danger)]/15 px-1.5 py-0.5 text-xs text-[color:var(--danger)] transition-colors duration-150 hover:bg-[color:var(--danger)]/25"
                     >
                       确认
                     </button>
@@ -385,7 +388,7 @@ export function ForeshadowPanel() {
                       onClick={() => setConfirmDelId(r.f.id)}
                       className={`${ICON_BTN} hover:text-[color:var(--danger)]`}
                     >
-                      <Trash2 size={12} />
+                      <Trash2 size={14} />
                     </button>
                   )}
                 </div>

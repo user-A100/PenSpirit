@@ -105,13 +105,13 @@ export function PlotBlocksPanel() {
             </div>
           </div>
         ) : (
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-2">
             {list.map((b, i) => {
               const meta = STATUS_META[b.status];
               return (
                 <li
                   key={b.id}
-                  className="group flex items-start gap-1.5 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] p-2"
+                  className="group flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-3 py-2.5 transition-colors duration-[var(--dur-md)] hover:border-[color:var(--accent)]"
                 >
                   <button
                     onClick={() => cycleStatus(b)}
@@ -134,7 +134,7 @@ export function PlotBlocksPanel() {
                         disabled={i === 0}
                         className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)] disabled:opacity-30"
                       >
-                        <ArrowUp size={12} />
+                        <ArrowUp size={14} />
                       </button>
                       <button
                         title="下移"
@@ -142,7 +142,7 @@ export function PlotBlocksPanel() {
                         disabled={i === list.length - 1}
                         className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)] disabled:opacity-30"
                       >
-                        <ArrowDown size={12} />
+                        <ArrowDown size={14} />
                       </button>
                     </div>
                     <div className="flex justify-end">
@@ -153,7 +153,7 @@ export function PlotBlocksPanel() {
                               void remove(b.id);
                               setConfirmDelId(null);
                             }}
-                            className="rounded bg-[color:var(--danger)]/15 px-1.5 text-[11px] text-[color:var(--danger)] transition-colors duration-150 hover:bg-[color:var(--danger)]/25"
+                            className="rounded bg-[color:var(--danger)]/15 px-1.5 text-xs text-[color:var(--danger)] transition-colors duration-150 hover:bg-[color:var(--danger)]/25"
                           >
                             删除
                           </button>
@@ -161,7 +161,7 @@ export function PlotBlocksPanel() {
                             onClick={() => setConfirmDelId(null)}
                             className="rounded p-0.5 text-[color:var(--text-faint)] hover:bg-[var(--bg-hover)]"
                           >
-                            <X size={11} />
+                            <X size={12} />
                           </button>
                         </span>
                       ) : (
