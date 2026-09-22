@@ -1,8 +1,8 @@
-import { useEffect, useRef } from "react";
-import { CornerDownLeft, Search, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BookmarkPlus, CornerDownLeft, Search, X } from "lucide-react";
 import { useSearch } from "../../stores/search";
 import { useWorkspace } from "../../stores/workspace";
-import type { SearchHit } from "../../lib/tauri";
+import { api, type SearchHit } from "../../lib/tauri";
 import { Modal } from "../ui/Modal";
 
 // M2-T9 全书搜索结果面板（Ctrl+Shift+F 唤起，Esc 关闭）。
@@ -22,11 +22,18 @@ function HitLine(props: { hit: SearchHit }) {
   );
 }
 
+const SCOPES: { value: string; label: string; title: string }[] = [
+  { value: "all", label: "全部", title: "标题+正文" },
+  { value: "title", label: "标题", title: "仅搜章节标题" },
+  { value: "content", label: "正文", title: "仅搜正文" },
+];
+
 export function SearchPanel() {
-  const { open, query, wholeWord, hits, truncated, loading, error, closePanel, setQuery, setWholeWord, search, jump } =
+  const { open, query, wholeWord, scope, hits, truncated, loading, error, closePanel, setQuery, setWholeWord, setScope, search, jump } =
     useSearch();
   const bookId = useWorkspace((s) => s.currentBookId);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | string>("idle");
 
   // 打开时聚焦（Esc 关闭由 Modal 承担）
   useEffect(() => {
@@ -39,7 +46,21 @@ export function SearchPanel() {
     if (!open) return;
     const t = setTimeout(() => void search(bookId), 300);
     return () => clearTimeout(t);
-  }, [open, query, wholeWord, bookId, search]);
+  }, [open, query, wholeWord, scope, bookId, search]);
+
+  // 查询变化后重置保存态
+  useEffect(() => setSaveState("idle"), [query, scope]);
+
+  const saveAsCollection = async () => {
+    if (bookId == null || query.trim() === "" || saveState === "saving") return;
+    setSaveState("saving");
+    try {
+      await api.collectionUpsert({ id: null, book_id: bookId, name: query.trim(), kind: "saved", query: query.trim() });
+      setSaveState("saved");
+    } catch (e) {
+      setSaveState(String(e).replace(/^.*?"|".*$/g, "") || String(e));
+    }
+  };
 
   if (!open) return null;
 
@@ -70,6 +91,22 @@ export function SearchPanel() {
             disabled={bookId == null}
             className="min-w-0 flex-1 bg-transparent text-sm text-[color:var(--text-primary)] outline-none placeholder:text-[color:var(--text-faint)]"
           />
+          <div className="flex shrink-0 items-center gap-0.5">
+            {SCOPES.map((sc) => (
+              <button
+                key={sc.value}
+                onClick={() => setScope(sc.value)}
+                title={sc.title}
+                className={`rounded px-1.5 py-0.5 text-[11px] transition-colors duration-150 hover:bg-[var(--bg-hover)] ${
+                  scope === sc.value
+                    ? "bg-[var(--accent-dim)] text-[color:var(--text-primary)]"
+                    : "text-[color:var(--text-faint)]"
+                }`}
+              >
+                {sc.label}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => setWholeWord(!wholeWord)}
             title="全词匹配"
@@ -88,20 +125,36 @@ export function SearchPanel() {
           </button>
         </div>
 
-        <div className="shrink-0 px-3 py-1.5 text-[11px] text-[color:var(--text-faint)]">
-          {error ? (
-            <span className="text-[color:var(--danger)]">{error}</span>
-          ) : query.trim() === "" ? (
-            "输入关键词搜索本书全部章节"
-          ) : loading ? (
-            "搜索中…"
-          ) : hits.length === 0 ? (
-            "没有找到匹配"
-          ) : (
-            <>
-              共 {hits.length} 处命中
-              {truncated && <span className="text-[color:var(--warning)]">（结果过多，已截断）</span>}
-            </>
+        <div className="flex shrink-0 items-center gap-2 px-3 py-1.5 text-[11px] text-[color:var(--text-faint)]">
+          <span className="min-w-0 flex-1 truncate">
+            {error ? (
+              <span className="text-[color:var(--danger)]">{error}</span>
+            ) : query.trim() === "" ? (
+              "空格=同时包含 · -词=排除 · \"短语\"=词组"
+            ) : loading ? (
+              "搜索中…"
+            ) : hits.length === 0 ? (
+              "没有找到匹配"
+            ) : saveState === "idle" || saveState === "saving" ? (
+              <>
+                共 {hits.length} 处命中
+                {truncated && <span className="text-[color:var(--warning)]">（结果过多，已截断）</span>}
+              </>
+            ) : saveState === "saved" ? (
+              <span className="text-[color:var(--success, var(--accent))]">已存为集合「{query.trim()}」</span>
+            ) : (
+              <span className="text-[color:var(--danger)]">{saveState}</span>
+            )}
+          </span>
+          {query.trim() !== "" && bookId != null && hits.length > 0 && saveState === "idle" && (
+            <button
+              onClick={() => void saveAsCollection()}
+              title="把当前查询存为搜索集合（写入写作区右侧「集合」面板）"
+              className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            >
+              <BookmarkPlus size={11} />
+              存为集合
+            </button>
           )}
         </div>
 

@@ -10,6 +10,8 @@ interface SearchState {
   open: boolean;
   query: string;
   wholeWord: boolean;
+  /** 搜索范围："all" 全部 / "title" 仅标题 / "content" 仅正文 */
+  scope: string;
   hits: SearchHit[];
   /** 命中数触顶被截断（Rust 侧 MAX_HITS） */
   truncated: boolean;
@@ -21,6 +23,7 @@ interface SearchState {
   closePanel: () => void;
   setQuery: (q: string) => void;
   setWholeWord: (v: boolean) => void;
+  setScope: (v: string) => void;
   search: (bookId: number | null) => Promise<void>;
   jump: (hit: SearchHit) => Promise<void>;
   clearJump: () => void;
@@ -30,6 +33,7 @@ export const useSearch = create<SearchState>((set, get) => ({
   open: false,
   query: "",
   wholeWord: false,
+  scope: "all",
   hits: [],
   truncated: false,
   loading: false,
@@ -40,16 +44,17 @@ export const useSearch = create<SearchState>((set, get) => ({
   closePanel: () => set({ open: false }),
   setQuery: (query) => set({ query }),
   setWholeWord: (wholeWord) => set({ wholeWord }),
+  setScope: (scope) => set({ scope }),
 
   search: async (bookId) => {
-    const { query, wholeWord } = get();
+    const { query, wholeWord, scope } = get();
     if (bookId == null || query.trim() === "") {
       set({ hits: [], truncated: false, loading: false, error: null });
       return;
     }
     set({ loading: true });
     try {
-      const r = await api.searchBook(bookId, query, wholeWord);
+      const r = await api.searchBook(bookId, query, wholeWord, scope);
       set({ hits: r.hits, truncated: r.truncated, loading: false, error: null });
     } catch (e) {
       set({ hits: [], truncated: false, loading: false, error: String(e) });

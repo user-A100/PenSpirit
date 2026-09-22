@@ -5,7 +5,7 @@ use crate::bump;
 use crate::fs_service;
 use crate::history;
 use crate::links;
-use crate::models::{Backlink, BgImage, Book, BumpWord, ChapterContent, ChapterMeta, ChapterMetaUpdate, ChapterTemplate, ChapterTemplateInput, Character, CharacterInput, CharacterMention, CharacterRelation, CharacterRelationInput, DailyStat, Foreshadow, ForeshadowInput, Idea, Keyword, Label, LabelInput, Map, Material, MaterialInput, Outline, OutlineInput, Place, PlaceInput, PlotBlock, PlotBlockInput, Status, StatusInput, WikiLink};
+use crate::models::{Backlink, BgImage, Book, BumpWord, ChapterContent, ChapterMeta, ChapterMetaUpdate, ChapterTemplate, ChapterTemplateInput, Character, CharacterInput, CharacterMention, CharacterRelation, CharacterRelationInput, Collection, CollectionInput, CustomFieldDef, CustomFieldDefInput, DailyStat, Foreshadow, ForeshadowInput, FreeformPos, Idea, Keyword, Label, LabelInput, Map, Material, MaterialInput, Outline, OutlineInput, Place, PlaceInput, PlotBlock, PlotBlockInput, Status, StatusInput, WikiLink};
 use crate::porting;
 use crate::repo;
 use crate::search;
@@ -602,7 +602,7 @@ pub fn export_docx(
     )
 }
 
-// ---- M2-T9 全书搜索（实现在 search.rs） ----
+// ---- M2-T9 全书搜索 + M7 批次4 范围/操作符（实现在 search.rs） ----
 
 #[tauri::command]
 pub fn search_book(
@@ -610,8 +610,263 @@ pub fn search_book(
     book_id: i64,
     query: String,
     whole_word: bool,
+    scope: Option<String>,
 ) -> AppResult<search::SearchResult> {
-    search::search_book_inner(&s, book_id, &query, whole_word)
+    search::search_book_inner(&s, book_id, &query, whole_word, scope.as_deref().unwrap_or("all"))
+}
+
+// ---- M7 批次4：集合（manual 勾章引用 / saved 存为搜索） ----
+
+pub fn collections_list_inner(s: &AppState, book_id: i64) -> AppResult<Vec<Collection>> {
+    repo::collections::list_by_book(&*lock(s)?, book_id)
+}
+
+pub fn collection_upsert_inner(s: &AppState, input: &CollectionInput) -> AppResult<Collection> {
+    let conn = lock(s)?;
+    repo::collections::upsert(&conn, input)
+}
+
+pub fn collection_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    let conn = lock(s)?;
+    repo::collections::delete(&conn, id)
+}
+
+/// 集合成员章：manual 走关联表；saved 用其 query 实时搜全书（每词命中章的并集口径=AND），
+/// 按 book 目录序返回，供面板直接渲染。
+pub fn collection_chapters_inner(s: &AppState, collection_id: i64) -> AppResult<Vec<ChapterMeta>> {
+    let (col, all) = {
+        let conn = lock(s)?;
+        let col = repo::collections::get(&conn, collection_id)?;
+        let all = repo::chapters::list_by_book(&conn, col.book_id)?;
+        (col, all)
+    };
+    if col.kind == "saved" {
+        let result = search::search_book_inner(s, col.book_id, &col.query, false, "all")?;
+        let mut hit_ids: Vec<i64> = result.hits.iter().map(|h| h.chapter_id).collect();
+        hit_ids.sort();
+        hit_ids.dedup();
+        let hit: std::collections::HashSet<i64> = hit_ids.into_iter().collect();
+        return Ok(all.into_iter().filter(|c| hit.contains(&c.id)).collect());
+    }
+    let ids = {
+        let conn = lock(s)?;
+        repo::collections::chapter_ids(&conn, collection_id)?
+    };
+    Ok(all.into_iter().filter(|c| ids.contains(&c.id)).collect())
+}
+
+pub fn collection_add_chapters_inner(
+    s: &AppState,
+    collection_id: i64,
+    chapter_ids: &[i64],
+) -> AppResult<Vec<i64>> {
+    let conn = lock(s)?;
+    let col = repo::collections::get(&conn, collection_id)?;
+    if col.kind != "manual" {
+        return Err(AppError::Invalid("搜索集合的成员由搜索结果决定，不能手动添加".into()));
+    }
+    repo::collections::add_chapters(&conn, &col, chapter_ids)?;
+    repo::collections::chapter_ids(&conn, collection_id)
+}
+
+pub fn collection_remove_chapter_inner(
+    s: &AppState,
+    collection_id: i64,
+    chapter_id: i64,
+) -> AppResult<Vec<i64>> {
+    let conn = lock(s)?;
+    let col = repo::collections::get(&conn, collection_id)?;
+    if col.kind != "manual" {
+        return Err(AppError::Invalid("搜索集合的成员由搜索结果决定，不能手动移除".into()));
+    }
+    repo::collections::remove_chapter(&conn, collection_id, chapter_id)?;
+    repo::collections::chapter_ids(&conn, collection_id)
+}
+
+#[tauri::command]
+pub fn collections_list(s: State<AppState>, book_id: i64) -> AppResult<Vec<Collection>> {
+    collections_list_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn collection_upsert(s: State<AppState>, input: CollectionInput) -> AppResult<Collection> {
+    collection_upsert_inner(&s, &input)
+}
+
+#[tauri::command]
+pub fn collection_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    collection_delete_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn collection_chapters(s: State<AppState>, collection_id: i64) -> AppResult<Vec<ChapterMeta>> {
+    collection_chapters_inner(&s, collection_id)
+}
+
+#[tauri::command]
+pub fn collection_add_chapters(
+    s: State<AppState>,
+    collection_id: i64,
+    chapter_ids: Vec<i64>,
+) -> AppResult<Vec<i64>> {
+    collection_add_chapters_inner(&s, collection_id, &chapter_ids)
+}
+
+#[tauri::command]
+pub fn collection_remove_chapter(
+    s: State<AppState>,
+    collection_id: i64,
+    chapter_id: i64,
+) -> AppResult<Vec<i64>> {
+    collection_remove_chapter_inner(&s, collection_id, chapter_id)
+}
+
+// ---- M7 批次7：自定义元数据字段 + 自由卡片墙摆位 ----
+
+pub fn custom_defs_list_inner(s: &AppState, book_id: i64) -> AppResult<Vec<CustomFieldDef>> {
+    repo::custom_fields::list_defs(&*lock(s)?, book_id)
+}
+
+pub fn custom_def_upsert_inner(s: &AppState, input: &CustomFieldDefInput) -> AppResult<CustomFieldDef> {
+    let conn = lock(s)?;
+    repo::custom_fields::upsert_def(&conn, input)
+}
+
+pub fn custom_def_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    let conn = lock(s)?;
+    repo::custom_fields::delete_def(&conn, id)
+}
+
+pub fn custom_values_get_inner(s: &AppState, chapter_id: i64) -> AppResult<serde_json::Map<String, serde_json::Value>> {
+    let conn = lock(s)?;
+    repo::custom_fields::get_values(&conn, chapter_id)
+}
+
+pub fn custom_value_set_inner(
+    s: &AppState,
+    chapter_id: i64,
+    def_id: i64,
+    value: Option<serde_json::Value>,
+) -> AppResult<()> {
+    let conn = lock(s)?;
+    repo::custom_fields::set_value(&conn, chapter_id, def_id, value)
+}
+
+pub fn freeform_positions_inner(s: &AppState, book_id: i64) -> AppResult<Vec<FreeformPos>> {
+    let conn = lock(s)?;
+    Ok(repo::chapters::freeform_positions(&conn, book_id)?
+        .into_iter()
+        .map(|(chapter_id, x, y)| FreeformPos { chapter_id, x, y })
+        .collect())
+}
+
+pub fn freeform_position_set_inner(s: &AppState, chapter_id: i64, x: f64, y: f64) -> AppResult<()> {
+    let conn = lock(s)?;
+    repo::chapters::set_freeform_position(&conn, chapter_id, x, y)
+}
+
+#[tauri::command]
+pub fn custom_defs_list(s: State<AppState>, book_id: i64) -> AppResult<Vec<CustomFieldDef>> {
+    custom_defs_list_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn custom_def_upsert(s: State<AppState>, input: CustomFieldDefInput) -> AppResult<CustomFieldDef> {
+    custom_def_upsert_inner(&s, &input)
+}
+
+#[tauri::command]
+pub fn custom_def_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    custom_def_delete_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn custom_values_get(
+    s: State<AppState>,
+    chapter_id: i64,
+) -> AppResult<serde_json::Map<String, serde_json::Value>> {
+    custom_values_get_inner(&s, chapter_id)
+}
+
+#[tauri::command]
+pub fn custom_value_set(
+    s: State<AppState>,
+    chapter_id: i64,
+    def_id: i64,
+    value: Option<serde_json::Value>,
+) -> AppResult<()> {
+    custom_value_set_inner(&s, chapter_id, def_id, value)
+}
+
+#[tauri::command]
+pub fn freeform_positions(s: State<AppState>, book_id: i64) -> AppResult<Vec<FreeformPos>> {
+    freeform_positions_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn freeform_position_set(s: State<AppState>, chapter_id: i64, x: f64, y: f64) -> AppResult<()> {
+    freeform_position_set_inner(&s, chapter_id, x, y)
+}
+
+// ---- M7 批次7：名字生成器（纯函数，无状态） ----
+
+#[tauri::command]
+pub fn names_generate(req: crate::names::NameRequest) -> AppResult<Vec<crate::names::GeneratedName>> {
+    crate::names::generate_inner(&req)
+}
+
+// ---- M7 批次7：参考窗弹出为 OS 浮窗（Scrivener Copyholder 的真身） ----
+
+/// 浮窗加载的 URL：查询参数带给前端书/章，main.tsx 检测 ?refwindow 后
+/// 渲染独立的 RefWindowApp（不挂整个应用）。独立成纯函数便于单测。
+pub fn ref_window_url(book_id: i64, chapter_id: Option<i64>) -> String {
+    let mut url = format!("index.html?refwindow&book={book_id}");
+    if let Some(cid) = chapter_id {
+        url.push_str(&format!("&chapter={cid}"));
+    }
+    url
+}
+
+/// 已存在同标签浮窗时导航到本次请求的书/章并聚焦（不重建，避免闪窗）；
+/// webview 已死（如调试工具从外部关页）则销毁重建自愈。主窗关闭时由 lib.rs 联动关掉它。
+/// 必须 async：同步 command 跑在主线程，build() 等主线程派发=自等死锁（实机核验踩过）。
+#[tauri::command]
+pub async fn open_ref_window(
+    app: tauri::AppHandle,
+    book_id: i64,
+    chapter_id: Option<i64>,
+) -> Result<(), String> {
+    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+    let url = ref_window_url(book_id, chapter_id);
+    if let Some(existing) = app.get_webview_window("ref") {
+        match existing.eval(&format!("window.location.replace({url:?})")) {
+            Ok(()) => {
+                let _ = existing.set_focus();
+                return Ok(());
+            }
+            Err(_) => {
+                let _ = existing.destroy();
+            }
+        }
+    }
+    WebviewWindowBuilder::new(&app, "ref", WebviewUrl::App(url.into()))
+        .title("参考 · 笔仙")
+        .inner_size(420.0, 640.0)
+        .min_inner_size(280.0, 360.0)
+        .build()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod ref_window_tests {
+    use super::ref_window_url;
+
+    #[test]
+    fn url_carries_book_and_optional_chapter() {
+        assert_eq!(ref_window_url(3, None), "index.html?refwindow&book=3");
+        assert_eq!(ref_window_url(3, Some(11)), "index.html?refwindow&book=3&chapter=11");
+    }
 }
 
 // ---- M2-T10 碰碰车（实现在 bump.rs / repo/） ----

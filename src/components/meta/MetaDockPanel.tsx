@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, Plus, Settings2, X } from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
 import { useMeta } from "../../stores/meta";
+import type { CustomFieldDef } from "../../lib/tauri";
 
 // 章节「元数据」dock 面板（M7 批次1，Scrivener Inspector 的元数据节移植）：
 // 梗概（独立于正文的展示字段）/ 状态（单选下拉）/ 标签（彩色单选）
@@ -28,12 +29,18 @@ export function MetaDockPanel() {
   const statuses = useMeta((s) => s.statuses);
   const keywords = useMeta((s) => s.keywords);
   const chapterKeywords = useMeta((s) => s.chapterKeywords);
-  const { updateChapterMeta, toggleChapterKeyword, createKeyword, deleteKeyword, labelUpsert, labelDelete, statusUpsert, statusDelete } = useMeta();
+  const customDefs = useMeta((s) => s.customDefs);
+  const customValues = useMeta((s) => s.customValues);
+  const { updateChapterMeta, toggleChapterKeyword, createKeyword, deleteKeyword, labelUpsert, labelDelete, statusUpsert, statusDelete, setCustomValue, customDefUpsert, customDefDelete } = useMeta();
 
   const [kwDraft, setKwDraft] = useState("");
   const [manageOpen, setManageOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newStatus, setNewStatus] = useState("");
+  // 新字段定义草稿：名字 + 类型（list 型多一个选项草稿，逗号分隔）
+  const [newField, setNewField] = useState("");
+  const [newFieldType, setNewFieldType] = useState<CustomFieldDef["field_type"]>("text");
+  const [newFieldOptions, setNewFieldOptions] = useState("");
 
   const chapter = chapters.find((c) => c.id === currentChapterId) ?? null;
 
@@ -70,6 +77,38 @@ export function MetaDockPanel() {
       if (kw) await toggleChapterKeyword(kw.id);
     }
     setKwDraft("");
+  };
+
+  const FIELD_TYPE_LABEL: Record<CustomFieldDef["field_type"], string> = {
+    text: "文本",
+    checkbox: "勾选",
+    list: "列表",
+    date: "日期",
+  };
+
+  const submitNewField = async () => {
+    const name = newField.trim();
+    if (!name) return;
+    const list_options =
+      newFieldType === "list"
+        ? JSON.stringify(newFieldOptions.split(/[,，]/).map((s) => s.trim()).filter(Boolean))
+        : "[]";
+    try {
+      await customDefUpsert({ id: null, name, field_type: newFieldType, list_options });
+      setNewField("");
+      setNewFieldOptions("");
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
+  /** list 型定义的选项数组（list_options 为 JSON 字符串数组） */
+  const optionsOf = (d: CustomFieldDef): string[] => {
+    try {
+      return JSON.parse(d.list_options) as string[];
+    } catch {
+      return [];
+    }
   };
 
   return (
@@ -217,6 +256,69 @@ export function MetaDockPanel() {
         </datalist>
       </div>
 
+      {/* 自定义字段（M7 批次7）：按书定义四型字段，值挂当前章 */}
+      {customDefs.length > 0 && (
+        <div className="border-b border-[color:var(--border-subtle)] p-3" data-testid="custom-fields">
+          <SectionTitle>自定义字段</SectionTitle>
+          <div className="space-y-1.5">
+            {customDefs.map((d) => {
+              const key = String(d.id);
+              const raw = customValues[key];
+              if (d.field_type === "checkbox") {
+                return (
+                  <label key={d.id} className="flex cursor-pointer items-center gap-1.5 text-xs text-[color:var(--text-secondary)]">
+                    <input
+                      type="checkbox"
+                      checked={raw === true}
+                      onChange={(e) => void setCustomValue(d.id, e.target.checked)}
+                      data-testid={`custom-value-${d.id}`}
+                    />
+                    {d.name}
+                  </label>
+                );
+              }
+              if (d.field_type === "list") {
+                const options = optionsOf(d);
+                return (
+                  <div key={d.id} className="flex items-center gap-1.5 text-xs">
+                    <span className="shrink-0 text-[color:var(--text-faint)]">{d.name}</span>
+                    <select
+                      key={`${chapter.id}-${key}-${raw == null ? "" : raw}`}
+                      value={raw == null ? "" : String(raw)}
+                      onChange={(e) => void setCustomValue(d.id, e.target.value === "" ? null : e.target.value)}
+                      data-testid={`custom-value-${d.id}`}
+                      className={`${INPUT} min-w-0 flex-1`}
+                    >
+                      <option value="">未设置</option>
+                      {options.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              }
+              return (
+                <div key={d.id} className="flex items-center gap-1.5 text-xs">
+                  <span className="shrink-0 text-[color:var(--text-faint)]">{d.name}</span>
+                  <input
+                    key={`${chapter.id}-${key}-${raw == null ? "" : raw}`}
+                    type={d.field_type === "date" ? "date" : "text"}
+                    defaultValue={raw == null ? "" : String(raw)}
+                    placeholder={d.field_type === "date" ? "" : "填写…"}
+                    onBlur={(e) => {
+                      const v = e.target.value;
+                      void setCustomValue(d.id, v === "" ? null : v);
+                    }}
+                    data-testid={`custom-value-${d.id}`}
+                    className={`${INPUT} min-w-0 flex-1`}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 定义管理（内联展开） */}
       <div className="p-3">
         <button
@@ -362,6 +464,88 @@ export function MetaDockPanel() {
                     </button>
                   </span>
                 ))}
+              </div>
+            </div>
+
+            {/* 自定义字段定义（M7 批次7）：类型建档后不改 */}
+            <div data-testid="custom-defs-manage">
+              <div className="mb-1 text-xs text-[color:var(--text-faint)]">自定义字段</div>
+              <div className="space-y-1">
+                {customDefs.map((d) => (
+                  <div key={d.id} className="flex items-center gap-1.5">
+                    <span className="shrink-0 rounded px-1 py-0.5 text-[10px] text-[color:var(--text-secondary)]" style={{ backgroundColor: "var(--bg-panel)" }}>
+                      {FIELD_TYPE_LABEL[d.field_type]}
+                    </span>
+                    <input
+                      defaultValue={d.name}
+                      onBlur={(e) => {
+                        const t = e.target.value.trim();
+                        if (t && t !== d.name) void customDefUpsert({ id: d.id, name: t, field_type: d.field_type, list_options: d.list_options });
+                      }}
+                      className={`${INPUT} min-w-0 flex-1`}
+                    />
+                    {d.field_type === "list" && (
+                      <input
+                        key={`opts-${d.id}-${d.list_options}`}
+                        defaultValue={optionsOf(d).join("，")}
+                        placeholder="选项，逗号分隔"
+                        title="选项（逗号分隔）"
+                        onBlur={(e) => {
+                          const opts = JSON.stringify(e.target.value.split(/[,，]/).map((s) => s.trim()).filter(Boolean));
+                          if (opts !== d.list_options) void customDefUpsert({ id: d.id, name: d.name, field_type: d.field_type, list_options: opts });
+                        }}
+                        className={`${INPUT} min-w-0 flex-1`}
+                      />
+                    )}
+                    <button
+                      onClick={() => void customDefDelete(d.id)}
+                      title="删除字段（章上已填的值保留但不再显示）"
+                      className="shrink-0 rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:text-[color:var(--accent-hover)]"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-1 flex items-center gap-1.5">
+                <input
+                  value={newField}
+                  placeholder="新字段名…"
+                  onChange={(e) => setNewField(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.nativeEvent.isComposing) void submitNewField();
+                  }}
+                  className={`${INPUT} min-w-0 flex-1`}
+                />
+                <select
+                  value={newFieldType}
+                  onChange={(e) => setNewFieldType(e.target.value as CustomFieldDef["field_type"])}
+                  aria-label="字段类型"
+                  className={`${INPUT} w-16 shrink-0`}
+                >
+                  <option value="text">文本</option>
+                  <option value="checkbox">勾选</option>
+                  <option value="list">列表</option>
+                  <option value="date">日期</option>
+                </select>
+                {newFieldType === "list" && (
+                  <input
+                    value={newFieldOptions}
+                    placeholder="新字段的选项，逗号分隔"
+                    onChange={(e) => setNewFieldOptions(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.nativeEvent.isComposing) void submitNewField();
+                    }}
+                    className={`${INPUT} min-w-0 flex-1`}
+                  />
+                )}
+                <button
+                  onClick={() => void submitNewField()}
+                  title="新增字段"
+                  className="shrink-0 rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:text-[color:var(--accent-hover)]"
+                >
+                  <Plus size={12} />
+                </button>
               </div>
             </div>
           </div>

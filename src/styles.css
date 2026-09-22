@@ -372,6 +372,16 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
 }
 .setting-hit { animation: setting-hit 1.8s ease; border-radius: 8px; }
 
+/* ---------- wiki 双链（M7 批次3）：正文 [[章题]] 纯文本的装饰着色 ---------- */
+/* 链接是文档文本本身（非 mark），落盘 markdown 保持原样；点击跳转由编辑器点击处理接 */
+.wiki-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 /* ---------- 长按 Esc 退出阅读（ReadView，作家助手同款 1500ms） ---------- */
 /* 按下 Esc 出现提示胶囊，内嵌进度条 1500ms 线性填满即退出；松开即取消 */
 .esc-hold-bar {

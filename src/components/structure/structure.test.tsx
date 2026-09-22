@@ -18,6 +18,10 @@ vi.mock("../../lib/tauri", () => ({
     templateUpsert: vi.fn(),
     templateDelete: vi.fn(),
     templateSetDefault: vi.fn(),
+    freeformPositions: vi.fn(),
+    freeformPositionSet: vi.fn(),
+    customDefsList: vi.fn(),
+    customValuesGet: vi.fn(),
   },
 }));
 
@@ -63,6 +67,10 @@ function mock() {
   (api.templateSetDefault as ReturnType<typeof vi.fn>).mockImplementation((id: number, isDefault: boolean) =>
     Promise.resolve({ ...TPL, id, is_default: isDefault }),
   );
+  (api.freeformPositions as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  (api.freeformPositionSet as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+  (api.customDefsList as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  (api.customValuesGet as ReturnType<typeof vi.fn>).mockResolvedValue({});
 }
 
 function resetStores(chapters = [CH1, CH2, CH3]) {
@@ -127,6 +135,65 @@ describe("Corkboard 卡片墙", () => {
       expect(useWorkspace.getState().chapters.map((c) => c.title)).toEqual(["乙", "丙", "甲"]);
       expect(useWorkspace.getState().error).toBeTruthy();
     });
+  });
+});
+
+describe("Corkboard 自由摆位（M7 批次7）", () => {
+  it("切自由摆位：卡片绝对定位（未摆过的按流式槽位），已存坐标原样还原", async () => {
+    (api.freeformPositions as ReturnType<typeof vi.fn>).mockResolvedValue([{ chapter_id: 12, x: 500, y: 400 }]);
+    render(<Corkboard />);
+    fireEvent.click(screen.getByTestId("corkboard-mode-freeform"));
+
+    await waitFor(() => expect(api.freeformPositions).toHaveBeenCalled());
+    const jia = screen.getByText("甲").closest("div.absolute") as HTMLDivElement;
+    const yi = screen.getByText("乙").closest("div.absolute") as HTMLDivElement;
+    expect(jia.style.left).toBe("0px"); // 未摆过 → 流式槽位 0
+    expect(yi.style.left).toBe("500px"); // 已存 → 原样
+    expect(yi.style.top).toBe("400px");
+    expect(localStorage.getItem("bixian.corkboardMode")).toBe("freeform");
+  });
+
+  it("拖动卡片：dragOver 实时更新位置，drop 落库坐标", async () => {
+    render(<Corkboard />);
+    fireEvent.click(screen.getByTestId("corkboard-mode-freeform"));
+    await screen.findByTestId("corkboard-freeform-canvas");
+
+    const canvas = screen.getByTestId("corkboard-freeform-canvas");
+    // 甲在流式槽位 (0,0)，画布矩形在 happy-dom 全 0 → 抓取偏移 = 0。
+    // happy-dom 的 DragEvent 不带 clientX，用 MouseEvent 同名事件类型派发
+    fireEvent(
+      screen.getByText("甲").closest("div.absolute")!,
+      new MouseEvent("dragstart", { bubbles: true }),
+    );
+    fireEvent(canvas, new MouseEvent("dragover", { bubbles: true, clientX: 250, clientY: 80 }));
+    const jia = screen.getByText("甲").closest("div.absolute") as HTMLDivElement;
+    expect(jia.style.left).toBe("250px");
+    expect(jia.style.top).toBe("80px");
+
+    fireEvent(canvas, new MouseEvent("drop", { bubbles: true }));
+    await waitFor(() => expect(api.freeformPositionSet).toHaveBeenCalledWith(11, 250, 80));
+  });
+
+  it("落序：按视觉行主序重排目录（x=300 的甲插到乙丙之间）", async () => {
+    (api.freeformPositions as ReturnType<typeof vi.fn>).mockResolvedValue([{ chapter_id: 11, x: 300, y: 0 }]);
+    render(<Corkboard />);
+    fireEvent.click(screen.getByTestId("corkboard-mode-freeform"));
+    await screen.findByTestId("corkboard-freeform-canvas");
+
+    // 未摆的乙/丙在流式槽位 x=192/384，摆过的甲 x=300 → 行内 x 序 = 乙,甲,丙
+    fireEvent.click(screen.getByTestId("corkboard-commit"));
+    await waitFor(() => expect(api.reorderChapters).toHaveBeenCalledWith([12, 11, 13]));
+    await waitFor(() => {
+      expect(useWorkspace.getState().chapters.map((c) => c.title)).toEqual(["乙", "甲", "丙"]);
+    });
+  });
+
+  it("切回排序网格：回到网格卡片墙且模式落库", () => {
+    render(<Corkboard />);
+    fireEvent.click(screen.getByTestId("corkboard-mode-freeform"));
+    fireEvent.click(screen.getByTestId("corkboard-mode-grid"));
+    expect(screen.getByText("甲").closest("div.h-32")).not.toBeNull();
+    expect(localStorage.getItem("bixian.corkboardMode")).toBe("grid");
   });
 });
 

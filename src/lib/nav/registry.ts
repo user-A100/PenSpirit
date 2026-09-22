@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { BarChart3, Blocks, BookOpen, CircleDot, Flag, LayoutGrid, Library, ListTree, Network, PenLine, Sparkles, Tag, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, Blocks, BookOpen, CircleDot, Dices, Flag, FolderOpen, LayoutGrid, Library, Link2, ListTree, Network, PenLine, Sparkles, Tag, Users, type LucideIcon } from "lucide-react";
 import { BumpView } from "../../views/BumpView";
 import { WriteView } from "../../views/WriteView";
 import { ReadView } from "../../views/read/ReadView";
@@ -51,10 +51,14 @@ registerView({
   Component: WriteView,
   dockPanels: [
     { id: "meta", label: "元数据", icon: Tag },
+    { id: "links", label: "链接", icon: Link2 },
+    { id: "collections", label: "集合", icon: FolderOpen },
+    { id: "reference", label: "参考", icon: BookOpen },
     { id: "outline", label: "大纲", icon: ListTree },
     { id: "characters", label: "人物", icon: Users },
     { id: "foreshadow", label: "伏笔", icon: Flag },
     { id: "plot", label: "情节块", icon: Blocks },
+    { id: "names", label: "取名", icon: Dices },
   ],
 });
 

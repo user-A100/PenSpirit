@@ -12,11 +12,13 @@ export interface WikiRange {
   target: string;
 }
 
-/** 提取一段文本中所有 wiki 链接的区间与目标 */
+/** 提取一段文本中所有 wiki 链接的区间与目标（纯空白目标视为无效跳过） */
 export function wikiRanges(text: string): WikiRange[] {
   const out: WikiRange[] = [];
   for (const m of text.matchAll(WIKI_RE)) {
-    out.push({ from: m.index, to: m.index + m[0].length, target: m[1].trim() });
+    const target = m[1].trim();
+    if (!target) continue;
+    out.push({ from: m.index, to: m.index + m[0].length, target });
   }
   return out;
 }
@@ -28,10 +30,10 @@ export function openWiki(textBefore: string): { from: number; query: string } | 
   return { from: textBefore.length - m[0].length, query: m[1] };
 }
 
-/** 目标在章题列表中的候选（包含匹配、排除精确同名），截断 limit 条 */
+/** 目标在章题列表中的候选（包含匹配、排除精确同名、去重），截断 limit 条 */
 export function wikiCandidates(query: string, titles: string[], limit = 8): string[] {
   const q = query.trim();
-  return titles
+  return [...new Set(titles)]
     .filter((t) => t !== q && (q === "" || t.includes(q)))
     .slice(0, limit);
 }

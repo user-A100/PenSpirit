@@ -531,3 +531,102 @@ pub struct CharacterMention {
     pub chapter_title: String,
     pub count: i64,
 }
+
+/// 集合（M7 批次4，Scrivener Collections）：manual 手动勾章（引用不拷贝）、
+/// saved 存为搜索（只存 query，结果打开时实时算）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Collection {
+    pub id: i64,
+    pub book_id: i64,
+    pub name: String,
+    pub kind: String,
+    pub query: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CollectionInput {
+    pub id: Option<i64>,
+    pub book_id: i64,
+    pub name: String,
+    pub kind: String,
+    pub query: String,
+}
+
+// ---------- M7 批次6 注入原子配置 ----------
+
+/// 单个注入槽位的每书配置（settings JSON `context:book:{id}`）。
+/// budget=0 表示不限；ids=None 表示全部（伏笔=全部未回收；情节块/灵感=全部），
+/// Some=只注入勾选项；all 仅角色卡用（true=不看关键词命中，全量注入）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlotConfig {
+    pub enabled: bool,
+    pub budget: i64,
+    #[serde(default)]
+    pub ids: Option<Vec<i64>>,
+    #[serde(default)]
+    pub all: bool,
+}
+
+/// 四个注入槽位的每书配置。settings 缺 key 时取 `default_context_config`。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextConfig {
+    pub characters: SlotConfig,
+    pub foreshadows: SlotConfig,
+    pub plots: SlotConfig,
+    pub ideas: SlotConfig,
+}
+
+/// 默认配置：角色卡/伏笔自动触发开，情节块/灵感手动语义默认关。
+pub fn default_context_config() -> ContextConfig {
+    let slot = |enabled: bool, budget: i64| SlotConfig {
+        enabled,
+        budget,
+        ids: None,
+        all: false,
+    };
+    ContextConfig {
+        characters: slot(true, 1500),
+        foreshadows: slot(true, 800),
+        plots: slot(false, 1000),
+        ideas: slot(false, 600),
+    }
+}
+
+// ---------- M7 批次7：自定义元数据字段 / 自由卡片墙 ----------
+
+/// 自定义字段定义（custom_field_defs 表）：书级定义，章节值存 chapters.custom_meta。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomFieldDef {
+    pub id: i64,
+    pub book_id: i64,
+    pub name: String,
+    /// text | checkbox | list | date
+    pub field_type: String,
+    /// list 型的候选，JSON 字符串数组（如 ["红","蓝"]）
+    pub list_options: String,
+    pub sort_key: i64,
+    pub created_at: String,
+}
+
+/// 自定义字段入参：id=None 插入，Some 更新。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomFieldDefInput {
+    pub id: Option<i64>,
+    pub book_id: i64,
+    pub name: String,
+    pub field_type: String,
+    #[serde(default)]
+    pub list_options: String,
+    #[serde(default)]
+    pub sort_key: i64,
+}
+
+/// 自由卡片墙单章摆位（chapters.freeform_x/y）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FreeformPos {
+    pub chapter_id: i64,
+    pub x: f64,
+    pub y: f64,
+}

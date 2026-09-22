@@ -5,11 +5,13 @@ use tauri::{Emitter, Manager, State};
 use tokio::sync::watch;
 
 use crate::context::assembler::{assemble, Assembled, AssembleInput, AssemblyLog};
+use crate::context::inject as inject_ctx;
+use crate::context::InjectionInput;
 use crate::error::{AppError, AppResult};
 use crate::fs_service;
 use crate::llm::provider;
 use crate::llm::stream::{chat_stream, StreamEvent, StreamReq};
-use crate::models::{ChatMessage, ChatSession, ProviderProfile, StyleCard};
+use crate::models::{ChatMessage, ChatSession, ContextConfig, ProviderProfile, StyleCard};
 use crate::repo;
 use crate::state::AppState;
 
@@ -23,6 +25,7 @@ pub(crate) struct ContextBundle {
     style_prompt: Option<String>,
     chapter_text: String,
     prev_tail: Option<String>,
+    injections: Vec<InjectionInput>,
 }
 
 pub(crate) fn assemble_with(bundle: &ContextBundle, instruction: &str) -> Assembled {
@@ -32,6 +35,7 @@ pub(crate) fn assemble_with(bundle: &ContextBundle, instruction: &str) -> Assemb
         chapter_text: &bundle.chapter_text,
         prev_chapter_tail: bundle.prev_tail.as_deref(),
         instruction,
+        injections: bundle.injections.clone(),
     })
 }
 
@@ -74,7 +78,12 @@ pub(crate) fn gather_context(s: &AppState, session_id: i64) -> AppResult<Context
         Some(rel) => Some(fs_service::read_chapter(&s.root, &rel)?),
         None => None,
     };
-    Ok(ContextBundle { book_title, style_prompt, chapter_text, prev_tail })
+    // 注入原子（角色卡/伏笔/情节块/灵感卡）按每书配置收集
+    let injections = {
+        let conn = lock(s)?;
+        inject_ctx::collect(&conn, book_id, Some(chapter_id), &chapter_text)?
+    };
+    Ok(ContextBundle { book_title, style_prompt, chapter_text, prev_tail, injections })
 }
 
 /// 组装 + 落库 user 消息 + 构建 StreamReq + 登记取消信号。
@@ -381,4 +390,34 @@ pub fn preview_context(
     instruction: String,
 ) -> AppResult<AssemblyLog> {
     preview_context_inner(&s, session_id, &instruction)
+}
+
+// ---------- 注入原子配置（M7 批次6） ----------
+
+pub fn context_config_get_inner(s: &AppState, book_id: i64) -> AppResult<ContextConfig> {
+    inject_ctx::load_config(&*lock(s)?, book_id)
+}
+
+pub fn context_config_set_inner(
+    s: &AppState,
+    book_id: i64,
+    config: ContextConfig,
+) -> AppResult<ContextConfig> {
+    let conn = lock(s)?;
+    inject_ctx::store_config(&conn, book_id, &config)?;
+    Ok(config)
+}
+
+#[tauri::command]
+pub fn context_config_get(s: State<AppState>, book_id: i64) -> AppResult<ContextConfig> {
+    context_config_get_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn context_config_set(
+    s: State<AppState>,
+    book_id: i64,
+    config: ContextConfig,
+) -> AppResult<ContextConfig> {
+    context_config_set_inner(&s, book_id, config)
 }

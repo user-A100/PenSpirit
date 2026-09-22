@@ -5,6 +5,7 @@ import { create } from "zustand";
 export const VIEW_STORAGE_KEY = "bixian.nav.view";
 export const SIDEBAR_PCT_KEY = "bixian.nav.sidebarPct";
 export const DOCK_PCT_KEY = "bixian.nav.dockPct";
+export const TYPEWRITER_KEY = "bixian.typewriter";
 
 /** dock 面板宽度百分比有效域（与 WriteView 中 minSize/maxSize 对应） */
 const DOCK_PCT_MIN = 17;
@@ -21,10 +22,13 @@ interface UiNavState {
   dockCollapsed: boolean;
   /** 阅读模式返回目标视图 id（进入 read 时由 App 记录上一视图，ReadView 退出时消费；会话内状态） */
   readReturn: string | null;
+  /** 打字机滚动：输入时把光标行固定在视口偏上位置（Scrivener Typewriter Scrolling） */
+  typewriter: boolean;
   setView: (id: string) => void;
   toggleSidebar: () => void;
   toggleDock: () => void;
   setReadReturn: (id: string | null) => void;
+  toggleTypewriter: () => void;
 }
 
 function readStoredView(): string {
@@ -37,11 +41,20 @@ function readStoredView(): string {
   return FALLBACK_VIEW;
 }
 
+function readStoredTypewriter(): boolean {
+  try {
+    return localStorage.getItem(TYPEWRITER_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export const useUiNav = create<UiNavState>((set) => ({
   activeView: readStoredView(),
   sidebarCollapsed: false,
   dockCollapsed: false,
   readReturn: null,
+  typewriter: readStoredTypewriter(),
   setView: (id) => {
     try {
       localStorage.setItem(VIEW_STORAGE_KEY, id);
@@ -53,6 +66,16 @@ export const useUiNav = create<UiNavState>((set) => ({
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   toggleDock: () => set((s) => ({ dockCollapsed: !s.dockCollapsed })),
   setReadReturn: (id) => set({ readReturn: id }),
+  toggleTypewriter: () =>
+    set((s) => {
+      const typewriter = !s.typewriter;
+      try {
+        localStorage.setItem(TYPEWRITER_KEY, typewriter ? "1" : "0");
+      } catch {
+        // 持久化失败不影响会话内切换
+      }
+      return { typewriter };
+    }),
 }));
 
 /** 读取用户拖定的侧栏宽度百分比；无记忆/非法值/折叠态 0 返回 null */

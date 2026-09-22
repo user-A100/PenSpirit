@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "ref-window",
+  "description": "Capability for the floating reference window (M7 批次7)",
+  "windows": ["ref"],
+  "permissions": ["core:default"]
+}

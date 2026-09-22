@@ -11,6 +11,8 @@ export function useAutosave(
   // 保持 getDirty 永远是最新引用，供定时器触发时读取最新内容
   const getDirtyRef = useRef(getDirty);
   getDirtyRef.current = getDirty;
+  const saveRef = useRef(save);
+  saveRef.current = save;
 
   // effect 无依赖数组，每次渲染都检查——依赖 getDirty 返回内容比较，
   // 模板组件 onUpdate 后触发重渲染即可驱动。
@@ -29,6 +31,16 @@ export function useAutosave(
     }, delayMs);
     return () => { if (timer.current) clearTimeout(timer.current); };
   });
+
+  // 卸载冲刷：分屏切换/切章会卸载编辑器实例，防抖窗口内的改动不能丢
+  useEffect(
+    () => () => {
+      const latest = getDirtyRef.current();
+      if (latest == null || latest === lastSaved.current) return;
+      void saveRef.current(latest).catch((e) => console.warn("autosave flush on unmount:", e));
+    },
+    [],
+  );
 
   return { status };
 }

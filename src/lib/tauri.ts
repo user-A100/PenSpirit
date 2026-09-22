@@ -25,6 +25,20 @@ export interface ChatMessage { id: number; session_id: number; role: string; con
 export interface SlotLog { name: string; source: string; chars: number; est_tokens: number; preview_head: string }
 export interface AssemblyLog { slots: SlotLog[]; total_est_tokens: number }
 
+// ---- M7 批次6：注入原子每书配置（settings context:book:{id}） ----
+export interface SlotConfig { enabled: boolean; budget: number; ids: number[] | null; all: boolean }
+export interface ContextConfig { characters: SlotConfig; foreshadows: SlotConfig; plots: SlotConfig; ideas: SlotConfig }
+
+// ---- M7 批次7：自定义元数据字段 / 名字生成器 / 自由卡片墙 ----
+export type CustomFieldType = "text" | "checkbox" | "list" | "date";
+export interface CustomFieldDef { id: number; book_id: number; name: string; field_type: CustomFieldType; list_options: string; sort_key: number; created_at: string }
+export interface CustomFieldDefInput { id: number | null; book_id: number; name: string; field_type: CustomFieldType; list_options: string; sort_key: number }
+/** 章节值表：键 = def_id 十进制字符串；checkbox→bool，text/date/list→string */
+export type CustomValues = Record<string, unknown>;
+export interface FreeformPos { chapter_id: number; x: number; y: number }
+export interface NameRequest { gender: "any" | "male" | "female"; starts_with: string; contains: string; obscurity: "any" | "common" | "rare"; count: number; seed: number }
+export interface GeneratedName { full: string; surname: string; given: string; gender: "male" | "female"; rare: boolean }
+
 // ---- M2：ACP agent（字段 snake_case 与 Rust models.rs 对齐） ----
 export interface ProbeResult {
   ok: boolean; agent_name: string | null; protocol_version: string | null; can_resume: boolean; detail: string | null;
@@ -155,6 +169,17 @@ export interface CharacterMention {
   chapter_id: number; chapter_title: string; count: number;
 }
 
+// ---- M7 批次4：集合（manual=手动成员，saved=存储查询实时算） ----
+export interface Collection {
+  id: number; book_id: number; name: string;
+  kind: "manual" | "saved"; query: string;
+  created_at: string; updated_at: string;
+}
+export interface CollectionInput {
+  id: number | null; book_id: number; name: string;
+  kind: "manual" | "saved"; query: string;
+}
+
 export const api = {
   listBooks: () => invoke<Book[]>("list_books"),
   createBook: (title: string) => invoke<Book>("create_book", { title }),
@@ -191,6 +216,15 @@ export const api = {
   linksScan: (bookId: number) => invoke<WikiLink[]>("links_scan", { bookId }),
   chapterBacklinks: (chapterId: number) => invoke<Backlink[]>("chapter_backlinks", { chapterId }),
   characterMentions: (bookId: number) => invoke<CharacterMention[]>("character_mentions", { bookId }),
+  // ---- M7 批次4：集合 ----
+  collectionsList: (bookId: number) => invoke<Collection[]>("collections_list", { bookId }),
+  collectionUpsert: (input: CollectionInput) => invoke<Collection>("collection_upsert", { input }),
+  collectionDelete: (id: number) => invoke<void>("collection_delete", { id }),
+  collectionChapters: (collectionId: number) => invoke<ChapterMeta[]>("collection_chapters", { collectionId }),
+  collectionAddChapters: (collectionId: number, chapterIds: number[]) =>
+    invoke<number[]>("collection_add_chapters", { collectionId, chapterIds }),
+  collectionRemoveChapter: (collectionId: number, chapterId: number) =>
+    invoke<number[]>("collection_remove_chapter", { collectionId, chapterId }),
   readChapter: (id: number) => invoke<ChapterContent>("read_chapter", { id }),
   writeChapter: (id: number, content: string) => invoke<ChapterMeta>("write_chapter", { id, content }),
   rescanLibrary: () => invoke<number>("rescan_library"),
@@ -216,6 +250,22 @@ export const api = {
   cancelGeneration: (sessionId: number) => invoke<void>("cancel_generation", { sessionId }),
   previewContext: (sessionId: number, instruction: string) =>
     invoke<AssemblyLog>("preview_context", { sessionId, instruction }),
+  // ---- M7 批次6：注入原子每书配置 ----
+  contextConfigGet: (bookId: number) => invoke<ContextConfig>("context_config_get", { bookId }),
+  contextConfigSet: (bookId: number, config: ContextConfig) =>
+    invoke<ContextConfig>("context_config_set", { bookId, config }),
+  // ---- M7 批次7：自定义字段 / 名字生成 / 自由摆位 ----
+  customDefsList: (bookId: number) => invoke<CustomFieldDef[]>("custom_defs_list", { bookId }),
+  customDefUpsert: (input: CustomFieldDefInput) => invoke<CustomFieldDef>("custom_def_upsert", { input }),
+  customDefDelete: (id: number) => invoke<void>("custom_def_delete", { id }),
+  customValuesGet: (chapterId: number) => invoke<CustomValues>("custom_values_get", { chapterId }),
+  customValueSet: (chapterId: number, defId: number, value: unknown | null) =>
+    invoke<void>("custom_value_set", { chapterId, defId, value }),
+  freeformPositions: (bookId: number) => invoke<FreeformPos[]>("freeform_positions", { bookId }),
+  freeformPositionSet: (chapterId: number, x: number, y: number) =>
+    invoke<void>("freeform_position_set", { chapterId, x, y }),
+  namesGenerate: (req: NameRequest) => invoke<GeneratedName[]>("names_generate", { req }),
+  openRefWindow: (bookId: number, chapterId: number | null) => invoke<void>("open_ref_window", { bookId, chapterId }),
   // ---- M2：ACP agent 注册表与会话 ----
   agentsList: () => invoke<AgentDescriptor[]>("agents_list"),
   agentsProbe: (id: string) => invoke<ProbeResult>("agents_probe", { id }),
@@ -247,8 +297,8 @@ export const api = {
   exportDocx: (bookId: number, chapterIds: number[], dest: string) =>
     invoke<void>("export_docx", { bookId, chapterIds, dest }),
   // ---- M2-T9：全书搜索 ----
-  searchBook: (bookId: number, query: string, wholeWord: boolean) =>
-    invoke<SearchResult>("search_book", { bookId, query, wholeWord }),
+  searchBook: (bookId: number, query: string, wholeWord: boolean, scope: string) =>
+    invoke<SearchResult>("search_book", { bookId, query, wholeWord, scope }),
   // ---- M2-T10：碰碰车 ----
   bumpListWords: () => invoke<BumpWord[]>("bump_list_words"),
   bumpAddWord: (word: string) => invoke<BumpWord>("bump_add_word", { word }),

@@ -10,6 +10,7 @@ pub mod history;
 pub mod links;
 pub mod llm;
 pub mod models;
+pub mod names;
 pub mod porting;
 pub mod repo;
 pub mod search;
@@ -60,6 +61,17 @@ pub fn run() {
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             app.manage(state::AppState::init(&dir)?);
+            // 主窗关闭时联动关掉参考浮窗：否则主窗没了 ref 窗还挂着，进程不退
+            let handle = app.handle().clone();
+            if let Some(main_win) = app.get_webview_window("main") {
+                main_win.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { .. } = event {
+                        if let Some(r) = handle.get_webview_window("ref") {
+                            let _ = r.close();
+                        }
+                    }
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -87,6 +99,21 @@ pub fn run() {
             commands::links_scan,
             commands::chapter_backlinks,
             commands::character_mentions,
+            commands::collections_list,
+            commands::collection_upsert,
+            commands::collection_delete,
+            commands::collection_chapters,
+            commands::collection_add_chapters,
+            commands::collection_remove_chapter,
+            commands::custom_defs_list,
+            commands::custom_def_upsert,
+            commands::custom_def_delete,
+            commands::custom_values_get,
+            commands::custom_value_set,
+            commands::freeform_positions,
+            commands::freeform_position_set,
+            commands::names_generate,
+            commands::open_ref_window,
             commands::templates_list,
             commands::template_upsert,
             commands::template_delete,
@@ -176,6 +203,8 @@ pub fn run() {
             commands_ai::send_message,
             commands_ai::cancel_generation,
             commands_ai::preview_context,
+            commands_ai::context_config_get,
+            commands_ai::context_config_set,
             agents::agents_list,
             agents::agents_probe,
             agents::agents_upsert,

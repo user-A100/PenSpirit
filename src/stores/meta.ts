@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, Keyword, Label, Status, ChapterMetaUpdate } from "../lib/tauri";
+import { api, CustomFieldDef, CustomValues, Keyword, Label, Status, ChapterMetaUpdate } from "../lib/tauri";
 import { useWorkspace } from "./workspace";
 
 interface MetaState {
@@ -8,6 +8,9 @@ interface MetaState {
   keywords: Keyword[];
   /** 当前章已挂的关键词 */
   chapterKeywords: Keyword[];
+  /** M7 批次7：书级自定义字段定义 + 当前章的值（键 = def_id 字符串） */
+  customDefs: CustomFieldDef[];
+  customValues: CustomValues;
   loadDefinitions: (bookId: number) => Promise<void>;
   loadChapterKeywords: (chapterId: number) => Promise<void>;
   /** 部分更新当前章元数据，并原地替换 workspace.chapters 里的该条 */
@@ -20,19 +23,26 @@ interface MetaState {
   labelDelete: (id: number) => Promise<void>;
   statusUpsert: (input: { id: number | null; book_id: number; title: string }) => Promise<void>;
   statusDelete: (id: number) => Promise<void>;
+  /** 写/清（value=null）当前章一个自定义字段值，乐观更新 */
+  setCustomValue: (defId: number, value: unknown | null) => Promise<void>;
+  /** 自定义字段定义增改删（书级） */
+  customDefUpsert: (input: { id: number | null; name: string; field_type: CustomFieldDef["field_type"]; list_options: string }) => Promise<void>;
+  customDefDelete: (id: number) => Promise<void>;
 }
 
 export const useMeta = create<MetaState>((set, get) => ({
   labels: [], statuses: [], keywords: [], chapterKeywords: [],
+  customDefs: [], customValues: {},
   loadDefinitions: async (bookId) => {
-    const [labels, statuses, keywords] = await Promise.all([
+    const [labels, statuses, keywords, customDefs] = await Promise.all([
       api.labelsList(bookId),
       api.statusesList(bookId),
       api.keywordsList(bookId),
+      api.customDefsList(bookId),
     ]);
     // 过期响应丢弃：快速连切两书时，慢的那份不能覆盖新书的定义
     if (useWorkspace.getState().currentBookId !== bookId) return;
-    set({ labels, statuses, keywords });
+    set({ labels, statuses, keywords, customDefs });
   },
   loadChapterKeywords: async (chapterId) => {
     const kws = await api.keywordsForChapter(chapterId);
@@ -100,6 +110,33 @@ export const useMeta = create<MetaState>((set, get) => ({
     await api.statusDelete(id);
     set((s) => ({ statuses: s.statuses.filter((st) => st.id !== id) }));
   },
+  setCustomValue: async (defId, value) => {
+    const chapterId = useWorkspace.getState().currentChapterId;
+    if (chapterId == null) return;
+    set((s) => {
+      const next = { ...s.customValues };
+      if (value == null) delete next[String(defId)];
+      else next[String(defId)] = value;
+      return { customValues: next };
+    });
+    await api.customValueSet(chapterId, defId, value);
+  },
+  customDefUpsert: async ({ id, name, field_type, list_options }) => {
+    const bookId = useWorkspace.getState().currentBookId;
+    if (bookId == null) return;
+    const saved = await api.customDefUpsert({
+      id, book_id: bookId, name, field_type, list_options, sort_key: 0,
+    });
+    set((s) => ({
+      customDefs: s.customDefs.some((d) => d.id === saved.id)
+        ? s.customDefs.map((d) => (d.id === saved.id ? saved : d))
+        : [...s.customDefs, saved],
+    }));
+  },
+  customDefDelete: async (id) => {
+    await api.customDefDelete(id);
+    set((s) => ({ customDefs: s.customDefs.filter((d) => d.id !== id) }));
+  },
 }));
 
 // 书/章切换自动拉取：侧栏色点、dock 面板、卡片墙（批次2）都不必各自挂 effect
@@ -109,9 +146,18 @@ useWorkspace.subscribe((s, prev) => {
   }
   if (s.currentChapterId !== prev.currentChapterId) {
     if (s.currentChapterId == null) {
-      useMeta.setState({ chapterKeywords: [] });
+      useMeta.setState({ chapterKeywords: [], customValues: {} });
     } else {
-      void useMeta.getState().loadChapterKeywords(s.currentChapterId).catch(console.warn);
+      const chapterId = s.currentChapterId;
+      void useMeta.getState().loadChapterKeywords(chapterId).catch(console.warn);
+      void api
+        .customValuesGet(chapterId)
+        .then((vals) => {
+          if (useWorkspace.getState().currentChapterId === chapterId) {
+            useMeta.setState({ customValues: vals });
+          }
+        })
+        .catch(console.warn);
     }
   }
 });

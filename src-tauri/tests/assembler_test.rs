@@ -18,6 +18,16 @@ fn input<'a>(
         chapter_text: chapter,
         prev_chapter_tail: prev,
         instruction,
+        injections: Vec::new(),
+    }
+}
+
+fn injection(name: &str, source: &str, text: &str, budget: usize) -> bixian::context::InjectionInput {
+    bixian::context::InjectionInput {
+        name: name.to_string(),
+        source: source.to_string(),
+        text: text.to_string(),
+        budget,
     }
 }
 
@@ -179,4 +189,58 @@ fn assembly_log_serializes_snake_case_fields() {
     assert!(json.contains(r#""total_est_tokens""#));
     assert!(json.contains(r#""est_tokens""#));
     assert!(json.contains(r#""preview_head""#));
+}
+
+// ---------- 注入原子槽位（M7 批次6） ----------
+
+#[test]
+fn injections_sit_between_style_and_prev_chapter() {
+    let mut inp = input(Some("华丽辞藻。"), "当前正文。", Some("前情提要。"), INSTRUCTION);
+    inp.injections = vec![
+        injection("角色卡", "关键词命中 1 人", "- 林远山（主角）：沉默寡言。", 0),
+        injection("伏笔提醒", "未回收 1 条", "- 「夜归人」第1章埋设", 0),
+    ];
+    let out = assemble(&inp);
+    assert_eq!(
+        slot_names(&out.log),
+        vec!["System", "文风", "角色卡", "伏笔提醒", "上一章结尾", "当前章正文", "写作指令"]
+    );
+    // 注入文本拼进 system，各自带标题段
+    assert!(out.system.contains("\n\n【角色卡】\n- 林远山"));
+    assert!(out.system.contains("\n\n【伏笔提醒】\n- 「夜归人」"));
+    // 文风段仍在注入之前
+    let style_pos = out.system.find("【文风要求】").unwrap();
+    let char_pos = out.system.find("【角色卡】").unwrap();
+    assert!(style_pos < char_pos);
+    // 注入不进 history（history 只认上一章结尾）
+    assert_eq!(out.history.len(), 1);
+}
+
+#[test]
+fn injection_budget_truncates_from_head_and_zero_means_unlimited() {
+    let long: String = (0..50).map(|i| char::from_u32(0x4e00 + i as u32).unwrap()).collect();
+    let unlimited: String = (0..50).map(|i| char::from_u32(0x9fa5 - i as u32).unwrap()).collect();
+    let mut inp = input(None, "正文。", None, INSTRUCTION);
+    inp.injections = vec![
+        injection("情节块", "勾选 1 块", &long, 20),
+        injection("灵感卡", "勾选 1 张", &unlimited, 0),
+    ];
+    let out = assemble(&inp);
+    let plot = out.log.slots.iter().find(|s| s.name == "情节块").unwrap();
+    assert_eq!(plot.chars, 20);
+    let kept: String = long.chars().take(20).collect();
+    assert!(out.system.contains(&kept));
+    assert!(!out.system.contains(&long), "超预算部分不进 system");
+    let idea = out.log.slots.iter().find(|s| s.name == "灵感卡").unwrap();
+    assert_eq!(idea.chars, 50, "budget=0 不限");
+    assert!(out.system.contains(&unlimited));
+}
+
+#[test]
+fn empty_injection_is_skipped_without_slot_or_heading() {
+    let mut inp = input(None, "正文。", None, INSTRUCTION);
+    inp.injections = vec![injection("角色卡", "关键词命中 0 人", "", 1500)];
+    let out = assemble(&inp);
+    assert_eq!(slot_names(&out.log), vec!["System", "当前章正文", "写作指令"]);
+    assert!(!out.system.contains("【角色卡】"));
 }

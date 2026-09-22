@@ -17,7 +17,7 @@ describe("search store", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useSearch.setState({
-      open: false, query: "", wholeWord: false, hits: [], truncated: false,
+      open: false, query: "", wholeWord: false, scope: "all", hits: [], truncated: false,
       loading: false, error: null, jumpText: null,
     });
   });
@@ -42,7 +42,7 @@ describe("search store", () => {
     useSearch.setState({ query: "风雪", wholeWord: true });
     await useSearch.getState().search(7);
 
-    expect(api.searchBook).toHaveBeenCalledWith(7, "风雪", true);
+    expect(api.searchBook).toHaveBeenCalledWith(7, "风雪", true, "all");
     const s = useSearch.getState();
     expect(s.hits).toEqual([HIT]);
     expect(s.truncated).toBe(true);
@@ -57,6 +57,13 @@ describe("search store", () => {
 
     expect(useSearch.getState().error).toContain("读取失败");
     expect(useSearch.getState().hits).toEqual([]);
+  });
+
+  it("setScope 换范围后随查询传递", async () => {
+    (api.searchBook as ReturnType<typeof vi.fn>).mockResolvedValue({ hits: [], truncated: false });
+    useSearch.setState({ query: "风雪", scope: "title" });
+    await useSearch.getState().search(7);
+    expect(api.searchBook).toHaveBeenCalledWith(7, "风雪", false, "title");
   });
 
   it("跳转：切章 + 把整行文本交给编辑器 + 关闭面板", async () => {

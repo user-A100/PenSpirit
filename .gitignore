@@ -34,3 +34,9 @@ scripts/m5-verify/ids.json
 
 # M6 核验脚本的生成态
 .tmp-m6/
+
+# M7 核验脚本的生成态
+.tmp-m7/
+.tmp-m7b7/
+scripts/m7-verify/ids.json
+scripts/m7b7-verify/ids.json

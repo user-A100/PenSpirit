@@ -5,6 +5,10 @@ import { CharactersPanel } from "../characters/CharactersPanel";
 import { OutlineDockPanel } from "../outline/OutlineDockPanel";
 import { PlotBlocksPanel } from "../plot/PlotBlocksPanel";
 import { MetaDockPanel } from "../meta/MetaDockPanel";
+import { LinksDockPanel } from "../links/LinksDockPanel";
+import { CollectionsDockPanel } from "../collections/CollectionsDockPanel";
+import { RefDockPanel } from "../reference/RefDockPanel";
+import { NamesPanel } from "../names/NamesPanel";
 import { getView } from "../../lib/nav/registry";
 import { useUiNav } from "../../lib/nav/uiStore";
 
@@ -14,10 +18,14 @@ const PANEL_EMPTY_TEXT: Record<string, string> = {};
 
 const PANEL_COMPONENTS: Record<string, ComponentType> = {
   meta: MetaDockPanel,
+  links: LinksDockPanel,
+  collections: CollectionsDockPanel,
+  reference: RefDockPanel,
   foreshadow: ForeshadowPanel,
   outline: OutlineDockPanel,
   characters: CharactersPanel,
   plot: PlotBlocksPanel,
+  names: NamesPanel,
 };
 
 export function PanelDock() {

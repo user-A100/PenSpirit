@@ -3,8 +3,18 @@ import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef, useState } from "react";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { History, ListTree, PanelRightOpen, PenLine, ScanSearch } from "lucide-react";
-import { useWorkspace } from "../../stores/workspace";
+import {
+  ArrowLeft,
+  ArrowRight,
+  History,
+  ListTree,
+  PanelRightOpen,
+  PenLine,
+  ScanSearch,
+  SquareSplitHorizontal,
+  SquareSplitVertical,
+} from "lucide-react";
+import { useWorkspace, type PaneId } from "../../stores/workspace";
 import { useChat } from "../../stores/chat";
 import { useSearch } from "../../stores/search";
 import { useOutline } from "../../stores/outline";
@@ -17,6 +27,8 @@ import { HistoryPanel } from "./HistoryPanel";
 import { PlaceholderDialog } from "./PlaceholderDialog";
 import { SensitiveDialog } from "./SensitiveDialog";
 import { FloatingOutline } from "./FloatingOutline";
+import { WikiLinks } from "./wikiLinks";
+import { WikiSuggest } from "./WikiSuggest";
 
 // 单次字数跳变超过它就丢弃：切章/恢复快照/清空这类程序化改动的特征
 const MAX_WORD_DELTA = 500;
@@ -33,19 +45,35 @@ function findTextPos(doc: PMNode, needle: string): { from: number; to: number } 
   return found;
 }
 
-export function ChapterEditor() {
-  const { books, currentBookId, currentChapterId, chapterContent, chapters } = useWorkspace();
+export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
+  // 内容来自所属窗格槽位（而非全局镜像）——分屏时两个编辑器互不干扰
+  const slot = useWorkspace((s) => s.panes[pane]);
+  const books = useWorkspace((s) => s.books);
+  const currentBookId = useWorkspace((s) => s.currentBookId);
+  const chapters = useWorkspace((s) => s.chapters);
+  const isActive = useWorkspace((s) => s.activePane === pane);
+  const canBack = useWorkspace((s) => s.historyIndex > 0);
+  const canForward = useWorkspace((s) => s.historyIndex < s.history.length - 1);
+  const splitAxis = useWorkspace((s) => s.splitAxis);
+  const chapterId = slot?.chapterId ?? null;
+  const content = slot?.content ?? null;
   const pendingAppend = useChat((s) => s.pendingAppend);
   const jumpText = useSearch((s) => s.jumpText);
   const outlineOpen = useOutline((s) => s.open);
   const outlineJump = useOutline((s) => s.jumpTarget);
+  const typewriter = useUiNav((s) => s.typewriter);
+  const toggleTypewriter = useUiNav((s) => s.toggleTypewriter);
   const dirty = useRef<string | null>(null);
   const chapterIdRef = useRef<number | null>(null);
-  chapterIdRef.current = currentChapterId;
+  chapterIdRef.current = chapterId;
   const bookIdRef = useRef<number | null>(null);
   bookIdRef.current = currentBookId;
   // 程序化改动（切章/恢复/AI 采纳）期间置位，其 transaction 不计入今日写作
   const suppressStats = useRef(false);
+  // 打字机滚动的实时开关（onTransaction 闭包里读 ref，避免重建编辑器）
+  const typewriterRef = useRef(false);
+  typewriterRef.current = typewriter;
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
   // 上一次计入活跃的分钟串——同一分钟只记一次
   const lastMinute = useRef<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -55,14 +83,44 @@ export function ChapterEditor() {
   const [placeholderOpen, setPlaceholderOpen] = useState(false);
 
   const editor = useEditor({
-    extensions: [StarterKit, Markdown],
+    extensions: [StarterKit, Markdown, WikiLinks],
     content: "",
     immediatelyRender: false,
+    // wiki 链接点击跳转（M7 批次3）：[[章题]] 是纯文本装饰，同书章题精确匹配选中
+    editorProps: {
+      handleDOMEvents: {
+        click: (_view, event) => {
+          const el = (event.target as HTMLElement).closest?.(".wiki-link") as HTMLElement | null;
+          const target = el?.getAttribute("data-wiki");
+          if (!target) return false;
+          const ch = useWorkspace.getState().chapters.find((c) => c.title === target);
+          if (ch) void useWorkspace.getState().selectChapter(ch.id);
+          return false;
+        },
+      },
+    },
+    // 点进哪个窗格，哪个窗格成为活动窗格（侧栏高亮/dock 面板/AI 会话跟随）
+    onFocus: () => {
+      const ws = useWorkspace.getState();
+      if (ws.activePane !== pane) ws.focusPane(pane);
+    },
     onUpdate: ({ editor: ed }) => {
       dirty.current = (ed.storage.markdown as { getMarkdown(): string }).getMarkdown();
     },
     // M2-T11 差量统计：按字计（与章节字数同一口径），粘贴与程序化改动不计
-    onTransaction: ({ transaction: tr }) => {
+    onTransaction: ({ editor: ed, transaction: tr }) => {
+      // 打字机滚动（M7 批次5）：光标行固定在视口偏上位置，只跟用户的输入/移动
+      if (typewriterRef.current && (tr.docChanged || tr.selectionSet)) {
+        requestAnimationFrame(() => {
+          const scroller = scrollerRef.current;
+          if (!scroller || !ed.view.hasFocus()) return;
+          const rect = ed.view.coordsAtPos(ed.state.selection.head);
+          const sr = scroller.getBoundingClientRect();
+          const target = sr.top + Math.min(sr.height * 0.4, 220);
+          const delta = rect.top - target;
+          if (Math.abs(delta) > 2) scroller.scrollTop += delta;
+        });
+      }
       if (!tr.docChanged || suppressStats.current) return;
       // 粘贴整段不算"写"（ProseMirror 的粘贴处理器会打上 paste meta）
       if (tr.getMeta("paste") || tr.getMeta("uiEvent") === "paste") return;
@@ -81,41 +139,43 @@ export function ChapterEditor() {
   });
 
   useEffect(() => {
-    if (editor && chapterContent != null) {
+    if (editor && content != null) {
       suppressStats.current = true;
-      editor.commands.setContent(chapterContent);
+      editor.commands.setContent(content);
       suppressStats.current = false;
       dirty.current = null;
     }
-  }, [currentChapterId, chapterContent, editor]);
+  }, [chapterId, content, editor]);
 
   // 搜索结果跳转：正文就位后定位到首个匹配并滚动到可见（本 effect 声明在灌内容之后，
-  // 故同一次提交里 chapterContent 先落地）。消费后清空，避免重复定位。
+  // 故同一次提交里 chapterContent 先落地）。只在活动窗格消费——搜索跳装载的章在活动窗格。
+  // 消费后清空，避免重复定位。
   useEffect(() => {
-    if (!editor || jumpText == null) return;
+    if (!editor || !isActive || jumpText == null) return;
     const pos = findTextPos(editor.state.doc, jumpText);
     if (pos) {
       editor.commands.setTextSelection(pos);
       editor.commands.scrollIntoView();
     }
     useSearch.getState().clearJump();
-  }, [editor, chapterContent, jumpText]);
+  }, [editor, isActive, content, jumpText]);
 
-  // 悬浮大纲跳转：与搜索跳转同款定位；consume 自取自清（一次性），避免重复定位
+  // 悬浮大纲跳转：与搜索跳转同款定位，同样只在活动窗格消费；consume 自取自清（一次性）
   useEffect(() => {
-    if (!editor || outlineJump == null) return;
+    if (!editor || !isActive || outlineJump == null) return;
     const pos = findTextPos(editor.state.doc, outlineJump);
     if (pos) {
       editor.commands.setTextSelection(pos);
       editor.commands.scrollIntoView();
     }
     useOutline.getState().consume();
-  }, [editor, chapterContent, outlineJump]);
+  }, [editor, isActive, content, outlineJump]);
 
   // 消费 AI 采纳：把文本以空行分隔追加到文档末尾（文档为空时不加前导空行），
+  // 只在活动窗格消费（AI 会话跟随活动窗格章节）。
   // 显式置 dirty 交给自动保存，然后清空通道。清空本身触发重渲染，驱动 autosave effect。
   useEffect(() => {
-    if (!editor || pendingAppend == null) return;
+    if (!editor || !isActive || pendingAppend == null) return;
     const docEmpty = editor.state.doc.textContent.trim() === "";
     // AI 采纳不计入今日手写字数
     suppressStats.current = true;
@@ -151,15 +211,18 @@ export function ChapterEditor() {
   };
 
   const book = books.find((b) => b.id === currentBookId);
-  const meta = chapters.find((c) => c.id === currentChapterId);
+  const meta = chapters.find((c) => c.id === chapterId);
   // dock 折叠后的展开入口（模仿侧栏在 Ribbon 底部的条件性展开按钮）：
   // 折叠时整个 dock 被 CSS 摘除，按钮必须挂在编辑器这侧才能被点到
   const dockCollapsed = useUiNav((s) => s.dockCollapsed);
   const toggleDock = useUiNav((s) => s.toggleDock);
 
-  if (currentChapterId == null) {
+  if (chapterId == null) {
     return (
-      <div className="relative flex h-full flex-col items-center justify-center gap-3 bg-transparent">
+      <div
+        onClick={() => useWorkspace.getState().focusPane(pane)}
+        className="relative flex h-full cursor-default flex-col items-center justify-center gap-3 bg-transparent"
+      >
         {/* 空态也没有顶部栏——dock 折叠时的展开入口挂这里（同顶栏按钮） */}
         {dockCollapsed && (
           <button
@@ -171,8 +234,10 @@ export function ChapterEditor() {
           </button>
         )}
         <PenLine size={32} strokeWidth={1.5} className="text-[color:var(--text-faint)]" />
-        <div className="text-sm text-[color:var(--text-secondary)]">选择或创建一个章节开始写作</div>
-        <div className="text-xs text-[color:var(--text-faint)]">Ctrl+N 快速新建（即将支持）</div>
+        <div className="text-sm text-[color:var(--text-secondary)]">
+          {pane === "b" ? "点击此处聚焦，再从左侧目录选一章在本窗打开" : "选择或创建一个章节开始写作"}
+        </div>
+        {pane === "a" && <div className="text-xs text-[color:var(--text-faint)]">Ctrl+N 快速新建（即将支持）</div>}
       </div>
     );
   }
@@ -189,6 +254,43 @@ export function ChapterEditor() {
           <span className="truncate text-[color:var(--text-primary)]">{meta?.title ?? ""}</span>
         </div>
         <div className="flex shrink-0 items-center gap-3 text-xs text-[color:var(--text-faint)]">
+          {/* 导航历史：浏览器式后退/前进，作用于活动窗格 */}
+          <span className="flex items-center gap-0.5">
+            <button
+              onClick={() => void useWorkspace.getState().goBack()}
+              disabled={!canBack}
+              title="后退（Alt+←）"
+              className="rounded p-1 transition-colors duration-150 enabled:hover:bg-[var(--bg-hover)] enabled:hover:text-[color:var(--text-primary)] disabled:opacity-40"
+            >
+              <ArrowLeft size={14} />
+            </button>
+            <button
+              onClick={() => void useWorkspace.getState().goForward()}
+              disabled={!canForward}
+              title="前进（Alt+→）"
+              className="rounded p-1 transition-colors duration-150 enabled:hover:bg-[var(--bg-hover)] enabled:hover:text-[color:var(--text-primary)] disabled:opacity-40"
+            >
+              <ArrowRight size={14} />
+            </button>
+          </span>
+          <button
+            onClick={() => useWorkspace.getState().cycleSplit()}
+            title="分屏：全部/左右/上下循环切换（Alt+S）"
+            className={`rounded p-1 transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] ${
+              splitAxis !== "none" ? "text-[color:var(--accent)]" : ""
+            }`}
+          >
+            {splitAxis === "horizontal" ? <SquareSplitVertical size={14} /> : <SquareSplitHorizontal size={14} />}
+          </button>
+          <button
+            onClick={toggleTypewriter}
+            title="打字机滚动：光标行固定在视口偏上位置"
+            className={`rounded px-1.5 py-0.5 text-[11px] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] ${
+              typewriter ? "bg-[var(--accent-dim)] text-[color:var(--text-primary)]" : ""
+            }`}
+          >
+            打字机
+          </button>
           <button
             onClick={() => useOutline.getState().toggle()}
             title="悬浮大纲"
@@ -248,7 +350,7 @@ export function ChapterEditor() {
             </span>
           )}
           <span>{countWords(text).toLocaleString()} 字</span>
-          {dockCollapsed && (
+          {dockCollapsed && isActive && (
             <button
               onClick={toggleDock}
               title="展开右侧面板（Ctrl+\\）"
@@ -260,14 +362,16 @@ export function ChapterEditor() {
         </div>
       </div>
 
-      {/* 正文：720px 单列衬线排版，无边框融入背景 */}
-      <div className="flex-1 overflow-y-auto">
+      {/* 正文：720px 单列衬线排版，无边框融入背景；[[章题]] 补全浮层 fixed 定位不占版面。
+          scrollerRef 供打字机滚动定位光标行。 */}
+      <div ref={scrollerRef} className="flex-1 overflow-y-auto">
         <EditorContent editor={editor} className="prose-serif mx-auto max-w-[720px] px-8 py-10" />
+        <WikiSuggest editor={editor} />
       </div>
 
       {historyOpen && (
         <HistoryPanel
-          chapterId={currentChapterId}
+          chapterId={chapterId}
           getCurrentContent={currentMarkdown}
           onRestore={restoreFromHistory}
           onClose={() => setHistoryOpen(false)}
@@ -282,8 +386,9 @@ export function ChapterEditor() {
         <PlaceholderDialog content={currentMarkdown()} onClose={() => setPlaceholderOpen(false)} />
       )}
 
-      {/* 悬浮大纲：fixed 定位不占版面；正文传编辑器实时 markdown，大纲随写随刷 */}
-      <FloatingOutline markdown={currentMarkdown()} />
+      {/* 悬浮大纲：fixed 定位不占版面；正文传编辑器实时 markdown，大纲随写随刷。
+          大纲是全局浮层，只在活动窗格挂载，避免分屏时出现两份。 */}
+      {isActive && <FloatingOutline markdown={currentMarkdown()} />}
     </div>
   );
 }

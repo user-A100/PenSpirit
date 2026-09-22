@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChapterMeta, Keyword, Label, Status } from "../../lib/tauri";
+import type { ChapterMeta, CustomFieldDef, Keyword, Label, Status } from "../../lib/tauri";
 import { useWorkspace } from "../../stores/workspace";
 import { useMeta } from "../../stores/meta";
 
@@ -18,6 +18,11 @@ vi.mock("../../lib/tauri", () => ({
     chapterUpdateMeta: vi.fn(),
     keywordsForChapter: vi.fn(),
     chapterSetKeywords: vi.fn(),
+    customDefsList: vi.fn(),
+    customValuesGet: vi.fn(),
+    customValueSet: vi.fn(),
+    customDefUpsert: vi.fn(),
+    customDefDelete: vi.fn(),
   },
 }));
 
@@ -37,6 +42,13 @@ const KEYWORDS: Keyword[] = [
   { id: 21, book_id: 1, title: "权谋", color: "#4ade80", created_at: "" },
 ];
 
+const DEFS: CustomFieldDef[] = [
+  { id: 30, book_id: 1, name: "视角", field_type: "text", list_options: "[]", sort_key: 0, created_at: "" },
+  { id: 31, book_id: 1, name: "已审", field_type: "checkbox", list_options: "[]", sort_key: 0, created_at: "" },
+  { id: 32, book_id: 1, name: "主线", field_type: "list", list_options: JSON.stringify(["红", "蓝"]), sort_key: 0, created_at: "" },
+  { id: 33, book_id: 1, name: "截稿", field_type: "date", list_options: "[]", sort_key: 0, created_at: "" },
+];
+
 function ch(p: Partial<ChapterMeta> & Pick<ChapterMeta, "id">): ChapterMeta {
   return {
     book_id: 1, file_path: "", title: "第一章", sort_key: 1, word_count: 1200,
@@ -52,7 +64,7 @@ function resetStores() {
   useWorkspace.setState({
     books: [], chapters: [CH1, CH2], currentBookId: 1, currentChapterId: 11, chapterContent: null,
   });
-  useMeta.setState({ labels: LABELS, statuses: STATUSES, keywords: KEYWORDS, chapterKeywords: [KEYWORDS[0]] });
+  useMeta.setState({ labels: LABELS, statuses: STATUSES, keywords: KEYWORDS, chapterKeywords: [KEYWORDS[0]], customDefs: DEFS, customValues: { "30": "第一人称", "31": true, "32": "红" } });
 }
 
 beforeEach(() => {
@@ -73,6 +85,14 @@ beforeEach(() => {
     (_bid: number, title: string) =>
       Promise.resolve({ id: 99, book_id: 1, title, color: "#facc15", created_at: "" }),
   );
+  (api.customDefsList as ReturnType<typeof vi.fn>).mockResolvedValue(DEFS);
+  (api.customValuesGet as ReturnType<typeof vi.fn>).mockResolvedValue({ "30": "第一人称", "31": true, "32": "红" });
+  (api.customValueSet as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+  (api.customDefUpsert as ReturnType<typeof vi.fn>).mockImplementation(
+    (input: Partial<CustomFieldDef> & { name: string }) =>
+      Promise.resolve({ id: 98, book_id: 1, field_type: "text", list_options: "[]", sort_key: 0, created_at: "", ...input } as CustomFieldDef),
+  );
+  (api.customDefDelete as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   resetStores();
 });
 
@@ -147,6 +167,79 @@ describe("MetaDockPanel（M7 章节元数据）", () => {
     const ta = screen.getByPlaceholderText("这一章讲什么（一两句话，导出不带）…") as HTMLTextAreaElement;
     expect(ta.value).toBe("");
     expect(screen.getByText("已写 1200 字")).toBeInTheDocument();
+  });
+
+  it("自定义字段：四型编辑器按当前值渲染", () => {
+    render(<MetaDockPanel />);
+    // text 型回显
+    expect(screen.getByDisplayValue("第一人称")).toBeInTheDocument();
+    // checkbox 型按 true 勾选
+    const check = screen.getByTestId("custom-value-31") as HTMLInputElement;
+    expect(check.checked).toBe(true);
+    // list 型 select 选中「红」
+    const list = screen.getByTestId("custom-value-32") as HTMLSelectElement;
+    expect(list.value).toBe("红");
+    // date 型无值渲染空 input
+    const date = screen.getByTestId("custom-value-33") as HTMLInputElement;
+    expect(date.value).toBe("");
+  });
+
+  it("自定义字段：改值即保存 customValueSet（checkbox 翻转 + text 失焦写串/清空写 null）", async () => {
+    render(<MetaDockPanel />);
+
+    fireEvent.click(screen.getByTestId("custom-value-31"));
+    await waitFor(() => expect(api.customValueSet).toHaveBeenCalledWith(11, 31, false));
+
+    const text = screen.getByTestId("custom-value-30");
+    fireEvent.change(text, { target: { value: "第三人称" } });
+    fireEvent.blur(text);
+    await waitFor(() => expect(api.customValueSet).toHaveBeenCalledWith(11, 30, "第三人称"));
+
+    // 保存后 store 更新触发 key 重挂，需重取节点；清空 = 写 null
+    const text2 = screen.getByTestId("custom-value-30");
+    fireEvent.change(text2, { target: { value: "" } });
+    fireEvent.blur(text2);
+    await waitFor(() => expect(api.customValueSet).toHaveBeenCalledWith(11, 30, null));
+  });
+
+  it("自定义字段：列表下拉换选项即保存；新建字段（list 型带选项）走定义 upsert", async () => {
+    render(<MetaDockPanel />);
+
+    fireEvent.change(screen.getByTestId("custom-value-32"), { target: { value: "蓝" } });
+    await waitFor(() => expect(api.customValueSet).toHaveBeenCalledWith(11, 32, "蓝"));
+
+    // 打开管理定义区
+    fireEvent.click(screen.getByText("管理定义"));
+    fireEvent.change(screen.getByPlaceholderText("新字段名…"), { target: { value: "结局" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "字段类型" }), { target: { value: "list" } });
+    fireEvent.change(screen.getByPlaceholderText("新字段的选项，逗号分隔"), { target: { value: "圆满，悲剧" } });
+    fireEvent.click(screen.getByTitle("新增字段"));
+
+    await waitFor(() =>
+      expect(api.customDefUpsert).toHaveBeenCalledWith({
+        id: null, book_id: 1, name: "结局", field_type: "list",
+        list_options: JSON.stringify(["圆满", "悲剧"]), sort_key: 0,
+      }),
+    );
+  });
+
+  it("自定义字段：定义改名与删除（管理区内完成）", async () => {
+    render(<MetaDockPanel />);
+    fireEvent.click(screen.getByText("管理定义"));
+
+    const nameInput = screen.getByDisplayValue("视角");
+    fireEvent.change(nameInput, { target: { value: "叙事视角" } });
+    fireEvent.blur(nameInput);
+    await waitFor(() =>
+      expect(api.customDefUpsert).toHaveBeenCalledWith({
+        id: 30, book_id: 1, name: "叙事视角", field_type: "text", list_options: "[]", sort_key: 0,
+      }),
+    );
+
+    // 删除「截稿」：从其定义行（含该名输入框的 div）里找删除钮
+    const row = screen.getByDisplayValue("截稿").closest("div")!;
+    fireEvent.click(row.querySelector('button[title^="删除字段"]')!);
+    await waitFor(() => expect(api.customDefDelete).toHaveBeenCalledWith(33));
   });
 
   it("未选章时空态提示", () => {

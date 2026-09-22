@@ -172,7 +172,7 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
             </div>
           )}
           <div className="min-h-0 flex-1">
-            <ContextPreview log={log} loading={previewLoading} />
+            <ContextPreview log={log} loading={previewLoading} onConfigChanged={() => void loadPreview()} />
           </div>
         </div>
       ) : (

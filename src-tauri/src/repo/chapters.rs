@@ -231,3 +231,30 @@ pub fn next_index(conn: &Connection, book_id: i64) -> AppResult<i64> {
         .unwrap_or(0);
     Ok(prefix_max.max(seq) + 1)
 }
+
+// ---- M7 批次7：自由卡片墙摆位（freeform_x/y 与 sort_key 解耦） ----
+
+/// 全书摆位（未摆过的章 x=y=0，前端可跳过）。
+pub fn freeform_positions(conn: &Connection, book_id: i64) -> AppResult<Vec<(i64, f64, f64)>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, freeform_x, freeform_y FROM chapters
+         WHERE book_id = ?1 AND deleted_at IS NULL ORDER BY id",
+    )?;
+    let rows = stmt.query_map([book_id], |r| {
+        Ok((r.get::<_, i64>(0)?, r.get::<_, f64>(1)?, r.get::<_, f64>(2)?))
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+pub fn set_freeform_position(conn: &Connection, chapter_id: i64, x: f64, y: f64) -> AppResult<()> {
+    let n = conn
+        .execute(
+            "UPDATE chapters SET freeform_x = ?1, freeform_y = ?2 WHERE id = ?3",
+            params![x, y, chapter_id],
+        )
+        .map_err(|e| AppError::Db(e.to_string()))?;
+    if n == 0 {
+        return Err(AppError::NotFound(format!("章节 {chapter_id} 不存在")));
+    }
+    Ok(())
+}

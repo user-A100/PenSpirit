@@ -4,7 +4,7 @@ import { SearchPanel } from "./SearchPanel";
 import { useSearch } from "../../stores/search";
 import { useWorkspace } from "../../stores/workspace";
 
-vi.mock("../../lib/tauri", () => ({ api: { searchBook: vi.fn() } }));
+vi.mock("../../lib/tauri", () => ({ api: { searchBook: vi.fn(), collectionUpsert: vi.fn() } }));
 
 import { api, type SearchHit } from "../../lib/tauri";
 
@@ -25,7 +25,7 @@ describe("SearchPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useSearch.setState({
-      open: true, query: "风雪", wholeWord: false, hits: [], truncated: false,
+      open: true, query: "风雪", wholeWord: false, scope: "all", hits: [], truncated: false,
       loading: false, error: null, jumpText: null,
     });
     useWorkspace.setState({ currentBookId: 7 });
@@ -35,7 +35,7 @@ describe("SearchPanel", () => {
     (api.searchBook as ReturnType<typeof vi.fn>).mockResolvedValue({ hits: HITS, truncated: false });
     render(<SearchPanel />);
 
-    await waitFor(() => expect(api.searchBook).toHaveBeenCalledWith(7, "风雪", false), { timeout: 2000 });
+    await waitFor(() => expect(api.searchBook).toHaveBeenCalledWith(7, "风雪", false, "all"), { timeout: 2000 });
     expect(await screen.findByText(/第一章/)).toBeInTheDocument();
     expect(screen.getByText(/第二章/)).toBeInTheDocument();
     expect(screen.getByText("(2)")).toBeInTheDocument(); // 第一章 2 处
@@ -76,6 +76,29 @@ describe("SearchPanel", () => {
     render(<SearchPanel />);
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(useSearch.getState().open).toBe(false));
+  });
+
+  it("切到标题范围后按新范围查询", async () => {
+    (api.searchBook as ReturnType<typeof vi.fn>).mockResolvedValue({ hits: [], truncated: false });
+    render(<SearchPanel />);
+    fireEvent.click(screen.getByTitle("仅搜章节标题"));
+    await waitFor(() => expect(api.searchBook).toHaveBeenCalledWith(7, "风雪", false, "title"), { timeout: 2000 });
+    expect(useSearch.getState().scope).toBe("title");
+  });
+
+  it("存为集合：把当前查询固化为搜索集合", async () => {
+    (api.searchBook as ReturnType<typeof vi.fn>).mockResolvedValue({ hits: HITS, truncated: false });
+    (api.collectionUpsert as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 1, book_id: 7, name: "风雪", kind: "saved", query: "风雪", created_at: "", updated_at: "",
+    });
+    render(<SearchPanel />);
+
+    await screen.findByText(/共 3 处命中/);
+    fireEvent.click(screen.getByTitle(/把当前查询存为搜索集合/));
+    await screen.findByText(/已存为集合「风雪」/);
+    expect(api.collectionUpsert).toHaveBeenCalledWith({
+      id: null, book_id: 7, name: "风雪", kind: "saved", query: "风雪",
+    });
   });
 
   it("未打开时不渲染", () => {

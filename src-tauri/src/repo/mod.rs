@@ -3,6 +3,8 @@ pub mod bump;
 pub mod chapter_templates;
 pub mod characters;
 pub mod chapters;
+pub mod collections;
+pub mod custom_fields;
 pub mod foreshadows;
 pub mod ideas;
 pub mod maps;

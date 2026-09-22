@@ -32,6 +32,20 @@ pub struct AssembleInput<'a> {
     pub chapter_text: &'a str,              // 当前章已写正文
     pub prev_chapter_tail: Option<&'a str>, // 上一章尾部
     pub instruction: &'a str,
+    /// 注入原子槽位（M7 批次6：角色卡/伏笔/情节块/灵感卡）。
+    /// 文本由命令层按每书配置渲染好；这里只做预算截断、拼进 system、记日志。
+    pub injections: Vec<InjectionInput>,
+}
+
+/// 单个注入原子槽位：命令层渲染完成的整段文本 + 每书预算（0 = 不限）。
+#[derive(Debug, Clone)]
+pub struct InjectionInput {
+    /// 槽位名（「角色卡」「伏笔提醒」「情节块」「灵感卡」）
+    pub name: String,
+    /// 来源摘要（预览面板展示，如「关键词命中 2 人」）
+    pub source: String,
+    pub text: String,
+    pub budget: usize,
 }
 
 /// 组装产物：system / history / user 与 llm::stream::StreamReq 同构，log 供预览面板。
@@ -52,6 +66,14 @@ fn tail_window(s: &str, window: usize) -> String {
     s.chars().skip(total - window).collect()
 }
 
+/// 取文本头部窗口：注入原子清单超预算时丢弃尾部条目（清单语义保头）。
+fn head_window(s: &str, window: usize) -> String {
+    if window == 0 || s.chars().count() <= window {
+        return s.to_string();
+    }
+    s.chars().take(window).collect()
+}
+
 fn preview_head(s: &str) -> String {
     s.chars().take(PREVIEW_HEAD_CHARS).collect()
 }
@@ -66,8 +88,8 @@ fn slot(name: &str, source: &str, payload: &str) -> SlotLog {
     }
 }
 
-/// 固定槽位顺序组装：System → 文风（有才记）→ 上一章结尾（有才记）→
-/// 当前章正文（非空才记）→ 写作指令；逐槽记录摘要与总估算 token。
+/// 固定槽位顺序组装：System → 文风（有才记）→ 注入原子（按传入序，空文本跳过）→
+/// 上一章结尾（有才记）→ 当前章正文（非空才记）→ 写作指令；逐槽记录摘要与总估算 token。
 pub fn assemble(input: &AssembleInput) -> Assembled {
     let default_prompt = format!(
         "你是长篇小说《{}》的合著者。续写须与既有正文风格、人称、时态保持一致，直接输出正文，不要解释。",
@@ -80,6 +102,16 @@ pub fn assemble(input: &AssembleInput) -> Assembled {
         system.push_str("\n\n【文风要求】\n");
         system.push_str(style);
         slots.push(slot("文风", "激活文风卡", style));
+    }
+
+    // 注入原子（M7 批次6）：预算截断保头（清单丢尾），逐槽独立记日志
+    for inj in &input.injections {
+        if inj.text.is_empty() {
+            continue;
+        }
+        let kept = head_window(&inj.text, inj.budget);
+        system.push_str(&format!("\n\n【{}】\n{}", inj.name, kept));
+        slots.push(slot(&inj.name, &inj.source, &kept));
     }
 
     let mut history = Vec::new();

@@ -25,7 +25,7 @@ describe("navRegistry", () => {
     expect(write.label).toBe("写作");
     expect(write.icon).toBeDefined();
     expect(write.Component).toBeDefined();
-    expect(write.dockPanels.map((p) => p.label)).toEqual(["元数据", "大纲", "人物", "伏笔", "情节块"]);
+    expect(write.dockPanels.map((p) => p.label)).toEqual(["元数据", "链接", "集合", "参考", "大纲", "人物", "伏笔", "情节块", "取名"]);
 
     const bump = registry.getView("bump")!;
     expect(bump.label).toBe("碰碰车");

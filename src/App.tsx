@@ -7,6 +7,7 @@ import { getView, getViews } from "./lib/nav/registry";
 import { useUiNav } from "./lib/nav/uiStore";
 import { useOutline } from "./stores/outline";
 import { useSearch } from "./stores/search";
+import { useWorkspace } from "./stores/workspace";
 import { ThemeProvider, useAppearance } from "./themes/ThemeProvider";
 import { findTexture, TEXTURE_TILE_PX } from "./themes/textures";
 
@@ -77,6 +78,34 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [openSearch]);
+
+  // Alt+← / Alt+→ 章节导航后退/前进（M7 批次5）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        void useWorkspace.getState().goBack();
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        void useWorkspace.getState().goForward();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Alt+S 分屏循环：无 → 左右 → 上下 → 无（M7 批次5）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        useWorkspace.getState().cycleSplit();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <ThemeProvider>
