@@ -15,6 +15,23 @@ fn manual_input(book_id: i64, name: &str) -> CollectionInput {
 }
 
 #[test]
+fn legacy_memberships_migrate_in_binder_order() {
+    let conn = rusqlite::Connection::open_in_memory().unwrap();
+    conn.execute_batch(
+        "CREATE TABLE chapters (id INTEGER PRIMARY KEY, sort_key REAL NOT NULL);
+         CREATE TABLE collection_chapters (collection_id INTEGER NOT NULL, chapter_id INTEGER NOT NULL);
+         INSERT INTO chapters VALUES (1, 20.0), (2, 10.0), (3, 30.0);
+         INSERT INTO collection_chapters VALUES (7, 1), (7, 3), (7, 2);",
+    ).unwrap();
+    conn.execute_batch(include_str!("../migrations/0018_ordered_collections.sql")).unwrap();
+    let mut stmt = conn.prepare(
+        "SELECT chapter_id FROM collection_chapters WHERE collection_id = 7 ORDER BY position",
+    ).unwrap();
+    let ids: Vec<i64> = stmt.query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect();
+    assert_eq!(ids, vec![2, 1, 3]);
+}
+
+#[test]
 fn manual_collection_crud_and_validation() {
     let (_tmp, s) = setup();
     let book = cmd::create_book_inner(&s, "书").unwrap();
@@ -75,13 +92,22 @@ fn manual_membership_order_and_cross_book_guard() {
     let e = cmd::collection_add_chapters_inner(&s, col.id, &[foreign]).unwrap_err();
     assert!(matches!(e, AppError::Invalid(ref m) if m.contains("不属于")));
 
-    // 乱序加入 → 按书目录序返回
+    // 乱序加入 → 手动集合保持加入顺序，不跟随书目录
     let ids = cmd::collection_add_chapters_inner(&s, col.id, &[c3, c1, c2]).unwrap();
-    assert_eq!(ids, vec![c1, c2, c3]);
+    assert_eq!(ids, vec![c3, c1, c2]);
 
     // 重复加入幂等
     let again = cmd::collection_add_chapters_inner(&s, col.id, &[c1]).unwrap();
-    assert_eq!(again, vec![c1, c2, c3]);
+    assert_eq!(again, vec![c3, c1, c2]);
+
+    let moved = cmd::collection_reorder_inner(&s, col.id, &[c1, c2, c3]).unwrap();
+    assert_eq!(moved, vec![c1, c2, c3]);
+    assert_eq!(cmd::list_chapters_inner(&s, b1.id).unwrap().iter().map(|c| c.id).collect::<Vec<_>>(), vec![c1, c2, c3]);
+
+    for bad in [vec![c1, c2], vec![c1, c1, c3], vec![c1, c2, foreign]] {
+        assert!(cmd::collection_reorder_inner(&s, col.id, &bad).is_err());
+        assert_eq!(cmd::collection_add_chapters_inner(&s, col.id, &[]).unwrap(), vec![c1, c2, c3]);
+    }
 
     // 移除一章
     let after = cmd::collection_remove_chapter_inner(&s, col.id, c2).unwrap();
@@ -110,6 +136,26 @@ fn soft_deleted_chapter_drops_out_and_returns_on_restore() {
     trash::restore_chapter_inner(&s, c1).unwrap();
     let ids = cmd::collection_chapters_inner(&s, col.id).unwrap();
     assert_eq!(ids.iter().map(|m| m.id).collect::<Vec<_>>(), vec![c1, c2], "恢复后成员关系保留");
+}
+
+#[test]
+fn reorder_keeps_hidden_member_and_rejects_saved_collection() {
+    let (_tmp, s) = setup();
+    let book = cmd::create_book_inner(&s, "书").unwrap();
+    let c1 = cmd::create_chapter_inner(&s, book.id, "一").unwrap().id;
+    let c2 = cmd::create_chapter_inner(&s, book.id, "二").unwrap().id;
+    let c3 = cmd::create_chapter_inner(&s, book.id, "三").unwrap().id;
+    let manual = cmd::collection_upsert_inner(&s, &manual_input(book.id, "手动")).unwrap();
+    cmd::collection_add_chapters_inner(&s, manual.id, &[c1, c2, c3]).unwrap();
+    cmd::delete_chapter_inner(&s, c2).unwrap();
+    assert_eq!(cmd::collection_reorder_inner(&s, manual.id, &[c3, c1]).unwrap(), vec![c3, c1]);
+    trash::restore_chapter_inner(&s, c2).unwrap();
+    assert_eq!(cmd::collection_add_chapters_inner(&s, manual.id, &[]).unwrap(), vec![c3, c2, c1]);
+
+    let saved = cmd::collection_upsert_inner(&s, &CollectionInput {
+        id: None, book_id: book.id, name: "搜索".into(), kind: "saved".into(), query: "一".into(),
+    }).unwrap();
+    assert!(matches!(cmd::collection_reorder_inner(&s, saved.id, &[c1]), Err(AppError::Invalid(_))));
 }
 
 #[test]

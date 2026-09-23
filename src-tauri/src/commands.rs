@@ -652,7 +652,8 @@ pub fn collection_chapters_inner(s: &AppState, collection_id: i64) -> AppResult<
         let conn = lock(s)?;
         repo::collections::chapter_ids(&conn, collection_id)?
     };
-    Ok(all.into_iter().filter(|c| ids.contains(&c.id)).collect())
+    let by_id: std::collections::HashMap<i64, ChapterMeta> = all.into_iter().map(|c| (c.id, c)).collect();
+    Ok(ids.into_iter().filter_map(|id| by_id.get(&id).cloned()).collect())
 }
 
 pub fn collection_add_chapters_inner(
@@ -681,6 +682,15 @@ pub fn collection_remove_chapter_inner(
     }
     repo::collections::remove_chapter(&conn, collection_id, chapter_id)?;
     repo::collections::chapter_ids(&conn, collection_id)
+}
+
+pub fn collection_reorder_inner(s: &AppState, collection_id: i64, chapter_ids: &[i64]) -> AppResult<Vec<i64>> {
+    let conn = lock(s)?;
+    let col = repo::collections::get(&conn, collection_id)?;
+    if col.kind != "manual" {
+        return Err(AppError::Invalid("搜索集合由查询结果排序，不能手动重排".into()));
+    }
+    repo::collections::reorder(&conn, collection_id, chapter_ids)
 }
 
 #[tauri::command]
@@ -719,6 +729,11 @@ pub fn collection_remove_chapter(
     chapter_id: i64,
 ) -> AppResult<Vec<i64>> {
     collection_remove_chapter_inner(&s, collection_id, chapter_id)
+}
+
+#[tauri::command]
+pub fn collection_reorder(s: State<AppState>, collection_id: i64, chapter_ids: Vec<i64>) -> AppResult<Vec<i64>> {
+    collection_reorder_inner(&s, collection_id, &chapter_ids)
 }
 
 // ---- M7 批次7：自定义元数据字段 + 自由卡片墙摆位 ----

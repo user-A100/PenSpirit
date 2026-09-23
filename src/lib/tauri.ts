@@ -225,6 +225,8 @@ export const api = {
     invoke<number[]>("collection_add_chapters", { collectionId, chapterIds }),
   collectionRemoveChapter: (collectionId: number, chapterId: number) =>
     invoke<number[]>("collection_remove_chapter", { collectionId, chapterId }),
+  collectionReorder: (collectionId: number, chapterIds: number[]) =>
+    invoke<number[]>("collection_reorder", { collectionId, chapterIds }),
   readChapter: (id: number) => invoke<ChapterContent>("read_chapter", { id }),
   writeChapter: (id: number, content: string) => invoke<ChapterMeta>("write_chapter", { id, content }),
   rescanLibrary: () => invoke<number>("rescan_library"),

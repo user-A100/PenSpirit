@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bookmark, ChevronDown, ChevronRight, FolderPlus, ListPlus, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Bookmark, ChevronDown, ChevronRight, FolderPlus, ListPlus, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { api, type ChapterMeta, type Collection } from "../../lib/tauri";
 import { useWorkspace } from "../../stores/workspace";
 
@@ -106,6 +106,19 @@ export function CollectionsDockPanel() {
     }
   };
 
+  const moveMember = async (col: Collection, index: number, direction: -1 | 1) => {
+    if (!members || index + direction < 0 || index + direction >= members.length) return;
+    const ids = members.map((m) => m.id);
+    [ids[index], ids[index + direction]] = [ids[index + direction], ids[index]];
+    try {
+      await api.collectionReorder(col.id, ids);
+      setMembers(await api.collectionChapters(col.id));
+      setMsg(null);
+    } catch (e) {
+      setMsg(String(e));
+    }
+  };
+
   if (currentBookId == null) {
     return <div className="flex h-full items-center justify-center p-4 text-xs text-[color:var(--text-faint)]">先选一本书</div>;
   }
@@ -181,6 +194,7 @@ export function CollectionsDockPanel() {
             onDelete={() => void removeCollection(c)}
             onAddCurrent={() => void addCurrent(c)}
             onRemoveMember={(cid) => void removeMember(c, cid)}
+            onMoveMember={(index, direction) => void moveMember(c, index, direction)}
             onJump={(cid) => void selectChapter(cid)}
           />
         ))}
@@ -216,6 +230,7 @@ function Row(props: {
   onDelete: () => void;
   onAddCurrent?: () => void;
   onRemoveMember?: (chapterId: number) => void;
+  onMoveMember?: (index: number, direction: -1 | 1) => void;
   onJump: (chapterId: number) => void;
 }) {
   const { col } = props;
@@ -253,7 +268,7 @@ function Row(props: {
               {manual ? "空集合" : "没有章命中当前查询"}
             </div>
           ) : (
-            props.members.map((m) => (
+            props.members.map((m, index) => (
               <div key={m.id} className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-[var(--bg-hover)]">
                 <button
                   onClick={() => props.onJump(m.id)}
@@ -262,6 +277,28 @@ function Row(props: {
                 >
                   {m.title}
                 </button>
+                {manual && props.onMoveMember && (
+                  <>
+                    <button
+                      onClick={() => props.onMoveMember!(index, -1)}
+                      disabled={index === 0}
+                      title={`上移「${m.title}」`}
+                      aria-label={`上移「${m.title}」`}
+                      className="shrink-0 rounded p-0.5 text-[color:var(--text-faint)] enabled:hover:text-[color:var(--text-primary)] disabled:opacity-30"
+                    >
+                      <ArrowUp size={10} />
+                    </button>
+                    <button
+                      onClick={() => props.onMoveMember!(index, 1)}
+                      disabled={index === props.members!.length - 1}
+                      title={`下移「${m.title}」`}
+                      aria-label={`下移「${m.title}」`}
+                      className="shrink-0 rounded p-0.5 text-[color:var(--text-faint)] enabled:hover:text-[color:var(--text-primary)] disabled:opacity-30"
+                    >
+                      <ArrowDown size={10} />
+                    </button>
+                  </>
+                )}
                 {manual && props.onRemoveMember && (
                   <button
                     onClick={() => props.onRemoveMember!(m.id)}

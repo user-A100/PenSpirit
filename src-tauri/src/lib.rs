@@ -105,6 +105,7 @@ pub fn run() {
             commands::collection_chapters,
             commands::collection_add_chapters,
             commands::collection_remove_chapter,
+            commands::collection_reorder,
             commands::custom_defs_list,
             commands::custom_def_upsert,
             commands::custom_def_delete,
