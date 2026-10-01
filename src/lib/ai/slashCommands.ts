@@ -1,4 +1,5 @@
 import { initials } from "../pinyin";
+import { toSlash, usePrompts } from "./prompts";
 
 // 斜杠命令（阶段 2A）：一处定义——名字（中文）、拼音首字母别名、模板、模式、默认产出方式、
 // 本命令默认关闭的上下文槽位。选中命令只把模板放进输入框（可补充后再发），
@@ -23,7 +24,11 @@ export interface SlashCommand {
   /** 选中即发 */
   sendNow?: boolean;
   /** 本地命令 */
-  local?: "newSession" | "context" | "help";
+  local?: "newSession" | "context" | "help" | "prompts";
+  /** 阶段 2B：自定义命令（命令库里的）及其绑定的温度 / 服务商 */
+  custom?: boolean;
+  temperature?: number | null;
+  providerId?: number | null;
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
@@ -46,18 +51,25 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { id: "new-session", name: "新对话", desc: "开一个新会话", template: "", mode: "discuss", output: "chat", local: "newSession" },
   { id: "context", name: "上下文", desc: "查看本轮注入了什么", template: "", mode: "discuss", output: "chat", local: "context" },
   { id: "help", name: "帮助", desc: "命令与快捷键一览", template: "", mode: "discuss", output: "chat", local: "help" },
+  { id: "prompts", name: "命令库", desc: "自定义命令：变量、绑定模型与温度、产出方式", template: "", mode: "discuss", output: "chat", local: "prompts" },
 ];
 
+/** 内置 + 命令库里的自定义命令（自定义排在后面） */
+export function allCommands(): SlashCommand[] {
+  return [...SLASH_COMMANDS, ...usePrompts.getState().list.filter((t) => t.name.trim() && t.template.trim()).map(toSlash)];
+}
+
 export function findCommand(id: string | null | undefined): SlashCommand | undefined {
-  return id ? SLASH_COMMANDS.find((c) => c.id === id) : undefined;
+  return id ? allCommands().find((c) => c.id === id) : undefined;
 }
 
 /** 按输入过滤命令：中文名包含 / 拼音首字母前缀 / 拼音首字母包含 */
 export function matchCommands(query: string): SlashCommand[] {
   const q = query.trim().toLowerCase();
-  if (q === "") return SLASH_COMMANDS;
+  const all = allCommands();
+  if (q === "") return all;
   const scored: Array<{ c: SlashCommand; s: number }> = [];
-  for (const c of SLASH_COMMANDS) {
+  for (const c of all) {
     const ini = initials(c.name);
     let s = -1;
     if (c.name.startsWith(q)) s = 100;

@@ -71,6 +71,8 @@ export interface AiTurnOptions {
   retry_hint?: string | null;
   /** 阶段 2B：多候选——本轮共生成几版（只记入 meta） */
   candidates?: number | null;
+  /** 阶段 2B：本轮用哪个服务商（自定义命令绑定的模型）；缺省 = 使用中 */
+  provider_id?: number | null;
 }
 /** 阶段 2B：写作规则 */
 export type RuleMode = "always" | "scoped" | "manual";
@@ -438,6 +440,8 @@ export const api = {
   // ---- M3-T1：通用设置 KV / 按日统计 / 完本目标 / 伏笔 ----
   settingGet: (key: string) => invoke<string | null>("setting_get", { key }),
   settingSet: (key: string, value: string) => invoke<void>("setting_set", { key, value }),
+  /** 阶段 2B：删掉一个设置键 */
+  settingRemove: (key: string) => invoke<void>("setting_remove", { key }),
   statsRange: (days: number, bookId: number | null) =>
     invoke<DailyStat[]>("stats_range", { days, bookId }),
   booksSetTarget: (bookId: number, targetWords: number | null) =>

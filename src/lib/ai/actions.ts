@@ -1,6 +1,7 @@
 import { getActiveEditor } from "../editorBridge";
 import { useUiNav } from "../nav/uiStore";
 import { findCommand } from "./slashCommands";
+import { fillCommand } from "./runPrompt";
 import { useChat } from "../../stores/chat";
 import { toast } from "../../stores/toast";
 
@@ -40,7 +41,14 @@ export async function runSelectionCommand(id: string): Promise<void> {
     chat.requestCompose(cmd.template, cmd.id);
     return;
   }
-  await chat.send(cmd.template, { command: cmd.id, mode: cmd.mode, targetChars: cmd.targetChars ?? null, disable: cmd.disable });
+  // 阶段 2B：命令库里的自定义命令——先填变量；没标「选中即发」的放进输入框可补充
+  const text = await fillCommand(cmd);
+  if (text == null) return;
+  if (cmd.custom && !cmd.sendNow) {
+    chat.requestCompose(text, cmd.id);
+    return;
+  }
+  await chat.send(text, { command: cmd.id, mode: cmd.mode, targetChars: cmd.targetChars ?? null, disable: cmd.disable, temperature: cmd.temperature, providerId: cmd.providerId });
 }
 
 /** 问 AI：引用选区并聚焦输入框（Ctrl+L 同义） */

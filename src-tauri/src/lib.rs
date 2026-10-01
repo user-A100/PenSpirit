@@ -175,6 +175,7 @@ pub fn run() {
             commands::sensitive_import_words,
             commands::setting_get,
             commands::setting_set,
+            commands::setting_remove,
             commands::stats_range,
             commands::books_set_target,
             commands::foreshadows_list,

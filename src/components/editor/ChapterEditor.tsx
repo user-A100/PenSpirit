@@ -25,6 +25,7 @@ import { AiTint, aiTintKey } from "./aiTint";
 import { InlineAi } from "./InlineAi";
 import { useInlineAi } from "../../stores/inlineAi";
 import { loadTint, pruneTint } from "../../lib/ai/aiTint";
+import { usePrompts } from "../../lib/ai/prompts";
 import { openMenuAt, type MenuEntry } from "../../stores/menu";
 import { commandShortcut, runCommand } from "../../lib/commands";
 import { useWorkspace, type PaneId } from "../../stores/workspace";
@@ -81,6 +82,9 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   const toggleTypewriter = useUiNav((s) => s.toggleTypewriter);
   const focusMode = useUiNav((s) => s.focusMode);
   const aiTintOn = useUiNav((s) => s.aiTint);
+  // 命令库里标了「进气泡」的自定义命令（list 引用稳定，过滤放在渲染里）
+  const prompts = usePrompts((s) => s.list);
+  const bubblePrompts = prompts.filter((p) => p.inBubble && p.name.trim() && p.template.trim());
   // 正文滚离顶部后顶栏才显发丝线（Zen：边界只在需要时出现）
   const [scrolled, setScrolled] = useState(false);
   const dirty = useRef<string | null>(null);
@@ -522,6 +526,18 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
                   className="rounded-[4px] px-2 py-1 text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-fast)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
                 >
                   {label}
+                </button>
+              ))}
+              {bubblePrompts.map((p) => (
+                <button
+                  key={p.id}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => void runSelectionCommand(`custom:${p.id}`)}
+                  data-bubble-prompt={p.id}
+                  data-tip={p.desc || "自定义命令"}
+                  className="rounded-[4px] px-2 py-1 text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-fast)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
+                >
+                  {p.name}
                 </button>
               ))}
               <span aria-hidden className="mx-0.5 h-4 w-px bg-[var(--hairline)]" />

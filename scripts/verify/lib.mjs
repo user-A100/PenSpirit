@@ -17,6 +17,8 @@ const PORT = Number(process.env.CDP_PORT ?? 9222);
 const EXE = fileURLToPath(new URL("../../src-tauri/target/debug/bixian.exe", import.meta.url));
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
 const PENDING = fileURLToPath(new URL("../../.tmp-verify/guard-pending.json", import.meta.url));
+/** 核验可能改到的全局设置键（不挂在测试书 id 上，书删了也不会跟着清）：开始时记下原值，结束原样还原 */
+const GLOBAL_SETTING_KEYS = ["ai_prompts"];
 
 async function findPage() {
   const list = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
@@ -199,6 +201,11 @@ async function restoreFrom(app, p) {
     if (!p.providers.ids.includes(pr.id)) await app.invoke("delete_provider", { id: pr.id }).catch(() => {});
   }
   if (p.providers.active != null) await app.invoke("set_active_provider", { id: p.providers.active }).catch(() => {});
+  // 全局设置键：原来没有的删掉，原来有的写回
+  for (const [key, value] of Object.entries(p.settings ?? {})) {
+    if (value == null) await app.invoke("setting_remove", { key }).catch(() => {});
+    else await app.invoke("setting_set", { key, value }).catch(() => {});
+  }
   // agent 登记（agents.json，阶段 2B 起）：删掉核验加的，还原默认 agent
   if (p.agents) {
     for (const a of await app.invoke("agents_list").catch(() => [])) {
@@ -253,6 +260,8 @@ export async function withGuard(name, body) {
     return { ids: list.map((a) => a.id), defaultId: list.find((a) => a.is_default)?.id ?? null, json: JSON.stringify(list) };
   };
   const agentsBefore = await agentState();
+  const settingState = async () => Object.fromEntries(await Promise.all(GLOBAL_SETTING_KEYS.map(async (k) => [k, await app.invoke("setting_get", { key: k })])));
+  const settingsBefore = await settingState();
   // 快照先落盘：进程崩溃 / 被杀也能在下次补做还原
   const pending = {
     name,
@@ -261,6 +270,7 @@ export async function withGuard(name, body) {
     providers: JSON.parse(providersBefore),
     materialsMaxId,
     agents: { ids: agentsBefore.ids, defaultId: agentsBefore.defaultId },
+    settings: settingsBefore,
     books: [],
   };
   const savePending = () => {
@@ -317,9 +327,11 @@ export async function withGuard(name, body) {
     if (matsLeft.length) console.log(`✘ 核验新增的素材未清理：${matsLeft.map((m) => m.title).join(", ")}`);
     const agentsOk = (await agentState()).json === agentsBefore.json;
     console.log(agentsOk ? "✔ 状态还原：agent 登记与默认 agent 与运行前一致" : "✘ agent 登记未还原");
+    const settingsOk = JSON.stringify(await settingState()) === JSON.stringify(settingsBefore);
+    console.log(settingsOk ? `✔ 状态还原：全局设置（${GLOBAL_SETTING_KEYS.join("、")}）与运行前一致` : "✘ 全局设置未还原");
     app.close();
     process.off("uncaughtException", onUncaught);
-    if (diff.length || leaked.length || !providersOk || matsLeft.length || !agentsOk) ok = false;
+    if (diff.length || leaked.length || !providersOk || matsLeft.length || !agentsOk || !settingsOk) ok = false;
     else unlinkSync(PENDING);
   }
   if (error) ok = false;

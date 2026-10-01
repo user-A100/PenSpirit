@@ -283,6 +283,8 @@ pub struct AiTurnOptions {
     pub retry_hint: Option<String>,
     /// 阶段 2B：多候选——本轮共生成几版（≥2 时前端并排展示），只记入 meta
     pub candidates: Option<i64>,
+    /// 阶段 2B：本轮用哪个服务商（自定义命令绑定的模型）；缺省 = 使用中
+    pub provider_id: Option<i64>,
 }
 
 /// 写作规则（阶段 2B）：mode = always（全书常驻）/ scoped（scope_ids 里的章或卷）/ manual（本轮手选）

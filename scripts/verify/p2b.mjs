@@ -4,6 +4,7 @@
 // 组 3 会话：收藏进素材库 / 分叉 / 置顶归档 / 全书搜索跳转 / 抽取情节块 / 存为梗概 / 最大化
 // 组 4 采纳：逐段取舍 / AI 着色 / 恢复到采纳之前 / 只采纳选中部分 / Alt+K 就地改写 / Alt+Enter 续写浮条
 // 组 5 agent：工具调用折叠 / 权限卡排队与「本会话一直允许」/ 回合文件改动全部撤销与恢复（本地假 ACP agent）
+// 组 6 命令库：自定义命令（变量、绑定模型与温度、产出方式）进斜杠菜单与选区气泡
 // 用法（应用已带调试端口启动）：node scripts/verify/p2b.mjs
 import { fileURLToPath } from "node:url";
 import { checker, sleep, waitFor, withGuard } from "./lib.mjs";
@@ -313,6 +314,61 @@ await withGuard("p2b", async ({ app, makeBook }) => {
     await sleep(1200);
     const disk = (await app.invoke("read_chapter", { id: ids[1] })).content;
     check("就地改写与续写已自动保存到磁盘", disk.includes("逐段核验丙：改稿") && disk.includes("渡口的灯笼次第亮起"));
+    // ================= 组 6 命令库（ai_prompts 由 withGuard 还原；第二个假服务商由 withGuard 删除） =================
+    const bound = await app.invoke("save_provider", {
+      p: { id: 0, name: "核验假服务B", base_url: mock.url, api_key: "sk-mock", model: "mock-model-b", max_tokens: 1024, temperature: 0.7 },
+    });
+    await app.clickEl(`document.querySelector('[data-chapter-row="${ids[1]}"]')`);
+    await waitFor(ev, `document.querySelector('.ProseMirror')?.textContent.includes('逐段核验乙')`);
+    await typeInComposer("/命令库");
+    await waitFor(ev, `!!document.querySelector('[role="listbox"][aria-label="命令"] [role="option"]')`);
+    await app.press("Enter");
+    await waitFor(ev, `!!document.querySelector('[data-testid="prompt-library"]')`, 4000);
+    await app.clickEl(`[...document.querySelectorAll('[data-testid="prompt-library"] button')].find(b => b.textContent.includes('新建命令'))`);
+    const fillField = async (label, text) => {
+      await app.clickEl(`document.querySelector('[aria-label="${label}"]')`);
+      await app.press("a", { ctrl: true });
+      await app.typeText(text);
+    };
+    await fillField("命令名", "加强冲突");
+    await fillField("命令说明", "冲突更尖锐，不改结局");
+    await fillField("命令模板", "把{{选区}}改得冲突更尖锐，让{{人物}}主动挑衅。");
+    await app.clickEl(`[...document.querySelectorAll('[role="radiogroup"][aria-label="产出"] button')].find(b => b.textContent === '替换选区')`);
+    await fillField("温度", "1.3");
+    await ev(`(() => { const s = document.querySelector('select[aria-label="绑定模型"]'); const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; set.call(s, '${bound.id}'); s.dispatchEvent(new Event('change', { bubbles: true })); return true })()`);
+    await app.clickEl(`[...document.querySelectorAll('[data-testid="prompt-editor"] label')].find(l => l.textContent.includes('出现在正文选区气泡')).querySelector('input')`);
+    await app.screenshot(`${SHOTS}/prompt-editor.png`);
+    await app.clickEl(`[...document.querySelectorAll('[data-testid="prompt-editor"] button')].find(b => b.textContent === '添加')`);
+    await waitFor(ev, `!!document.querySelector('[data-prompt-row]')`, 4000);
+    const stored = JSON.parse((await app.invoke("setting_get", { key: "ai_prompts" })) ?? "[]");
+    check("命令库：新建的命令存进全局设置（名字 / 产出 / 温度 / 绑定模型 / 进气泡）", stored.length === 1 && stored[0].name === "加强冲突" && stored[0].output === "replace" && stored[0].temperature === 1.3 && stored[0].providerId === bound.id && stored[0].inBubble === true, JSON.stringify(stored[0] ?? {}).slice(0, 120));
+    await app.clickEl(`document.querySelector('[data-testid="prompt-library"] button[aria-label="返回对话"]')`);
+    await waitFor(ev, `!!document.querySelector('textarea[aria-label="AI 指令"]')`);
+    await typeInComposer("/jqct");
+    const firstOpt = await waitFor(ev, `document.querySelector('[role="listbox"][aria-label="命令"] [role="option"]')?.innerText`);
+    check("斜杠菜单：拼音首字母找到自定义命令并标「自定义」", firstOpt.includes("/加强冲突") && firstOpt.includes("自定义"), firstOpt.replace(/\n/g, " "));
+    await app.press("Escape");
+    await typeInComposer("");
+    // 正文选区气泡里的自定义命令：自动填选区、表单问「人物」、放进输入框后发送
+    await ev(`(() => { const ed = document.querySelector('.ProseMirror'); const p = [...ed.querySelectorAll('p')].find(x => x.textContent.startsWith('逐段核验乙')); const r = document.createRange(); r.selectNodeContents(p); const s = getSelection(); s.removeAllRanges(); s.addRange(r); ed.focus(); return true })()`);
+    await sleep(400);
+    await waitFor(ev, `!!document.querySelector('[data-bubble-menu] [data-bubble-prompt]')`, 4000);
+    await app.clickEl(`document.querySelector('[data-bubble-menu] [data-bubble-prompt]')`);
+    await waitFor(ev, `!!document.querySelector('[data-testid="vars-dialog"]')`, 4000);
+    await app.typeText("沈砚");
+    await app.press("Enter");
+    await waitFor(ev, `document.querySelector('textarea[aria-label="AI 指令"]').value.includes('沈砚主动挑衅')`, 4000);
+    const composed = await ev(`document.querySelector('textarea[aria-label="AI 指令"]').value`);
+    check("气泡运行：{{选区}} 自动填、{{人物}} 表单填后放进输入框", composed.includes("把逐段核验乙：这一段不需要改。改得冲突更尖锐，让沈砚主动挑衅"), composed.slice(0, 50));
+    const activeBefore = await app.invoke("get_active_provider");
+    await app.clickEl(`document.querySelector('textarea[aria-label="AI 指令"]')`);
+    await app.press("Enter");
+    await waitIdle();
+    const r6 = mock.lastRequest();
+    check("按命令绑定的模型与温度发出，不改「使用中」", r6.model === "mock-model-b" && r6.temperature === 1.3 && (await app.invoke("get_active_provider")) === activeBefore, `model=${r6.model} t=${r6.temperature}`);
+    check("选区已填进指令：不再重复注入「选中段落」", !r6.messages.at(-1).content.includes("【选中段落】"));
+    check("回答的采纳主按钮按命令的产出方式：替换选区", await ev(`[...${lastReply}.querySelectorAll('button')].some(b => b.textContent.includes('替换选区'))`));
+
     check("全程没有原生对话框", (await ev(`window.__nativeDialogs.length`)) === 0);
 
     // ================= 组 5 agent 工具调用（假 ACP agent；agent 登记由 withGuard 还原） =================

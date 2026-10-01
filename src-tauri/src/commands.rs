@@ -1520,6 +1520,11 @@ pub fn setting_set_inner(s: &AppState, key: &str, value: &str) -> AppResult<()> 
     repo::settings::set(&*lock(s)?, key, value)
 }
 
+/// 阶段 2B：删掉一个设置键（不存在则无操作）
+pub fn setting_remove_inner(s: &AppState, key: &str) -> AppResult<()> {
+    repo::settings::remove(&*lock(s)?, key)
+}
+
 pub fn books_set_target_inner(s: &AppState, book_id: i64, target_words: Option<i64>) -> AppResult<Book> {
     repo::books::set_target(&*lock(s)?, book_id, target_words)
 }
@@ -1611,6 +1616,11 @@ pub fn setting_get(s: State<AppState>, key: String) -> AppResult<Option<String>>
 #[tauri::command]
 pub fn setting_set(s: State<AppState>, key: String, value: String) -> AppResult<()> {
     setting_set_inner(&s, &key, &value)
+}
+
+#[tauri::command]
+pub fn setting_remove(s: State<AppState>, key: String) -> AppResult<()> {
+    setting_remove_inner(&s, &key)
 }
 
 #[tauri::command]

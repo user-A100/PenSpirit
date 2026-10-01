@@ -8,6 +8,7 @@ import { MenuHost } from "./components/ui/MenuHost";
 import { TooltipHost } from "./components/ui/TooltipHost";
 import { CommandPalette } from "./components/ui/CommandPalette";
 import { DiffReview } from "./components/chat/DiffReview";
+import { VarsDialog } from "./components/chat/VarsDialog";
 import { WriteView } from "./views/WriteView";
 import { FocusEdge } from "./components/layout/FocusEdge";
 import { getView, getViews } from "./lib/nav/registry";
@@ -97,6 +98,7 @@ export default function App() {
       <TooltipHost />
       <CommandPalette />
       <DiffReview />
+      <VarsDialog />
     </ThemeProvider>
   );
 }

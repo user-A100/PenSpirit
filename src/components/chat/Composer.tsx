@@ -5,6 +5,7 @@ import { useWorkspace } from "../../stores/workspace";
 import { api, type AssemblyLog, type MentionRef, type WritingRule } from "../../lib/tauri";
 import { StyleSwitch } from "./StyleSwitch";
 import { findCommand, matchCommands, type SlashCommand } from "../../lib/ai/slashCommands";
+import { fillCommand } from "../../lib/ai/runPrompt";
 import { fuzzyMatch } from "../../lib/pinyin";
 import { quoteSelection } from "../../lib/ai/actions";
 import { openMenuAt } from "../../stores/menu";
@@ -41,7 +42,7 @@ function fmtTokens(n: number): string {
 
 type MenuState = { kind: "slash" | "mention"; query: string; index: number } | null;
 
-export function Composer({ onLocal }: { onLocal: (kind: "context" | "help") => void }) {
+export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "prompts") => void }) {
   const chapterId = useWorkspace((s) => s.currentChapterId);
   const bookId = useWorkspace((s) => s.currentBookId);
   const chapters = useWorkspace((s) => s.chapters);
@@ -204,6 +205,18 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help") => v
     if (c.needsSelection && !useChat.getState().quote && !quoteSelection()) {
       toast.info(`「${c.name}」作用于选中段落：先在正文选中一段（或选好后按 Ctrl+L）`);
     }
+    // 阶段 2B：自定义命令先填变量（{{选区}} 等自动、其它弹表单），再进输入框 / 直接发
+    if (c.custom) {
+      setText("");
+      void fillCommand(c).then((filled) => {
+        if (filled == null) return;
+        setCommand(c);
+        setText(filled);
+        if (c.sendNow) void doSend(filled, c);
+        else requestAnimationFrame(() => taRef.current?.focus());
+      });
+      return;
+    }
     setCommand(c);
     setText(c.template);
     if (c.sendNow) {
@@ -240,7 +253,10 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help") => v
     setText("");
     setCommand(null);
     setMenu(null);
-    const ok = await send(instruction, cmd ? { command: cmd.id, mode: cmd.mode, targetChars: cmd.targetChars ?? targetChars, disable: cmd.disable } : {});
+    const ok = await send(
+      instruction,
+      cmd ? { command: cmd.id, mode: cmd.mode, targetChars: cmd.targetChars ?? targetChars, disable: cmd.disable, temperature: cmd.temperature, providerId: cmd.providerId } : {},
+    );
     if (!ok) {
       setText(t);
       setCommand(cmd);
@@ -322,6 +338,7 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help") => v
                   <span className="w-20 shrink-0 font-medium text-[color:var(--text-primary)]">/{c.name}</span>
                   <span className="min-w-0 flex-1 truncate text-xs text-[color:var(--text-faint)]">{c.desc}</span>
                   <span className="shrink-0 text-2xs text-[color:var(--text-faint)]">
+                    {c.custom && <span className="mr-1 rounded-[3px] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-1 text-[color:var(--accent)]">自定义</span>}
                     {c.local ? "本地" : c.mode === "write" ? (c.output === "replace" ? "替换选区" : "写正文") : "讨论"}
                   </span>
                 </div>

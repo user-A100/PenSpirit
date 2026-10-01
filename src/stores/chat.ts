@@ -56,6 +56,9 @@ export interface SendExtra {
   retryHint?: string | null;
   /** 阶段 2B：多候选（本轮共生成几版） */
   candidates?: number;
+  /** 阶段 2B：自定义命令绑定的温度 / 服务商（缺省跟随输入区设置 / 使用中） */
+  temperature?: number | null;
+  providerId?: number | null;
 }
 
 const CANDIDATES_KEY = "bixian.chat.candidates";
@@ -418,7 +421,8 @@ export function buildTurnOptions(extra: SendExtra & { quote?: QuoteRef | null })
     disabled_slots: disabled,
     mentions: st.mentions.map(({ kind, id }) => ({ kind, id })),
     target_chars: extra.targetChars !== undefined ? extra.targetChars : st.targetChars,
-    temperature: st.temperature,
+    temperature: extra.temperature ?? st.temperature,
+    provider_id: extra.providerId ?? null,
     command: extra.command ?? null,
     rules: st.manualRules,
     retry_hint: extra.retryHint ?? null,

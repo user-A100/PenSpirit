@@ -23,6 +23,26 @@ fn provider(id: i64, name: &str) -> ProviderProfile {
     }
 }
 
+/// 阶段 2B：自定义命令绑定的模型——本轮指定服务商时用它，不改「使用中」；没指定 / 已删除回落到使用中
+#[test]
+fn 本轮指定服务商_不改使用中() {
+    let (_tmp, s) = setup();
+    let active = activate_provider(&s);
+    let mut other = provider(0, "绑定的模型");
+    other.model = "bound-model".into();
+    let other = cmd::save_provider_inner(&s, other).unwrap();
+    let (_book, _ch1, ch2) = book_with_two_chapters(&s);
+    let sess = cmd::get_or_create_session_inner(&s, ch2).unwrap();
+    let opts = AiTurnOptions { provider_id: Some(other.id), temperature: Some(0.2), ..Default::default() };
+    let t = cmd::send_prepare(&s, sess.id, "写一段", &opts).unwrap();
+    assert_eq!(t.req.model, "bound-model");
+    assert_eq!(t.req.temperature, 0.2);
+    assert_eq!(cmd::get_active_provider_inner(&s).unwrap(), Some(active.id));
+    cmd::cancel_generation_inner(&s, sess.id).ok();
+    let t2 = cmd::send_prepare(&s, sess.id, "再写", &AiTurnOptions { provider_id: Some(9999), ..Default::default() }).unwrap();
+    assert_eq!(t2.req.model, "test-model");
+}
+
 fn activate_provider(s: &AppState) -> ProviderProfile {
     let p = cmd::save_provider_inner(s, provider(0, "测试服务商")).unwrap();
     cmd::set_active_provider_inner(s, p.id).unwrap();

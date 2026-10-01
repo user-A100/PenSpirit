@@ -486,7 +486,7 @@ pub struct PreparedTurn {
 fn build_req(s: &AppState, assembled: Assembled, opts: &AiTurnOptions) -> AppResult<StreamReq> {
     let p = {
         let conn = lock(s)?;
-        provider::resolve(&conn)?
+        provider::resolve_for(&conn, opts.provider_id)?
     };
     Ok(StreamReq {
         base_url: p.base_url,
@@ -519,7 +519,7 @@ pub fn send_prepare(
 ) -> AppResult<PreparedTurn> {
     {
         let conn = lock(s)?;
-        provider::resolve(&conn)?;
+        provider::resolve_for(&conn, opts.provider_id)?;
     }
     let bundle = gather_context(s, session_id, opts, None)?;
     let assembled = assemble_with(&bundle, instruction, opts);
@@ -568,7 +568,7 @@ pub fn edit_resend_prepare(
     }
     {
         let conn = lock(s)?;
-        provider::resolve(&conn)?;
+        provider::resolve_for(&conn, opts.provider_id)?;
         let msg = repo::sessions::get_message(&conn, user_message_id)?;
         if msg.role != "user" {
             return Err(AppError::Invalid("只能编辑用户消息".into()));

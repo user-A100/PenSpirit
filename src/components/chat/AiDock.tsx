@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Archive, ArchiveRestore, BookMarked, ChevronDown, ChevronUp, Eye, Maximize2, MessageSquarePlus, Minimize2, Pencil, Pin, PinOff, RefreshCw, Search, ShieldOff, Sparkles, Trash2, X } from "lucide-react";
 import { TOOL_KIND_LABEL } from "./AgentTools";
 import { useUiNav } from "../../lib/nav/uiStore";
@@ -15,6 +15,8 @@ import { BackendSelector } from "./BackendSelector";
 import { ContextPreview } from "./ContextPreview";
 import { MemoryRules } from "./MemoryRules";
 import { SessionSearch } from "./SessionSearch";
+import { PromptLibrary } from "./PromptLibrary";
+import { usePrompts } from "../../lib/ai/prompts";
 import { MessageList } from "./MessageList";
 import { Composer } from "./Composer";
 
@@ -28,7 +30,7 @@ interface AiDockProps {
   onToggle: () => void;
 }
 
-type View = "chat" | "preview" | "help" | "memory" | "search";
+type View = "chat" | "preview" | "help" | "memory" | "search" | "prompts";
 
 const SUGGESTIONS: Array<{ label: string; cmd: string }> = [
   { label: "/续写", cmd: "continue" },
@@ -77,12 +79,30 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
     }
   };
 
-  const showLocal = (kind: "context" | "help") => {
+  const showLocal = (kind: "context" | "help" | "prompts") => {
     if (kind === "context") {
       setView("preview");
       void loadPreview();
-    } else setView("help");
+    } else setView(kind);
   };
+  // 表单类视图（命令库 / 记忆与规则）字段多：进入时自动最大化 AI 卡，回到对话再还原（用户原本就最大化的不动）
+  const autoMax = useRef(false);
+  useEffect(() => {
+    const ui = useUiNav.getState();
+    if (view === "prompts" || view === "memory") {
+      if (!ui.aiMaximized) {
+        autoMax.current = true;
+        ui.setAiMaximized(true);
+      }
+    } else if (autoMax.current) {
+      autoMax.current = false;
+      ui.setAiMaximized(false);
+    }
+  }, [view]);
+  // 命令库（全书通用）：dock 挂载时读一次——斜杠菜单与正文气泡都用
+  useEffect(() => {
+    if (!usePrompts.getState().loaded) void usePrompts.getState().load();
+  }, []);
 
   const current = sessions.find((s) => s.id === sessionId);
   const autoKinds = useChat((s) => (s.sessionId != null ? s.autoAllow[s.sessionId] ?? NO_KINDS : NO_KINDS));
@@ -286,6 +306,8 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
             <ContextPreview log={log} loading={previewLoading} onConfigChanged={() => void loadPreview()} />
           </div>
         </div>
+      ) : view === "prompts" ? (
+        <PromptLibrary onClose={() => setView("chat")} />
       ) : view === "search" ? (
         <SessionSearch onClose={() => setView("chat")} />
       ) : view === "memory" ? (
@@ -354,7 +376,7 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
         />
       )}
 
-      {view !== "help" && <Composer onLocal={showLocal} />}
+      {view !== "help" && view !== "prompts" && <Composer onLocal={showLocal} />}
     </div>
   );
 }
