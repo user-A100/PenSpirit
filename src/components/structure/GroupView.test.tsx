@@ -34,14 +34,48 @@ const CHS = [ch(11, "甲"), ch(12, "乙"), ch(13, "丙"), ch(14, "丁")];
 let reorderChapters: Mock;
 beforeEach(() => {
   reorderChapters = vi.fn(async () => {});
-  useWorkspace.setState({ books: [BOOK], chapters: CHS, currentBookId: 1, currentChapterId: 11, activePane: "a", reorderChapters });
-  useBinder.setState({ selected: [], anchor: null, filter: "", scope: { kind: "book" } });
+  useWorkspace.setState({ books: [BOOK], chapters: CHS, volumes: [], currentBookId: 1, currentChapterId: 11, activePane: "a", reorderChapters });
+  useBinder.setState({ selected: [], anchor: null, filter: "", scope: { kind: "book" }, hoist: null });
   useGroupView.setState({ modes: { a: "outliner", b: "single" }, preferred: "outliner" });
   useCollections.setState({ bookId: 1, list: [], members: {} });
   useMeta.setState({ labels: [], statuses: [] });
 });
 
 const outlinerRows = (container: HTMLElement) => [...container.querySelectorAll(".flex-1.overflow-y-auto > div")] as HTMLElement[];
+
+describe("组视图 · 卷（阶段 3B）", () => {
+  const VOL = { ...ch(30, "第一卷", 0), kind: "folder" as const, sort_key: 0.5 };
+  it("单选卷 = 看卷内各章（标题为卷名）；整本书有卷时卷作为卡片、含卷的同级重排走树操作", () => {
+    const applyTree = vi.fn(async () => true);
+    const kids = CHS.map((c, i) => ({ ...c, parent_id: i < 2 ? 30 : null }));
+    useWorkspace.setState({ chapters: kids, volumes: [VOL], applyTree });
+    useBinder.setState({ selected: [30] });
+    const { container, unmount } = render(<GroupView pane="a" mode="outliner" />);
+    expect(screen.getByText("第一卷")).toBeInTheDocument();
+    expect(outlinerRows(container).map((r) => r.querySelector("span.flex-1")?.textContent)).toEqual(["甲", "乙"]);
+    expect(screen.getByText("卷首语")).toBeInTheDocument();
+    unmount();
+
+    // 当前章在顶层 → 看全书顶层：卷 + 顶层章
+    useBinder.setState({ selected: [] });
+    useWorkspace.setState({ currentChapterId: 13 });
+    const r2 = render(<GroupView pane="a" mode="outliner" />);
+    const rows = outlinerRows(r2.container);
+    expect(rows.map((r) => r.querySelector("span.flex-1")?.textContent)).toEqual(["第一卷", "丙", "丁"]);
+    expect(screen.getByText(/1 卷 · 2 章/)).toBeInTheDocument();
+    // 把「丁」拖到卷前：顶层同级重排（卷连同子章整块移动）
+    fireEvent.dragStart(rows[2]);
+    fireEvent.dragOver(rows[0]);
+    fireEvent.drop(rows[0]);
+    expect(applyTree).toHaveBeenCalledWith([
+      { id: 14, parent_id: null },
+      { id: 30, parent_id: null },
+      { id: 11, parent_id: 30 },
+      { id: 12, parent_id: 30 },
+      { id: 13, parent_id: null },
+    ]);
+  });
+});
 
 describe("组视图", () => {
   it("无多选 = 整本书；表头显示章数与合计字数", () => {

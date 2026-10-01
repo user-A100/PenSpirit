@@ -4,7 +4,13 @@ export interface Book { id: number; slug: string; title: string; created_at: str
 export interface ChapterMeta {
   id: number; book_id: number; file_path: string; title: string; sort_key: number; word_count: number; created_at: string; updated_at: string;
   synopsis: string; label_id: number | null; status_id: number | null; target_words: number | null;
+  /** 阶段 3B：text = 正文章、folder = 卷（磁盘子目录，卷首语在 _index.md）；缺省视为 text */
+  kind?: "text" | "folder";
+  /** 所属卷（null = 顶层） */
+  parent_id?: number | null;
 }
+/** 合并章节的结果（撤销用：首章原文 + 被并入、已进回收站的章） */
+export interface MergeResult { merged: ChapterMeta; original: string; removed: number[] }
 export interface ChapterContent { meta: ChapterMeta; content: string }
 
 // ---- M7 批次1：章节元数据（标签/状态/关键词） ----
@@ -211,6 +217,20 @@ export const api = {
   renameBook: (id: number, title: string) => invoke<Book>("rename_book", { id, title }),
   listChapters: (bookId: number) => invoke<ChapterMeta[]>("list_chapters", { bookId }),
   createChapter: (bookId: number, title: string) => invoke<ChapterMeta>("create_chapter", { bookId, title }),
+  // ---- 阶段 3B：卷层级 ----
+  /** 整棵树（卷 + 章），全书先序 */
+  listNodes: (bookId: number) => invoke<ChapterMeta[]>("list_nodes", { bookId }),
+  /** 树操作统一入口：全书先序 + 所属卷；后端校验、落库并重编文件 / 搬目录 */
+  treeApply: (bookId: number, items: { id: number; parent_id: number | null }[]) => invoke<void>("tree_apply", { bookId, items }),
+  /** 在树中指定位置新建章：afterId（其后同级；为卷则卷后）或 parentId（卷末） */
+  chapterCreateAt: (bookId: number, title: string, afterId: number | null, parentId: number | null) =>
+    invoke<ChapterMeta>("chapter_create_at", { bookId, title, afterId, parentId }),
+  /** 新建卷；childIds 非空 = 放入新卷 */
+  volumeCreate: (bookId: number, title: string, afterId: number | null, childIds: number[]) =>
+    invoke<ChapterMeta>("volume_create", { bookId, title, afterId, childIds }),
+  chapterSplit: (id: number, head: string, tail: string, newTitle: string) =>
+    invoke<ChapterMeta>("chapter_split", { id, head, tail, newTitle }),
+  chapterMerge: (ids: number[]) => invoke<MergeResult>("chapter_merge", { ids }),
   renameChapter: (id: number, newTitle: string) => invoke<ChapterMeta>("rename_chapter", { id, newTitle }),
   deleteChapter: (id: number) => invoke<void>("delete_chapter", { id }),
   // ---- M7 批次1：章节元数据 ----

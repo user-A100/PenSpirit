@@ -18,6 +18,9 @@ interface BinderState {
   /** 「在目录中定位当前章」请求计数（Binder 监听它滚动并聚焦当前章行） */
   revealSeq: number;
   reveal: () => void;
+  /** 阶段 3B：聚焦单卷（Hoist）——侧栏只显示该卷的章；null = 全书 */
+  hoist: number | null;
+  setHoist: (id: number | null) => void;
   startRename: (target: RenameTarget) => void;
   stopRename: () => void;
   /** 单选（普通点击） */
@@ -45,6 +48,8 @@ export const useBinder = create<BinderState>((set, get) => ({
   scope: { kind: "book" },
   revealSeq: 0,
   reveal: () => set((s) => ({ revealSeq: s.revealSeq + 1 })),
+  hoist: null,
+  setHoist: (hoist) => set({ hoist, filter: "" }),
   startRename: (target) => set({ renaming: target }),
   stopRename: () => set({ renaming: null }),
   selectOne: (id) => set({ selected: [id], anchor: id }),
@@ -67,5 +72,5 @@ export const useBinder = create<BinderState>((set, get) => ({
   setSelection: (ids, order, anchor) => set({ selected: inOrder(ids, order), anchor: anchor === undefined ? get().anchor : anchor }),
   clearSelection: () => set({ selected: [], anchor: null }),
   setFilter: (filter) => set({ filter }),
-  setScope: (scope) => set({ scope, selected: [], anchor: null, filter: "" }),
+  setScope: (scope) => set({ scope, selected: [], anchor: null, filter: "", hoist: null }),
 }));

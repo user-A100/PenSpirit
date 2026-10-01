@@ -16,7 +16,9 @@ vi.mock("../lib/tauri", () => ({
     deleteChapter: vi.fn().mockResolvedValue(undefined),
     readChapter: vi.fn().mockImplementation(async (id: number) => ({ meta: {}, content: `正文-${id}` })),
     listChapters: vi.fn(),
+    listNodes: vi.fn(),
     createChapter: vi.fn(),
+    chapterCreateAt: vi.fn(),
     reorderChapters: vi.fn().mockResolvedValue(undefined),
     renameChapter: vi.fn(),
   },
@@ -55,7 +57,7 @@ describe("workspace 章节增删改", () => {
 
     const t = lastToast();
     expect(t.message).toContain("二");
-    vi.mocked(api.listChapters).mockResolvedValue(chapters);
+    vi.mocked(api.listNodes).mockResolvedValue(chapters);
     await t.action!.run();
     expect(trashApi.restoreChapter).toHaveBeenCalledWith(12);
     expect(useWorkspace.getState().chapters.map((c) => c.id)).toEqual([11, 12, 13]);
@@ -67,15 +69,13 @@ describe("workspace 章节增删改", () => {
     expect(useWorkspace.getState().currentChapterId).toBe(12);
   });
 
-  it("新建章插到指定章之后并选中", async () => {
+  it("新建章插到指定章之后并选中（后端一步落位）", async () => {
     const created = { ...chapters[0], id: 14, title: "新章节", sort_key: 4 };
-    vi.mocked(api.createChapter).mockResolvedValue(created);
-    vi.mocked(api.listChapters)
-      .mockResolvedValueOnce([...chapters, created])
-      .mockResolvedValueOnce([chapters[0], created, chapters[1], chapters[2]]);
+    vi.mocked(api.chapterCreateAt).mockResolvedValue(created);
+    vi.mocked(api.listNodes).mockResolvedValueOnce([chapters[0], created, chapters[1], chapters[2]]);
     const got = await useWorkspace.getState().createChapter("新章节", { afterId: 11, select: true });
     expect(got?.id).toBe(14);
-    expect(api.reorderChapters).toHaveBeenCalledWith([11, 14, 12, 13]);
+    expect(api.chapterCreateAt).toHaveBeenCalledWith(1, "新章节", 11, null);
     expect(useWorkspace.getState().chapters.map((c) => c.id)).toEqual([11, 14, 12, 13]);
     expect(useWorkspace.getState().currentChapterId).toBe(14);
   });

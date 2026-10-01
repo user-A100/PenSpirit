@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Eraser, RotateCcw, Trash2, X } from "lucide-react";
+import { Eraser, Folder, RotateCcw, Trash2, X } from "lucide-react";
 import { trashApi, type TrashedChapter } from "../../lib/tauri_trash";
 import { useWorkspace } from "../../stores/workspace";
 import { errMsg } from "../../lib/errors";
@@ -135,7 +135,8 @@ export function TrashPanel(props: { bookId: number | null; onClose: () => void; 
               className="mb-1 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-[var(--bg-hover)]"
             >
               <div className="flex items-center gap-1">
-                <span className="min-w-0 flex-1 truncate text-xs text-[color:var(--text-primary)]" title={c.title}>
+                {c.kind === "folder" && <Folder size={12} aria-label="卷" className="shrink-0 text-[color:var(--accent)]" />}
+                <span className="min-w-0 flex-1 truncate text-xs text-[color:var(--text-primary)]" title={c.kind === "folder" ? `卷：${c.title}（恢复后其中的章可逐一恢复回卷里）` : c.title}>
                   {c.title}
                 </span>
                 <button

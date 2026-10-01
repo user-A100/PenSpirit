@@ -42,13 +42,15 @@ const titles = () => [...document.querySelectorAll("[data-chapter-row]")].map((r
 
 let selectChapter: Mock;
 let reorderChapters: Mock;
+let applyTree: Mock;
 
 beforeEach(() => {
   selectChapter = vi.fn(async (id: number) => {
     useWorkspace.setState({ currentChapterId: id });
   });
   reorderChapters = vi.fn(async () => {});
-  useWorkspace.setState({ books: [BOOK], chapters: CHS, currentBookId: 1, currentChapterId: 11, activePane: "a", selectChapter, reorderChapters });
+  applyTree = vi.fn(async () => true);
+  useWorkspace.setState({ books: [BOOK], chapters: CHS, volumes: [], currentBookId: 1, currentChapterId: 11, activePane: "a", selectChapter, reorderChapters, applyTree });
   useBinder.setState({ selected: [], anchor: null, filter: "", scope: { kind: "book" }, renaming: null, revealSeq: 0 });
   useMeta.setState({ labels: LABELS, statuses: STATUSES });
   useGroupView.setState({ modes: { a: "single", b: "single" }, preferred: "corkboard" });
@@ -104,7 +106,8 @@ describe("Binder 键盘", () => {
     expect(useBinder.getState().selected).toEqual([12, 13]);
 
     fireEvent.keyDown(row("重逢"), { key: "ArrowUp", ctrlKey: true });
-    expect(reorderChapters).toHaveBeenCalledWith([12, 13, 11, 14, 15]);
+    // 阶段 3B：同级移位走树操作
+    expect(applyTree).toHaveBeenCalledWith([12, 13, 11, 14, 15].map((id) => ({ id, parent_id: null })));
 
     fireEvent.keyDown(row("重逢"), { key: "a", ctrlKey: true });
     expect(useBinder.getState().selected).toEqual([11, 12, 13, 14, 15]);
@@ -144,7 +147,7 @@ describe("Binder 右键批量赋值", () => {
     );
     useBinder.getState().setSelection([12, 13, 14], CHS.map((c) => c.id));
     fireEvent.contextMenu(row("重逢"));
-    fireEvent.click(await screen.findByText("标签（3 章）"));
+    fireEvent.click(await screen.findByText("标签（3 项）"));
     fireEvent.click(await screen.findByText("主线"));
     await waitFor(() => expect(api.chapterUpdateMeta).toHaveBeenCalledTimes(3));
     expect(api.chapterUpdateMeta).toHaveBeenCalledWith(12, { label_id: 1 });

@@ -86,7 +86,10 @@ pub(crate) fn gather_context(
             .position(|c| c.id == chapter_id)
             .and_then(|i| i.checked_sub(1))
             .map(|i| chapters[i].file_path.clone());
-        let text = fs_service::read_chapter(&s.root, &cur.file_path)?;
+        // 卷（卷首语）也能开对话：读卷目录内的 _index.md，未写过则为空
+        let text = fs_service::read_chapter(&s.root, &crate::commands::body_rel(&cur)).or_else(|e| {
+            if cur.kind == "folder" { Ok(String::new()) } else { Err(e) }
+        })?;
         (text, prev)
     };
     // 光标感知：前端给了光标前文就以它为准（编辑器里的内容比磁盘新，且续写位置正确）

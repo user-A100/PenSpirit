@@ -4,7 +4,8 @@ import { useMeta } from "../../stores/meta";
 import { useWorkspace } from "../../stores/workspace";
 import { openContextMenu, openMenuAt, type MenuEntry } from "../../stores/menu";
 import { chapterMenu, setChaptersMeta } from "../../lib/binderActions";
-import { useLens, type LensProps } from "./lens";
+import { Folder } from "lucide-react";
+import { useLens, useNodeWords, type LensProps } from "./lens";
 
 // 大纲列（Scrivener Outliner 移植）：章 = 行。点表头排序 = 视图透镜，只改展示不动 sort_key
 // （正序循环：升 → 降 → 恢复目录序）。阶段 3A：列可选（梗概/标签/状态/字数/目标）、
@@ -35,6 +36,7 @@ export function OutlinerTable(props: LensProps = {}) {
   const [asc, setAsc] = useState(true);
   const [dragId, setDragId] = useState<number | null>(null);
   const [cols, setCols] = useState<OptCol[]>(readCols);
+  const wordsOf = useNodeWords();
 
   // 排序 = 透镜：永远基于目录序派生，不回写
   const rows = useMemo(() => {
@@ -46,11 +48,12 @@ export function OutlinerTable(props: LensProps = {}) {
       case "title": list.sort((a, b) => collator.compare(a.title, b.title) * (asc ? 1 : -1)); break;
       case "label": list.sort((a, b) => (labelOf(a.label_id) - labelOf(b.label_id)) * (asc ? 1 : -1)); break;
       case "status": list.sort((a, b) => (statusOf(a.status_id) - statusOf(b.status_id)) * (asc ? 1 : -1)); break;
-      case "words": list.sort((a, b) => (a.word_count - b.word_count) * (asc ? 1 : -1)); break;
+      case "words": list.sort((a, b) => (wordsOf(a) - wordsOf(b)) * (asc ? 1 : -1)); break;
       case "target": list.sort((a, b) => ((a.target_words ?? -1) - (b.target_words ?? -1)) * (asc ? 1 : -1)); break;
       default: break;
     }
     return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapters, labels, statuses, sortKey, asc]);
 
   const headerClick = (key: SortKey) => {
@@ -109,7 +112,7 @@ export function OutlinerTable(props: LensProps = {}) {
       <SortIcon colKey={key} />
     </button>
   );
-  const totalWords = chapters.reduce((n, c) => n + c.word_count, 0);
+  const totalWords = chapters.reduce((n, c) => n + wordsOf(c), 0);
   const targets = chapters.reduce((n, c) => n + (c.target_words ?? 0), 0);
 
   const pickMenu = (e: React.MouseEvent, ids: number[], kind: "label" | "status") => {
@@ -146,9 +149,11 @@ export function OutlinerTable(props: LensProps = {}) {
         {rows.map((c) => {
           const label = labels.find((l) => l.id === c.label_id) ?? null;
           const status = statuses.find((st) => st.id === c.status_id) ?? null;
+          const words = wordsOf(c);
+          const folder = c.kind === "folder";
           const progress =
             c.target_words != null && c.target_words > 0
-              ? Math.min(100, Math.round((c.word_count / c.target_words) * 100))
+              ? Math.min(100, Math.round((words / c.target_words) * 100))
               : null;
           const ids = [c.id];
           const active = currentChapterId === c.id;
@@ -170,7 +175,8 @@ export function OutlinerTable(props: LensProps = {}) {
               <span className={`w-8 shrink-0 text-[color:var(--text-faint)] ${canDrag ? "cursor-grab" : ""}`} title={canDrag ? "拖拽换序" : undefined}>
                 {chapters.indexOf(c) + 1}
               </span>
-              <span className="min-w-0 flex-1 truncate text-[color:var(--text-primary)]">{c.title}</span>
+              {folder && <Folder size={12} className="-mr-1 shrink-0 text-[color:var(--accent)]" />}
+              <span className={`min-w-0 flex-1 truncate text-[color:var(--text-primary)] ${folder ? "font-medium" : ""}`}>{c.title}</span>
               {show("synopsis") && (
                 <span className="hidden min-w-0 flex-[1.4] truncate text-[color:var(--text-faint)] @2xl:block" title={c.synopsis}>
                   {c.synopsis || "—"}
@@ -193,7 +199,7 @@ export function OutlinerTable(props: LensProps = {}) {
                   {status?.title ?? "—"}
                 </button>
               )}
-              {show("words") && <span className="w-16 shrink-0 text-right tabular-nums text-[color:var(--text-secondary)]">{c.word_count}</span>}
+              {show("words") && <span className="w-16 shrink-0 text-right tabular-nums text-[color:var(--text-secondary)]">{words}</span>}
               {show("target") && (
                 <span className="flex w-24 shrink-0 items-center gap-1.5">
                   {progress != null ? (
@@ -214,7 +220,7 @@ export function OutlinerTable(props: LensProps = {}) {
         })}
       </div>
       <div className="flex shrink-0 items-center gap-3 px-3 py-1.5 text-2xs text-[color:var(--text-faint)] [box-shadow:inset_0_1px_0_var(--hairline)]">
-        <span>共 {chapters.length} 章</span>
+        <span>共 {chapters.filter((c) => c.kind !== "folder").length} 章{chapters.some((c) => c.kind === "folder") ? ` · ${chapters.filter((c) => c.kind === "folder").length} 卷` : ""}</span>
         <span className="tabular-nums">{totalWords.toLocaleString()} 字</span>
         {targets > 0 && <span className="tabular-nums">目标 {targets.toLocaleString()} 字 · {Math.min(100, Math.round((totalWords / targets) * 100))}%</span>}
         {reorder == null && <span className="ml-auto">只读</span>}

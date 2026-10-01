@@ -1,8 +1,8 @@
 //! M2-T8 导出：txt / docx。
 //!
 //! 章序按书内既有 sort_key 顺序输出（不按勾选顺序）；空筛选 = 全书。
-//! chapters 表无卷字段，故导出为平铺章节列表（卷信息只用于导入预览分组），
-//! docx 用 Heading1 承载章题，Word 导航窗格可直接跳章。
+//! 阶段 3B 起有卷：每进入一个新卷先输出卷标题（及卷首语）；docx 中卷为 Heading1、章为 Heading2，
+//! 无卷的书章题仍为 Heading1。Word 导航窗格可直接跳卷 / 跳章。
 
 use std::path::Path;
 
@@ -11,6 +11,8 @@ use serde::Deserialize;
 use crate::commands::lock;
 use crate::error::{AppError, AppResult};
 use crate::fs_service;
+use std::collections::HashMap;
+
 use crate::models::ChapterMeta;
 use crate::repo;
 use crate::state::AppState;
@@ -34,28 +36,57 @@ fn chapters_of(s: &AppState, book_id: i64, range: &ExportRange) -> AppResult<Vec
     Ok(all.into_iter().filter(|c| range.chapter_ids.contains(&c.id)).collect())
 }
 
-/// 组装纯文本：章题 + 空行 + 正文；行尾统一 CRLF（记事本兼容）。
+/// 书内的卷：id → (卷名, 卷首语)
+fn volumes_of(s: &AppState, book_id: i64) -> AppResult<HashMap<i64, (String, String)>> {
+    let nodes = repo::chapters::list_nodes(&*lock(s)?, book_id)?;
+    let mut out = HashMap::new();
+    for n in nodes.into_iter().filter(|n| n.kind == "folder") {
+        let body = fs_service::read_chapter(&s.root, &format!("{}/{}", n.file_path, fs_service::VOLUME_BODY)).unwrap_or_default();
+        out.insert(n.id, (n.title, body));
+    }
+    Ok(out)
+}
+
+/// 正文逐行输出（CRLF；indent 时非空段落前加全角双空格，空行原样保留）
+fn push_body(out: &mut String, body: &str, indent: bool) {
+    for line in body.replace("\r\n", "\n").replace('\r', "\n").lines() {
+        if line.trim().is_empty() {
+            out.push_str("\r\n");
+        } else {
+            if indent {
+                out.push_str(INDENT);
+            }
+            out.push_str(line);
+            out.push_str("\r\n");
+        }
+    }
+}
+
+/// 组装纯文本：（进入新卷时）卷名 + 卷首语，章题 + 空行 + 正文；行尾统一 CRLF（记事本兼容）。
 /// `indent = true` 时正文每个非空段落前加全角双空格；空行原样保留。
 pub fn build_txt(s: &AppState, book_id: i64, range: &ExportRange, indent: bool) -> AppResult<String> {
+    let volumes = volumes_of(s, book_id)?;
     let mut out = String::new();
+    let mut current_volume: Option<i64> = None;
     for (i, ch) in chapters_of(s, book_id, range)?.iter().enumerate() {
         if i > 0 {
             out.push_str("\r\n");
         }
-        out.push_str(&ch.title);
-        out.push_str("\r\n\r\n");
-        let body = fs_service::read_chapter(&s.root, &ch.file_path)?;
-        for line in body.replace("\r\n", "\n").replace('\r', "\n").lines() {
-            if line.trim().is_empty() {
-                out.push_str("\r\n");
-            } else {
-                if indent {
-                    out.push_str(INDENT);
-                }
-                out.push_str(line);
+        let vol = ch.parent_id.filter(|p| volumes.contains_key(p));
+        if vol.is_some() && vol != current_volume {
+            let (title, body) = &volumes[&vol.unwrap()];
+            out.push_str(title);
+            out.push_str("\r\n\r\n");
+            if !body.trim().is_empty() {
+                push_body(&mut out, body, indent);
                 out.push_str("\r\n");
             }
         }
+        current_volume = vol;
+        out.push_str(&ch.title);
+        out.push_str("\r\n\r\n");
+        let body = fs_service::read_chapter(&s.root, &ch.file_path)?;
+        push_body(&mut out, &body, indent);
     }
     Ok(out)
 }
@@ -83,12 +114,26 @@ pub fn export_docx_inner(
     range: &ExportRange,
     dest: &Path,
 ) -> AppResult<()> {
+    let volumes = volumes_of(s, book_id)?;
     let mut docx = docx_rs::Docx::new()
-        .add_style(docx_rs::Style::new("Heading1", docx_rs::StyleType::Paragraph).name("Heading 1"));
+        .add_style(docx_rs::Style::new("Heading1", docx_rs::StyleType::Paragraph).name("Heading 1"))
+        .add_style(docx_rs::Style::new("Heading2", docx_rs::StyleType::Paragraph).name("Heading 2"));
+    // 有卷时：卷 = Heading1、章 = Heading2；无卷的书章题仍为 Heading1
+    let chapter_style = if volumes.is_empty() { "Heading1" } else { "Heading2" };
+    let mut current_volume: Option<i64> = None;
     for ch in chapters_of(s, book_id, range)? {
+        let vol = ch.parent_id.filter(|p| volumes.contains_key(p));
+        if vol.is_some() && vol != current_volume {
+            let (title, body) = &volumes[&vol.unwrap()];
+            docx = docx.add_paragraph(docx_rs::Paragraph::new().style("Heading1").add_run(docx_rs::Run::new().add_text(title)));
+            for line in body.replace("\r\n", "\n").lines().filter(|l| !l.trim().is_empty()) {
+                docx = docx.add_paragraph(docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text(line)));
+            }
+        }
+        current_volume = vol;
         docx = docx.add_paragraph(
             docx_rs::Paragraph::new()
-                .style("Heading1")
+                .style(chapter_style)
                 .add_run(docx_rs::Run::new().add_text(&ch.title)),
         );
         let body = fs_service::read_chapter(&s.root, &ch.file_path)?;

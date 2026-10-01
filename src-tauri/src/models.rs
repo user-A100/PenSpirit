@@ -22,6 +22,7 @@ pub struct Book {
 pub struct ChapterMeta {
     pub id: i64,
     pub book_id: i64,
+    /// 正文章：md 相对路径；卷（kind = "folder"）：卷目录相对路径（卷首语在其中的 _index.md）
     pub file_path: String,
     pub title: String,
     pub sort_key: f64,
@@ -46,12 +47,38 @@ pub struct ChapterMeta {
     /// 本章目标字数（None = 未设置）
     #[serde(default)]
     pub target_words: Option<i64>,
+    /// 阶段 3B："text"（正文章）/ "folder"（卷）
+    #[serde(default = "default_kind")]
+    pub kind: String,
+    /// 所属卷（None = 顶层）
+    #[serde(default)]
+    pub parent_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChapterContent {
     pub meta: ChapterMeta,
     pub content: String,
+}
+
+fn default_kind() -> String {
+    "text".into()
+}
+
+/// tree_apply 清单项：全书先序中的一个节点及其所属卷
+#[derive(Debug, Clone, Deserialize)]
+pub struct TreeItem {
+    pub id: i64,
+    #[serde(default)]
+    pub parent_id: Option<i64>,
+}
+
+/// 合并章节的结果（撤销用：首章原文 + 被并入、已移入回收站的章）
+#[derive(Debug, Clone, Serialize)]
+pub struct MergeResult {
+    pub merged: ChapterMeta,
+    pub original: String,
+    pub removed: Vec<i64>,
 }
 
 /// 章节元数据部分更新：字段缺失 = 不动；字段为 null = 清空。

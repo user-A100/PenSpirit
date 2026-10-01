@@ -66,7 +66,8 @@ await withGuard("p2a", async ({ app, makeBook }) => {
     check("回答标记「已采纳」", await ev(`[...document.querySelectorAll('[data-reply]')].some(r => r.innerText.includes('已采纳'))`));
     await app.clickEl(`[...document.querySelectorAll('[data-testid="toast"] button')].find(b => b.textContent === '撤销')`);
     await waitFor(ev, `!document.querySelector('.ProseMirror')?.textContent.includes('夜雨初歇')`);
-    check("Toast 撤销：一步回退插入", true);
+    // 原文必须还在：载入若留在撤销栈里，撤销会连载入一起撤掉、正文变空（阶段 3B 修复）
+    check("Toast 撤销：一步回退插入、原文还在", await ev(`document.querySelector('.ProseMirror').textContent.includes('旧城灯会')`));
 
     // ③ 重新生成：出现 ‹2/2›，可切回 1/2
     await app.clickEl(`[...document.querySelectorAll('[data-reply] button')].find(b => b.getAttribute('aria-label') === '重新生成')`);

@@ -6,7 +6,8 @@ import { openContextMenu } from "../../stores/menu";
 import { chapterMenu, setChaptersMeta } from "../../lib/binderActions";
 import { api, type ChapterMeta } from "../../lib/tauri";
 import { freeformCommitOrder } from "../../lib/freeform";
-import { useLens, type LensProps } from "./lens";
+import { Folder } from "lucide-react";
+import { useChildCount, useLens, useNodeWords, type LensProps } from "./lens";
 
 // 卡片墙（Scrivener Corkboard 移植）：章 = 卡，显示梗概/标签/状态/字数/目标进度。
 // 两种摆法：排序网格（拖拽换序，落 sort_key）与自由摆位（坐标落 chapters.freeform_x/y，
@@ -36,7 +37,7 @@ function SynopsisEditor({ ch, onDone }: { ch: ChapterMeta; onDone: () => void })
     if (v === ch.synopsis) return;
     try {
       const meta = await api.chapterUpdateMeta(ch.id, { synopsis: v });
-      useWorkspace.setState((s) => ({ chapters: s.chapters.map((c) => (c.id === ch.id ? { ...c, ...meta } : c)) }));
+      useWorkspace.getState().patchNodes([meta]);
     } catch {
       // 失败保持原梗概（store 未改）
     }
@@ -67,11 +68,15 @@ function SynopsisEditor({ ch, onDone }: { ch: ChapterMeta; onDone: () => void })
 function Card({ ch, active, dragging, over, editing, onEdit }: { ch: ChapterMeta; active: boolean; dragging: boolean; over: boolean; editing: boolean; onEdit: (v: boolean) => void }) {
   const labels = useMeta((s) => s.labels);
   const statuses = useMeta((s) => s.statuses);
+  const wordsOf = useNodeWords();
+  const childCount = useChildCount();
   const label = labels.find((l) => l.id === ch.label_id) ?? null;
   const status = statuses.find((st) => st.id === ch.status_id) ?? null;
+  const folder = ch.kind === "folder";
+  const words = wordsOf(ch);
   const progress =
     ch.target_words != null && ch.target_words > 0
-      ? Math.min(100, Math.round((ch.word_count / ch.target_words) * 100))
+      ? Math.min(100, Math.round((words / ch.target_words) * 100))
       : null;
   return (
     <div
@@ -83,7 +88,10 @@ function Card({ ch, active, dragging, over, editing, onEdit }: { ch: ChapterMeta
     >
       {/* 左缘标签色条（Scrivener 卡片标签色） */}
       {label && <span aria-hidden className="absolute bottom-0 left-0 top-0 w-[3px]" style={{ backgroundColor: label.color }} />}
+      {/* 卷卡：背后叠一张卡的「一摞」意象（Scrivener 文件夹卡片） */}
+      {folder && <span aria-hidden className="pointer-events-none absolute inset-x-2 -top-px h-px bg-[color:var(--accent)] opacity-40" />}
       <div className="flex min-w-0 items-center gap-1.5">
+        {folder && <Folder size={13} className="shrink-0 text-[color:var(--accent)]" />}
         {label && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: label.color }} title={label.title} />}
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-[color:var(--text-primary)]">{ch.title}</span>
         {status && (
@@ -114,7 +122,7 @@ function Card({ ch, active, dragging, over, editing, onEdit }: { ch: ChapterMeta
         </div>
       )}
       <div className="flex items-center gap-2 text-2xs text-[color:var(--text-faint)]">
-        <span>{ch.word_count} 字</span>
+        <span>{folder ? `${childCount(ch.id)} 章 · ${words} 字` : `${words} 字`}</span>
         {progress != null && (
           <>
             <div className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--fill-element)]">

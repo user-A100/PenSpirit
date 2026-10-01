@@ -17,12 +17,14 @@ import {
   SquareSplitVertical,
   Trash2,
   Type,
+  Scissors,
 } from "lucide-react";
 import { openMenuAt, type MenuEntry } from "../../stores/menu";
 import { commandShortcut, runCommand } from "../../lib/commands";
 import { useWorkspace, type PaneId } from "../../stores/workspace";
 import { registerEditorBridge, toParagraphs, type EditorBridge } from "../../lib/editorBridge";
-import { editorMarkdown } from "../../lib/markdownOut";
+import { editorMarkdown, splitMarkdownAt } from "../../lib/markdownOut";
+import { loadDocument } from "../../lib/editorDoc";
 import { askAiAboutSelection, runSelectionCommand } from "../../lib/ai/actions";
 import { useSearch } from "../../stores/search";
 import { useOutline } from "../../stores/outline";
@@ -160,7 +162,8 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
       void api.writeChapter(loaded, pending).catch((e) => console.warn("切章冲刷上一章失败:", e));
     }
     suppressStats.current = true;
-    editor.commands.setContent(content);
+    // 载入不进撤销栈（否则载入后很快的输入 / 采纳会与它并成一步，撤销即清空正文并被自动保存）
+    loadDocument(editor, content);
     suppressStats.current = false;
     dirty.current = null;
     savedRef.current = null;
@@ -276,6 +279,25 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
           if (!hit) return false;
           return editor.chain().focus().insertContentAt(hit.pos, text).run();
         }),
+      splitAtCursor: () => splitMarkdownAt(editor, editor.state.selection.from),
+      markdown: () => editorMarkdown(editor),
+      resetContent: (md) => {
+        suppressStats.current = true;
+        try {
+          loadDocument(editor, md);
+        } finally {
+          suppressStats.current = false;
+        }
+        dirty.current = null;
+        savedRef.current = null;
+      },
+      flush: async () => {
+        const pending = dirty.current;
+        if (pending == null || pending === savedRef.current) return;
+        await api.writeChapter(chapterId, pending);
+        savedRef.current = pending;
+        dirty.current = null;
+      },
     };
     return registerEditorBridge(pane, bridge);
   }, [editor, chapterId, pane]);
@@ -359,6 +381,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
       ],
     },
     { type: "separator" },
+    { label: "在光标处拆分…", icon: Scissors, shortcut: commandShortcut("chapter.split"), onSelect: () => runCommand("chapter.split") },
     { label: "重命名本章", icon: Pencil, shortcut: "F2", onSelect: () => runCommand("chapter.rename") },
     { label: "移到回收站", icon: Trash2, danger: true, onSelect: () => runCommand("chapter.delete") },
   ];

@@ -20,8 +20,17 @@ export interface PaneSlot {
 const EMPTY_PANE: PaneSlot = { chapterId: null, content: null };
 const HISTORY_MAX = 100;
 
+/** 节点拆成正文章与卷（各自保持全书先序） */
+function splitNodes(nodes: ChapterMeta[]): { chapters: ChapterMeta[]; volumes: ChapterMeta[] } {
+  return { chapters: nodes.filter((n) => n.kind !== "folder"), volumes: nodes.filter((n) => n.kind === "folder") };
+}
+
 interface WorkspaceState {
-  books: Book[]; chapters: ChapterMeta[];
+  books: Book[];
+  /** 正文章（不含卷），全书先序——绝大多数调用方（搜索、AI、统计、命令面板…）只认它 */
+  chapters: ChapterMeta[];
+  /** 阶段 3B：卷（folder 节点），与 chapters 合起来是整棵树（parent_id / sort_key） */
+  volumes: ChapterMeta[];
   currentBookId: number | null; currentChapterId: number | null;
   chapterContent: string | null;
   loading: boolean; error: string | null;
@@ -36,8 +45,14 @@ interface WorkspaceState {
   loadBooks: () => Promise<void>;
   selectBook: (id: number) => Promise<void>;
   createBook: (title: string) => Promise<void>;
-  /** 新建章：afterId 给定时插到该章之后（否则追加到末尾）；select=true 时立即打开 */
-  createChapter: (title: string, opts?: { afterId?: number | null; select?: boolean }) => Promise<ChapterMeta | null>;
+  /** 新建章：afterId = 其后同级（为卷则卷后）；parentId = 该卷末尾；都无 = 全书末尾；select=true 时立即打开 */
+  createChapter: (title: string, opts?: { afterId?: number | null; parentId?: number | null; select?: boolean }) => Promise<ChapterMeta | null>;
+  /** 新建卷（阶段 3B）：childIds 非空 = 把这些章放入新卷 */
+  createVolume: (title: string, opts?: { afterId?: number | null; childIds?: number[] }) => Promise<ChapterMeta | null>;
+  /** 树操作（拖放 / 升降级 / 移位）：乐观更新，失败回滚 */
+  applyTree: (items: { id: number; parent_id: number | null }[]) => Promise<boolean>;
+  /** 元数据更新后把新行合进章或卷列表 */
+  patchNodes: (metas: ChapterMeta[]) => void;
   /** 重命名章（磁盘文件随之改名）；失败 toast 并返回 false */
   renameChapter: (id: number, title: string) => Promise<boolean>;
   /** 删除章 = 移入回收站，toast 带「撤销」；删的是正在看的章则打开相邻章 */
@@ -88,7 +103,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
   };
 
   return {
-    books: [], chapters: [], currentBookId: null, currentChapterId: null, chapterContent: null, loading: false, error: null,
+    books: [], chapters: [], volumes: [], currentBookId: null, currentChapterId: null, chapterContent: null, loading: false, error: null,
     splitAxis: "none",
     panes: { a: { ...EMPTY_PANE }, b: { ...EMPTY_PANE } },
     activePane: "a",
@@ -118,7 +133,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         splitAxis: "none", panes: { a: { ...EMPTY_PANE }, b: { ...EMPTY_PANE } },
         activePane: "a", history: [], historyIndex: -1,
       });
-      set({ chapters: await api.listChapters(id) });
+      set(splitNodes(await api.listNodes(id)));
     },
     createBook: async (title) => {
       const book = await api.createBook(title);
@@ -130,39 +145,63 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       if (bookId == null) return null;
       let created: ChapterMeta;
       try {
-        created = await api.createChapter(bookId, title);
+        // 阶段 3B：后端一步建在树中目标位置（同卷其后 / 卷末 / 全书末），并重编文件序号
+        created = await api.chapterCreateAt(bookId, title, opts?.afterId ?? null, opts?.parentId ?? null);
       } catch (e) {
         toast.error(`新建章节失败：${errMsg(e)}`);
         return null;
       }
-      let chapters = await api.listChapters(bookId);
-      const afterId = opts?.afterId;
-      if (afterId != null) {
-        // 后端总是追加到末尾；要插在某章之后就再排一次序
-        const ids = chapters.map((c) => c.id).filter((x) => x !== created.id);
-        const at = ids.indexOf(afterId);
-        if (at >= 0 && at < ids.length - 1) {
-          ids.splice(at + 1, 0, created.id);
-          try {
-            await api.reorderChapters(ids);
-            chapters = await api.listChapters(bookId);
-          } catch (e) {
-            toast.error(`新章已建在末尾（排序失败：${errMsg(e)}）`);
-          }
-        }
-      }
+      const nodes = await api.listNodes(bookId);
       if (get().currentBookId !== bookId) return created;
-      set({ chapters });
+      set(splitNodes(nodes));
       if (opts?.select) await get().selectChapter(created.id);
       return created;
     },
+    createVolume: async (title, opts) => {
+      const bookId = get().currentBookId;
+      if (bookId == null) return null;
+      try {
+        const folder = await api.volumeCreate(bookId, title, opts?.afterId ?? null, opts?.childIds ?? []);
+        if (get().currentBookId === bookId) set(splitNodes(await api.listNodes(bookId)));
+        return folder;
+      } catch (e) {
+        toast.error(`新建卷失败：${errMsg(e)}`);
+        return null;
+      }
+    },
+    applyTree: async (items) => {
+      const bookId = get().currentBookId;
+      if (bookId == null) return false;
+      const prev = { chapters: get().chapters, volumes: get().volumes };
+      const place = new Map(items.map((it, i) => [it.id, { sort_key: i, parent_id: it.parent_id }]));
+      const apply = (list: ChapterMeta[]) =>
+        list
+          .map((n) => (place.has(n.id) ? { ...n, ...place.get(n.id)! } : n))
+          .sort((a, b) => a.sort_key - b.sort_key);
+      set({ chapters: apply(prev.chapters), volumes: apply(prev.volumes) });
+      try {
+        await api.treeApply(bookId, items);
+        return true;
+      } catch (e) {
+        if (get().currentBookId === bookId) set(prev);
+        toast.error(`调整结构失败：${errMsg(e)}`);
+        return false;
+      }
+    },
+    patchNodes: (metas) => {
+      const byId = new Map(metas.map((m) => [m.id, m]));
+      const patch = (list: ChapterMeta[]) => list.map((c) => (byId.has(c.id) ? { ...c, ...byId.get(c.id)! } : c));
+      set((s) => ({ chapters: patch(s.chapters), volumes: patch(s.volumes) }));
+    },
     renameChapter: async (id, title) => {
       const t = title.trim();
-      const cur = get().chapters.find((c) => c.id === id);
+      const cur = get().chapters.find((c) => c.id === id) ?? get().volumes.find((c) => c.id === id);
       if (!cur || t === "" || t === cur.title) return false;
       try {
         const meta = await api.renameChapter(id, t);
-        set((st) => ({ chapters: st.chapters.map((c) => (c.id === id ? { ...c, ...meta } : c)) }));
+        // 卷改名会把卷内的章搬到新目录：整树重取；章改名只动自己
+        if (cur.kind === "folder") await get().reloadChapters();
+        else get().patchNodes([meta]);
         return true;
       } catch (e) {
         toast.error(`重命名失败：${errMsg(e)}`);
@@ -171,6 +210,42 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     },
     deleteChapter: async (id) => {
       const before = get();
+      const folder = before.volumes.find((v) => v.id === id);
+      if (folder) {
+        // 删卷：卷内的章一并进回收站；撤销 = 先恢复卷、再恢复这些章（回到卷里）
+        const kids = before.chapters.filter((c) => c.parent_id === id).map((c) => c.id);
+        try {
+          await api.deleteChapter(id);
+        } catch (e) {
+          toast.error(`删除失败：${errMsg(e)}`);
+          return false;
+        }
+        await get().reloadChapters();
+        const gone = new Set([id, ...kids]);
+        set((st) => {
+          const panes = { ...st.panes };
+          for (const p of ["a", "b"] as PaneId[]) if (panes[p].chapterId != null && gone.has(panes[p].chapterId!)) panes[p] = { ...EMPTY_PANE };
+          const kept = st.history.map((h, i) => ({ h, i })).filter((x) => !gone.has(x.h));
+          const lost = st.currentChapterId != null && gone.has(st.currentChapterId);
+          return {
+            panes,
+            currentChapterId: lost ? null : st.currentChapterId,
+            chapterContent: lost ? null : st.chapterContent,
+            history: kept.map((x) => x.h),
+            historyIndex: Math.max(-1, kept.filter((x) => x.i <= st.historyIndex).length - 1),
+          };
+        });
+        toast.info(kids.length > 0 ? `卷「${folder.title}」及其中 ${kids.length} 章已移到回收站` : `卷「${folder.title}」已移到回收站`, {
+          action: {
+            label: "撤销",
+            run: async () => {
+              await get().restoreChapter(id);
+              for (const k of kids) await get().restoreChapter(k);
+            },
+          },
+        });
+        return true;
+      }
       const idx = before.chapters.findIndex((c) => c.id === id);
       if (idx < 0) return false;
       const title = before.chapters[idx].title;
@@ -315,8 +390,16 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       const bookId = get().currentBookId;
       if (bookId == null) return;
       const prev = get().chapters;
-      const pos = new Map(ids.map((id, i) => [id, i]));
-      set({ chapters: [...prev].sort((a, b) => (pos.get(a.id) ?? 0) - (pos.get(b.id) ?? 0)) });
+      // 与后端同一「按位置」语义：给定的章依次填回它们占据的位置，继承该位置的 sort_key 与所属卷
+      const wanted = new Set(ids);
+      const byId = new Map(prev.map((c) => [c.id, c]));
+      let k = 0;
+      const next = prev.map((slot) => {
+        if (!wanted.has(slot.id)) return slot;
+        const c = byId.get(ids[k++]);
+        return c ? { ...c, sort_key: slot.sort_key, parent_id: slot.parent_id } : slot;
+      });
+      set({ chapters: next });
       try {
         await api.reorderChapters(ids);
       } catch (e) {
@@ -326,7 +409,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     reloadChapters: async () => {
       const bookId = get().currentBookId;
       if (bookId == null) return;
-      set({ chapters: await api.listChapters(bookId) });
+      const nodes = await api.listNodes(bookId);
+      if (get().currentBookId === bookId) set(splitNodes(nodes));
     },
   };
 });

@@ -29,6 +29,14 @@ export interface EditorBridge {
   focus(): void;
   /** 在屏幕坐标处插入行内文本（侧栏把章拖进正文 → [[章题]]）；坐标不在正文里返回 false */
   insertAtPoint?(x: number, y: number, text: string): boolean;
+  /** 阶段 3B：光标处一分为二的落盘 Markdown（章首 / 章末返回 null） */
+  splitAtCursor?(): { head: string; tail: string } | null;
+  /** 当前全文（落盘 Markdown） */
+  markdown?(): string;
+  /** 程序化替换全文：不进撤销栈、不计今日字数、视为已保存（内容已由后端落盘） */
+  resetContent?(md: string): void;
+  /** 防抖窗口内未落盘的改动立即写盘（合并 / 拆分前调用） */
+  flush?(): Promise<void>;
 }
 
 const bridges = new Map<PaneId, EditorBridge>();
@@ -48,6 +56,11 @@ export function getActiveEditor(): EditorBridge | null {
 /** 指定窗格的编辑器（拖放落点所在窗格） */
 export function getEditorFor(pane: PaneId): EditorBridge | null {
   return bridges.get(pane) ?? null;
+}
+
+/** 正在显示这些章的编辑器（两个窗格都查） */
+export function editorsShowing(ids: number[]): EditorBridge[] {
+  return [...bridges.values()].filter((b) => ids.includes(b.chapterId));
 }
 
 /** 文本 → 段落列表：按换行拆分，去空行（中文网文一行即一段） */

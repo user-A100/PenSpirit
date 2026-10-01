@@ -14,3 +14,17 @@ export function unescapeWikiLinks(md: string): string {
 export function editorMarkdown(editor: Editor): string {
   return unescapeWikiLinks((editor.storage.markdown as { getMarkdown(): string }).getMarkdown());
 }
+
+/**
+ * 在文档坐标 pos 处一分为二（阶段 3B 拆分章节）：返回前后两半的落盘 Markdown。
+ * 段落中间拆开时两半各自成段；任一半没有文字返回 null（章首 / 章末无需拆分）。
+ */
+export function splitMarkdownAt(editor: Editor, pos: number): { head: string; tail: string } | null {
+  const doc = editor.state.doc;
+  const at = Math.max(0, Math.min(pos, doc.content.size));
+  const head = doc.cut(0, at);
+  const tail = doc.cut(at);
+  if (head.textContent.trim() === "" || tail.textContent.trim() === "") return null;
+  const ser = (editor.storage.markdown as { serializer: { serialize(node: unknown): string } }).serializer;
+  return { head: unescapeWikiLinks(ser.serialize(head)).trim(), tail: unescapeWikiLinks(ser.serialize(tail)).trim() };
+}

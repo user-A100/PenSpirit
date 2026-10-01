@@ -9,7 +9,7 @@ import { useBinder } from "../stores/binder";
 import { usePalette } from "../stores/palette";
 import { useGroupView, type LensMode } from "../stores/groupView";
 import { askAiAboutSelection } from "./ai/actions";
-import { newChapterAfter, newCollection } from "./binderActions";
+import { canMerge, isVolume, mergeChapters, newChapterAfter, newCollection, newVolume, splitCurrentChapter } from "./binderActions";
 
 /** 新建一章、打开它并进入行内改名（Scrivener：新建即命名）；位置 = Binder 选中章（多选取最后一章）之后，否则当前章之后 */
 export async function newChapterAfterCurrent(): Promise<void> {
@@ -141,6 +141,53 @@ export function builtinCommands(): Command[] {
       },
     },
     { id: "collection.new", title: "新建集合…", category: "章节", when: hasBook, run: () => newCollection([], true) },
+    // 阶段 3B：卷层级与拆分合并
+    {
+      id: "volume.new",
+      title: "新建卷",
+      category: "章节",
+      keys: ["Alt+Shift+N"],
+      when: hasBook,
+      run: async () => {
+        const nav = useUiNav.getState();
+        if (nav.activeView !== "write") nav.setView("write");
+        if (nav.sidebarCollapsed) nav.toggleSidebar();
+        const sel = useBinder.getState().selected;
+        await newVolume(sel[sel.length - 1] ?? useWorkspace.getState().currentChapterId);
+      },
+    },
+    {
+      id: "binder.hoist",
+      title: "聚焦当前卷 / 回到全书（Hoist）",
+      category: "导航",
+      when: () => useWorkspace.getState().volumes.length > 0,
+      run: () => {
+        const b = useBinder.getState();
+        if (b.hoist != null) {
+          b.setHoist(null);
+          return;
+        }
+        const ws = useWorkspace.getState();
+        const sel = b.selected[b.selected.length - 1] ?? ws.currentChapterId;
+        const vol = isVolume(sel) ? sel : ws.chapters.find((c) => c.id === sel)?.parent_id ?? null;
+        if (vol != null) b.setHoist(vol);
+      },
+    },
+    {
+      id: "chapter.split",
+      title: "在光标处拆分本章…",
+      category: "章节",
+      keys: ["Mod+Shift+K"],
+      when: () => hasChapter() && useUiNav.getState().activeView === "write",
+      run: () => splitCurrentChapter(),
+    },
+    {
+      id: "chapter.merge",
+      title: "合并所选章节（同卷相邻）",
+      category: "章节",
+      when: () => canMerge(useBinder.getState().selected),
+      run: () => mergeChapters(useBinder.getState().selected),
+    },
     { id: "settings.open", title: "打开设置", category: "应用", keys: ["Mod+,"], allowInModal: false, run: () => useSettings.getState().open() },
   ];
   for (const v of getViews()) {
