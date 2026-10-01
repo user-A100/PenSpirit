@@ -40,7 +40,22 @@ export function startMockLlm(port = 0) {
           model: json.model ?? "mock",
           choices: [{ index: 0, delta: first ? { role: "assistant", content: text } : { content: text }, finish_reason: null }],
         })}\n\n`;
-      const discuss = (msgs[0]?.content ?? "").includes("写作顾问");
+      const sys = msgs[0]?.content ?? "";
+      // 阶段 2B 抽取：系统提示要求「只输出 JSON 数组」→ 按类型回一份固定的 JSON
+      if (sys.includes("只输出 JSON 数组")) {
+        const data = sys.includes("人物")
+          ? [{ name: "沈砚", role: "主角", aliases: "砚哥", description: "冷面剑客，守着渡口" }, { name: "林晚", role: "女主", aliases: "", description: "递来半张地图的姑娘" }]
+          : sys.includes("伏笔")
+            ? [{ title: "半张地图", note: "另一半在反派手里，终局揭晓" }]
+            : [{ content: "雪夜渡口初遇" }, { content: "旧城灯会交换地图" }];
+        const text = "```json\n" + JSON.stringify(data) + "\n```";
+        res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
+        res.write(`data: ${JSON.stringify({ id: "mock", object: "chat.completion.chunk", created: 0, model: "mock", choices: [{ index: 0, delta: { role: "assistant", content: text }, finish_reason: null }] })}\n\n`);
+        res.write(`data: ${JSON.stringify({ id: "mock", object: "chat.completion.chunk", created: 0, model: "mock", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\n`);
+        res.end("data: [DONE]\n\n");
+        return;
+      }
+      const discuss = sys.includes("写作顾问");
       const pieces = discuss
         ? ["**建议**：", "节奏可以再快一些。\n", "- 删去重复的环境描写\n", `- 让冲突提前出现 [历史${historyN}条]`]
         : ["好的，以下是续写内容：\n", "夜雨初歇，渡口的灯笼次第亮起。", "\n沈砚把斗篷裹紧了些，", `回头望了一眼旧城。[历史${historyN}条]`];

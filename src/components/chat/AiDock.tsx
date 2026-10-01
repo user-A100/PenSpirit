@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { BookMarked, ChevronDown, ChevronUp, Eye, MessageSquarePlus, Pencil, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, BookMarked, ChevronDown, ChevronUp, Eye, Maximize2, MessageSquarePlus, Minimize2, Pencil, Pin, PinOff, RefreshCw, Search, Sparkles, Trash2, X } from "lucide-react";
+import { useUiNav } from "../../lib/nav/uiStore";
 import { useWorkspace } from "../../stores/workspace";
 import { buildTurnOptions, useChat } from "../../stores/chat";
 import { useSettings } from "../../stores/settings";
@@ -12,6 +13,7 @@ import { commandShortcut } from "../../lib/commands";
 import { BackendSelector } from "./BackendSelector";
 import { ContextPreview } from "./ContextPreview";
 import { MemoryRules } from "./MemoryRules";
+import { SessionSearch } from "./SessionSearch";
 import { MessageList } from "./MessageList";
 import { Composer } from "./Composer";
 
@@ -22,7 +24,7 @@ interface AiDockProps {
   onToggle: () => void;
 }
 
-type View = "chat" | "preview" | "help" | "memory";
+type View = "chat" | "preview" | "help" | "memory" | "search";
 
 const SUGGESTIONS: Array<{ label: string; cmd: string }> = [
   { label: "/续写", cmd: "continue" },
@@ -41,7 +43,8 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
   const errorKind = useChat((s) => s.errorKind);
   const lastFailure = useChat((s) => s.lastFailure);
   const mode = useChat((s) => s.mode);
-  const { initForChapter, openSession, newSession, renameSession, deleteSession, setMode, clearError, retry, dispose, requestCompose } = useChat.getState();
+  const { initForChapter, openSession, newSession, renameSession, deleteSession, setMode, clearError, retry, dispose, requestCompose, setSessionPinned, setSessionArchived } = useChat.getState();
+  const aiMaximized = useUiNav((s) => s.aiMaximized);
   const openSettings = useSettings((s) => s.open);
   const [view, setView] = useState<View>("chat");
   const [log, setLog] = useState<AssemblyLog | null>(null);
@@ -80,9 +83,33 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
   const current = sessions.find((s) => s.id === sessionId);
   const sessionMenu = (): MenuEntry[] => [
     { type: "label", label: "本章对话" },
-    ...sessions.map((s) => ({ label: s.title || "未命名对话", checked: s.id === sessionId, onSelect: () => void openSession(s.id) })),
+    ...sessions
+      .filter((s) => !s.archived)
+      .map((s) => ({ label: s.title || "未命名对话", icon: s.pinned ? Pin : undefined, checked: s.id === sessionId, onSelect: () => void openSession(s.id) })),
+    ...(sessions.some((s) => s.archived)
+      ? [
+          {
+            label: `已归档（${sessions.filter((s) => s.archived).length}）`,
+            icon: Archive,
+            submenu: sessions.filter((s) => s.archived).map((s) => ({ label: s.title || "未命名对话", checked: s.id === sessionId, onSelect: () => void openSession(s.id) })),
+          },
+        ]
+      : []),
     { type: "separator" },
     { label: "新对话", icon: MessageSquarePlus, onSelect: () => void newSession() },
+    { label: "搜索全书对话…", icon: Search, onSelect: () => setView("search") },
+    {
+      label: current?.pinned ? "取消置顶" : "置顶本对话",
+      icon: current?.pinned ? PinOff : Pin,
+      disabled: current == null,
+      onSelect: () => current && void setSessionPinned(current.id, !current.pinned),
+    },
+    {
+      label: current?.archived ? "取消归档" : "归档本对话",
+      icon: current?.archived ? ArchiveRestore : Archive,
+      disabled: current == null,
+      onSelect: () => current && void setSessionArchived(current.id, !current.archived),
+    },
     {
       label: "重命名本对话…",
       icon: Pencil,
@@ -177,6 +204,14 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
         </div>
         <BackendSelector />
         <button
+          onClick={() => useUiNav.getState().setAiMaximized(!aiMaximized)}
+          aria-label={aiMaximized ? "还原 AI 卡" : "最大化 AI 卡"}
+          data-tip={aiMaximized ? "还原高度" : "最大化（读长回答）"}
+          className="rounded-[var(--r-control)] p-1 text-[color:var(--text-faint)] transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
+        >
+          {aiMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+        </button>
+        <button
           onClick={() => setView(view === "memory" ? "chat" : "memory")}
           aria-label="记忆与规则"
           data-tip={view === "memory" ? "返回对话" : "常驻记忆 · 作者注 · 写作规则"}
@@ -243,6 +278,8 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
             <ContextPreview log={log} loading={previewLoading} onConfigChanged={() => void loadPreview()} />
           </div>
         </div>
+      ) : view === "search" ? (
+        <SessionSearch onClose={() => setView("chat")} />
       ) : view === "memory" ? (
         <MemoryRules onChanged={() => useChat.getState().requestPreviewRefresh()} />
       ) : view === "help" ? (

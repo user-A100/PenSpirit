@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { ChapterEditor } from "./ChapterEditor";
 import { AiDock } from "../chat/AiDock";
@@ -49,6 +49,22 @@ export function EditorPane() {
   const splitAxis = useWorkspace((s) => s.splitAxis);
   const focusMode = useUiNav((s) => s.focusMode);
   const aiCollapsed = useUiNav((s) => s.aiCollapsed);
+  const aiMaximized = useUiNav((s) => s.aiMaximized);
+  const restoreSize = useRef<string | null>(null);
+
+  // 阶段 2B：AI 卡最大化 / 还原（记住最大化前的高度）
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    if (aiMaximized) {
+      restoreSize.current = `${Math.round(panel.getSize().asPercentage)}`;
+      panel.resize("86");
+    } else if (restoreSize.current != null) {
+      panel.resize(restoreSize.current);
+      restoreSize.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiMaximized]);
 
   // store → 面板：命令（Ctrl+J / 气泡菜单）改变折叠态时驱动面板；面板 → store 见 onResize
   useEffect(() => {
@@ -104,7 +120,7 @@ export function EditorPane() {
         panelRef={panelRef}
         defaultSize="32"
         minSize="15"
-        maxSize="60"
+        maxSize={aiMaximized ? "90" : "60"}
         collapsible
         collapsedSize={`${COLLAPSED_PX}px`}
         onResize={(size, _id, prev) => {

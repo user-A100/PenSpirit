@@ -34,5 +34,6 @@ pub fn migrations() -> Migrations<'static> {
         M::up(include_str!("../migrations/0019_chat_v2.sql")),
         M::up(include_str!("../migrations/0020_volumes.sql")),
         M::up(include_str!("../migrations/0021_ai_context.sql")),
+        M::up(include_str!("../migrations/0022_sessions_v3.sql")),
     ])
 }

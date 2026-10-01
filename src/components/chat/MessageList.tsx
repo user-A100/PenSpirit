@@ -13,14 +13,22 @@ import {
   Replace,
   Trash2,
   TriangleAlert,
+  Star,
+  GitBranch,
+  Wand2,
+  NotebookPen,
 } from "lucide-react";
-import type { ChatMessage } from "../../lib/tauri";
+import { api, type ChatMessage } from "../../lib/tauri";
+import { useWorkspace } from "../../stores/workspace";
 import { isTruncated, messageCandidates, messageCommand, messageMode, messageRetry, useChat, type QuoteRef } from "../../stores/chat";
 import { adoptReply, type AdoptHow } from "../../lib/ai/adopt";
 import { findCommand } from "../../lib/ai/slashCommands";
 import { plainText } from "../../lib/ai/cleanText";
 import { parseDirections } from "../../lib/ai/directions";
 import { estimateTokens } from "../../lib/ai/tokens";
+import { EXTRACT_LABEL, runExtraction, type ExtractItem, type ExtractKind } from "../../lib/ai/extract";
+import { errMsg } from "../../lib/errors";
+import { ExtractDialog } from "./ExtractDialog";
 import { openMenuAt } from "../../stores/menu";
 import { confirmDialog, promptDialog } from "../../stores/confirm";
 import { toast } from "../../stores/toast";
@@ -99,8 +107,36 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
   const streamReplyTo = useChat((s) => s.streamReplyTo);
   const quote: QuoteRef | null = useChat((s) => (turn.user ? s.quoteByMessage[turn.user.id] ?? null : null));
   const cmdId = useChat((s) => (turn.user ? s.commandByMessage[turn.user.id] ?? null : null));
-  const { regenerate, switchVariant, deleteMessage, editResend, send } = useChat.getState();
+  const { regenerate, switchVariant, deleteMessage, editResend, send, forkSession, starMessage } = useChat.getState();
   const pending = useChat((s) => s.pendingCandidates);
+  const [extracting, setExtracting] = useState<{ kind: ExtractKind; items: ExtractItem[] } | null>(null);
+  // 存为本章梗概（Binder / 软木板 / 大纲表都读这个字段）；已有梗概先确认再替换
+  const saveAsSynopsis = async (m: ChatMessage) => {
+    const chapterId = useChat.getState().chapterId;
+    if (chapterId == null) return;
+    const ws = useWorkspace.getState();
+    const old = [...ws.chapters, ...ws.volumes].find((c) => c.id === chapterId)?.synopsis ?? "";
+    if (old.trim() && !(await confirmDialog({ title: "替换本章梗概？", message: `现有梗概：${old.slice(0, 80)}${old.length > 80 ? "…" : ""}`, confirmLabel: "替换" }))) return;
+    try {
+      const meta = await api.chapterUpdateMeta(chapterId, { synopsis: plainText(m.content).trim() });
+      useWorkspace.getState().patchNodes([meta]);
+      toast.success("已存为本章梗概");
+    } catch (e) {
+      toast.error(`保存失败：${errMsg(e)}`);
+    }
+  };
+  const startExtract = async (kind: ExtractKind) => {
+    if (!shown) return;
+    const t = toast.info(`正在从回答里抽取${EXTRACT_LABEL[kind]}…`);
+    try {
+      const items = await runExtraction(kind, shown);
+      setExtracting({ kind, items });
+    } catch (e) {
+      toast.error(`抽取失败：${errMsg(e)}`);
+    } finally {
+      toast.dismiss(t);
+    }
+  };
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
@@ -142,6 +178,7 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
 
   return (
     <div className="flex flex-col gap-2">
+      {extracting && <ExtractDialog kind={extracting.kind} items={extracting.items} onClose={() => setExtracting(null)} />}
       {turn.user && (
         <div className="group/user flex flex-col items-end gap-1">
           {(command || quote) && (
@@ -199,6 +236,15 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                   className={ACT}
                 >
                   <Copy size={12} />
+                </button>
+                <button
+                  aria-label="从这一问分叉"
+                  data-tip="从这一问分叉为新对话（之后的不带）"
+                  disabled={streaming || turn.user.id < 0}
+                  onClick={() => void forkSession(turn.user!.id)}
+                  className={ACT}
+                >
+                  <GitBranch size={12} />
                 </button>
                 <button
                   aria-label="删除这一问"
@@ -384,9 +430,29 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                     </button>
                   )}
                   <button
+                    aria-label={shown.starred ? "取消收藏" : "收藏到素材库"}
+                    data-tip={shown.starred ? "已收藏（素材库「AI 收藏」）" : "收藏到素材库"}
+                    disabled={shown.id < 0}
+                    onClick={() => void starMessage(shown.id, !shown.starred)}
+                    className={`${ACT} ${shown.starred ? "text-[color:var(--warning)]" : ""}`}
+                  >
+                    <Star size={12} fill={shown.starred ? "currentColor" : "none"} />
+                  </button>
+                  <button
                     aria-label="更多"
                     onClick={(e) =>
                       openMenuAt(e.currentTarget, [
+                        { label: "从这里分叉为新对话", icon: GitBranch, disabled: shown.id < 0 || streaming, onSelect: () => void forkSession(shown.id) },
+                        {
+                          label: "抽取为…",
+                          icon: Wand2,
+                          submenu: (["character", "foreshadow", "plot"] as ExtractKind[]).map((k) => ({
+                            label: EXTRACT_LABEL[k],
+                            onSelect: () => void startExtract(k),
+                          })),
+                        },
+                        { label: "存为本章梗概", icon: NotebookPen, onSelect: () => void saveAsSynopsis(shown) },
+                        { type: "separator" },
                         { label: "删除这个版本", icon: Trash2, danger: true, onSelect: () => void deleteMessage(shown.id) },
                       ])
                     }

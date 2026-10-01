@@ -13,7 +13,7 @@ use crate::error::{AppError, AppResult};
 use crate::fs_service;
 use crate::llm::provider;
 use crate::llm::stream::{chat_stream, classify_error, StreamEvent, StreamReq};
-use crate::models::{AiMemory, AiTurnOptions, ChatMessage, ChatSession, ContextConfig, ProviderProfile, StyleCard, WritingRule, WritingRuleInput};
+use crate::models::{AiMemory, AiTurnOptions, ChatMessage, ChatSession, ContextConfig, MaterialInput, ProviderProfile, SessionHit, StyleCard, TransientTask, WritingRule, WritingRuleInput};
 use crate::repo;
 use crate::state::AppState;
 
@@ -315,6 +315,161 @@ fn turn_meta(opts: &AiTurnOptions, extra: Option<(&str, &str)>) -> String {
         v[k] = serde_json::Value::String(val.to_string());
     }
     v.to_string()
+}
+
+// ---------- 阶段 2B：会话置顶 / 归档 / 分叉 / 搜索，收藏回答 ----------
+
+pub fn session_set_pinned_inner(s: &AppState, id: i64, pinned: bool) -> AppResult<ChatSession> {
+    repo::sessions::set_pinned(&*lock(s)?, id, pinned)
+}
+pub fn session_set_archived_inner(s: &AppState, id: i64, archived: bool) -> AppResult<ChatSession> {
+    repo::sessions::set_archived(&*lock(s)?, id, archived)
+}
+pub fn session_fork_inner(s: &AppState, session_id: i64, upto_message_id: i64) -> AppResult<ChatSession> {
+    let conn = lock(s)?;
+    let tx = conn.unchecked_transaction()?;
+    let forked = repo::sessions::fork(&tx, session_id, upto_message_id)?;
+    tx.commit()?;
+    Ok(forked)
+}
+pub fn sessions_search_inner(s: &AppState, book_id: i64, query: &str) -> AppResult<Vec<SessionHit>> {
+    let conn = lock(s)?;
+    let hits = repo::sessions::search(&conn, book_id, query)?;
+    Ok(hits
+        .into_iter()
+        .map(|(session, message_id, snippet)| SessionHit {
+            chapter_title: repo::chapters::get(&conn, session.chapter_id).map(|c| c.title).unwrap_or_default(),
+            session,
+            message_id,
+            snippet,
+        })
+        .collect())
+}
+/// 收藏回答：标记 starred；收藏时同时存进素材库（分类「AI 收藏」，标签 = 章名），返回素材 id
+pub fn message_star_inner(s: &AppState, id: i64, starred: bool) -> AppResult<Option<i64>> {
+    let conn = lock(s)?;
+    let m = repo::sessions::set_starred(&conn, id, starred)?;
+    if !starred {
+        return Ok(None);
+    }
+    let session = repo::sessions::get(&conn, m.session_id)?;
+    let chapter = repo::chapters::get(&conn, session.chapter_id).map(|c| c.title).unwrap_or_default();
+    let title: String = m.content.chars().filter(|c| !c.is_whitespace() && *c != '#' && *c != '*').take(18).collect();
+    let mat = repo::materials::upsert(
+        &conn,
+        &MaterialInput { id: None, title: if title.is_empty() { "AI 收藏".into() } else { title }, category: "AI 收藏".into(), content: m.content.clone(), tags: chapter },
+    )?;
+    Ok(Some(mat.id))
+}
+
+// ---------- 阶段 2B：一次性生成（抽取设定卡 / 内联改写 / 光标处续写浮条），不落进对话历史 ----------
+
+fn extract_prompt(kind: &str) -> AppResult<&'static str> {
+    match kind {
+        "character" => Ok("从文本里找出出场或提到的人物。只输出 JSON 数组，每项 {\"name\":\"姓名\",\"role\":\"身份或定位\",\"aliases\":\"别名，逗号分隔\",\"description\":\"一两句小传\"}；没有就输出 []。"),
+        "foreshadow" => Ok("从文本里找出埋下的伏笔或悬念。只输出 JSON 数组，每项 {\"title\":\"伏笔名\",\"note\":\"内容与打算如何回收\"}；没有就输出 []。"),
+        "plot" => Ok("把文本里的剧情要点拆成情节块。只输出 JSON 数组，每项 {\"content\":\"一句话情节\"}；没有就输出 []。"),
+        _ => Err(AppError::Invalid(format!("不支持的抽取类型：{kind}"))),
+    }
+}
+
+/// 一次性生成的请求组装：抽取走专用提示；改写 / 续写复用完整的上下文管线（记忆、规则、设定卡、前情），
+/// 但不带对话历史、不落库。
+pub fn transient_request(s: &AppState, task: &TransientTask) -> AppResult<StreamReq> {
+    match task.kind.as_str() {
+        "extract" => {
+            let p = {
+                let conn = lock(s)?;
+                provider::resolve(&conn)?
+            };
+            Ok(StreamReq {
+                base_url: p.base_url,
+                api_key: p.api_key,
+                model: p.model,
+                system: format!("你是小说设定的信息抽取助手。{}", extract_prompt(&task.extract_kind)?),
+                history: Vec::new(),
+                user: task.text.clone(),
+                max_tokens: p.max_tokens,
+                temperature: task.temperature.unwrap_or(0.2),
+            })
+        }
+        "inline_edit" | "continue" => {
+            let chapter_id = task.chapter_id.ok_or_else(|| AppError::Invalid("缺少章节".into()))?;
+            let session = get_or_create_session_inner(s, chapter_id)?;
+            let mut opts = AiTurnOptions {
+                mode: Some("write".into()),
+                cursor_before: Some(task.before.clone()),
+                cursor_after: Some(task.after.clone()).filter(|a| !a.trim().is_empty()),
+                disabled_slots: vec!["对话历史".into()],
+                target_chars: task.target_chars,
+                temperature: task.temperature,
+                ..Default::default()
+            };
+            let instruction = if task.kind == "inline_edit" {
+                if task.selection.trim().is_empty() {
+                    return Err(AppError::Invalid("先选中要改的段落".into()));
+                }
+                opts.selection = Some(task.selection.clone());
+                format!("按要求改写选中段落：{}\n只输出改写后的段落，不要解释。", task.instruction.trim())
+            } else if task.instruction.trim().is_empty() {
+                "接着光标处往下写，保持人称与节奏，直接输出正文。".to_string()
+            } else {
+                task.instruction.clone()
+            };
+            let bundle = gather_context(s, session.id, &opts, Some(0))?;
+            build_req(s, assemble_with(&bundle, &instruction, &opts), &opts)
+        }
+        other => Err(AppError::Invalid(format!("未知的生成类型：{other}"))),
+    }
+}
+
+/// 跑一次性生成：增量经 `transient://{request_id}` 推给前端，结束返回全文；
+/// 取消走 cancel_generation(request_id)（已收到的部分照常返回）。
+pub async fn ai_transient_run(app: &tauri::AppHandle, s: &AppState, request_id: i64, task: TransientTask) -> AppResult<String> {
+    let req = transient_request(s, &task)?;
+    let cancel_rx = register_cancel(s, request_id)?;
+    let mut rx = chat_stream(req, request_id, cancel_rx).await?;
+    let mut out = String::new();
+    let result = loop {
+        match rx.recv().await {
+            Some(StreamEvent::Delta { text }) => {
+                out.push_str(&text);
+                let _ = app.emit(&format!("transient://{request_id}"), StreamEvent::Delta { text });
+            }
+            Some(StreamEvent::Done { content, .. }) => break Ok(content),
+            Some(StreamEvent::Error { message, partial, .. }) => {
+                break if partial.trim().is_empty() { Err(AppError::Invalid(message)) } else { Ok(partial) };
+            }
+            None => break Ok(out),
+        }
+    };
+    remove_cancel(app, request_id);
+    result
+}
+
+#[tauri::command]
+pub async fn ai_transient(app: tauri::AppHandle, state: State<'_, AppState>, request_id: i64, task: TransientTask) -> AppResult<String> {
+    ai_transient_run(&app, &state, request_id, task).await
+}
+#[tauri::command]
+pub fn session_set_pinned(s: State<AppState>, id: i64, pinned: bool) -> AppResult<ChatSession> {
+    session_set_pinned_inner(&s, id, pinned)
+}
+#[tauri::command]
+pub fn session_set_archived(s: State<AppState>, id: i64, archived: bool) -> AppResult<ChatSession> {
+    session_set_archived_inner(&s, id, archived)
+}
+#[tauri::command]
+pub fn session_fork(s: State<AppState>, session_id: i64, upto_message_id: i64) -> AppResult<ChatSession> {
+    session_fork_inner(&s, session_id, upto_message_id)
+}
+#[tauri::command]
+pub fn sessions_search(s: State<AppState>, book_id: i64, query: String) -> AppResult<Vec<SessionHit>> {
+    sessions_search_inner(&s, book_id, &query)
+}
+#[tauri::command]
+pub fn message_star(s: State<AppState>, id: i64, starred: bool) -> AppResult<Option<i64>> {
+    message_star_inner(&s, id, starred)
 }
 
 /// 测试用：回合 meta 的拼装结果

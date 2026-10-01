@@ -11,6 +11,7 @@ import {
   type MentionRef,
 } from "../lib/tauri";
 import { errCode, errMsg } from "../lib/errors";
+import { toast } from "./toast";
 import { getActiveEditor } from "../lib/editorBridge";
 import { useAgents } from "./agents";
 
@@ -174,6 +175,13 @@ interface ChatState {
   setCandidates: (n: number) => void;
   /** 进行中的多候选：还要再生成几版 */
   pendingCandidates: { userMessageId: number; remaining: number; total: number } | null;
+  /** 阶段 2B：会话管理 */
+  forkSession: (uptoMessageId: number) => Promise<void>;
+  setSessionPinned: (id: number, pinned: boolean) => Promise<void>;
+  setSessionArchived: (id: number, archived: boolean) => Promise<void>;
+  starMessage: (id: number, starred: boolean) => Promise<void>;
+  /** 搜索结果跳转：切到该章后打开这个会话（initForChapter 消费） */
+  openAfterInit: number | null;
   editResend: (userMessageId: number, content: string) => Promise<boolean>;
   switchVariant: (messageId: number) => Promise<void>;
   stop: () => Promise<void>;
@@ -392,6 +400,52 @@ export const useChat = create<ChatState>((set, get) => ({
     }
   },
   pendingCandidates: null,
+  openAfterInit: null,
+  forkSession: async (uptoMessageId) => {
+    const sid = get().sessionId;
+    if (sid == null || uptoMessageId < 0) return;
+    try {
+      const s = await api.sessionFork(sid, uptoMessageId);
+      set((st) => ({ sessions: [s, ...st.sessions.filter((x) => x.id !== s.id)] }));
+      await get().openSession(s.id);
+      toast.success(`已分叉为「${s.title}」`);
+    } catch (e) {
+      set({ error: errMsg(e) });
+    }
+  },
+  setSessionPinned: async (id, pinned) => {
+    try {
+      await api.sessionSetPinned(id, pinned);
+      const chapterId = get().chapterId;
+      if (chapterId != null) await refreshSessions(chapterId);
+    } catch (e) {
+      set({ error: errMsg(e) });
+    }
+  },
+  setSessionArchived: async (id, archived) => {
+    try {
+      await api.sessionSetArchived(id, archived);
+      const chapterId = get().chapterId;
+      if (chapterId != null) await refreshSessions(chapterId);
+      // 归档当前会话：换到最近一个未归档的（没有就新建）
+      if (archived && get().sessionId === id) {
+        const next = get().sessions.find((s) => !s.archived && s.id !== id);
+        if (next) await get().openSession(next.id);
+        else await get().newSession();
+      }
+    } catch (e) {
+      set({ error: errMsg(e) });
+    }
+  },
+  starMessage: async (id, starred) => {
+    try {
+      await api.messageStar(id, starred);
+      set((st) => ({ messages: st.messages.map((m) => (m.id === id ? { ...m, starred } : m)) }));
+      if (starred) toast.success("已收藏，并存进素材库「AI 收藏」");
+    } catch (e) {
+      set({ error: errMsg(e) });
+    }
+  },
   previewSeq: 0,
   requestPreviewRefresh: () => set((st) => ({ previewSeq: st.previewSeq + 1 })),
   mentions: [],
@@ -417,7 +471,10 @@ export const useChat = create<ChatState>((set, get) => ({
         sessions = [await api.getOrCreateSession(chapterId)];
         if (seq !== initSeq) return;
       }
-      const session = sessions[0];
+      // 搜索跳转指定的会话优先；否则最近一个未归档的
+      const want = get().openAfterInit;
+      const session = sessions.find((s) => s.id === want) ?? sessions.find((s) => !s.archived) ?? sessions[0];
+      if (want != null) set({ openAfterInit: null });
       const uns = await attach(session.id);
       if (seq !== initSeq) {
         for (const un of uns) un();

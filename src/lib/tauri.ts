@@ -26,11 +26,21 @@ export interface ChapterTemplateInput { id: number | null; book_id: number; name
 // ---- M1：字段名与 Rust 结构体 snake_case 对齐 ----
 export interface ProviderProfile { id: number; name: string; base_url: string; api_key: string; model: string; max_tokens: number; temperature: number }
 export interface StyleCard { id: number; name: string; prompt_md: string; sample_md: string; tags: string; created_at: string; updated_at: string } // tags 为 JSON 数组字符串
-export interface ChatSession { id: number; book_id: number; chapter_id: number; title: string; created_at: string; source?: string; updated_at?: string }
+export interface ChatSession { id: number; book_id: number; chapter_id: number; title: string; created_at: string; source?: string; updated_at?: string; pinned?: boolean; archived?: boolean }
+/** 阶段 2B：会话搜索命中 */
+export interface SessionHit { session: ChatSession; chapter_title: string; message_id: number | null; snippet: string }
+/** 阶段 2B：一次性生成（不落进对话历史） */
+export interface TransientTask {
+  kind: "extract" | "inline_edit" | "continue";
+  chapter_id?: number | null; text?: string; extract_kind?: "character" | "foreshadow" | "plot";
+  before?: string; after?: string; selection?: string; instruction?: string; target_chars?: number | null; temperature?: number | null;
+}
 export interface ChatMessage {
   id: number; session_id: number; role: string; content: string; created_at: string;
   /** 阶段 2A：回答所针对的 user 消息（同组多条 = 多个版本） */
   reply_to?: number | null;
+  /** 阶段 2B：已收藏（同时存进素材库） */
+  starred?: boolean;
   /** 同组版本中当前选用的一条 */
   active?: boolean;
   /** 已采纳进正文 */
@@ -326,6 +336,15 @@ export const api = {
   sessionCreate: (chapterId: number) => invoke<ChatSession>("session_create", { chapterId }),
   sessionRename: (id: number, title: string) => invoke<ChatSession>("session_rename", { id, title }),
   sessionDelete: (id: number) => invoke<void>("session_delete", { id }),
+  // ---- 阶段 2B：会话置顶 / 归档 / 分叉 / 搜索，收藏，一次性生成 ----
+  sessionSetPinned: (id: number, pinned: boolean) => invoke<ChatSession>("session_set_pinned", { id, pinned }),
+  sessionSetArchived: (id: number, archived: boolean) => invoke<ChatSession>("session_set_archived", { id, archived }),
+  sessionFork: (sessionId: number, uptoMessageId: number) => invoke<ChatSession>("session_fork", { sessionId, uptoMessageId }),
+  sessionsSearch: (bookId: number, query: string) => invoke<SessionHit[]>("sessions_search", { bookId, query }),
+  /** 收藏时同时存进素材库，返回素材 id */
+  messageStar: (id: number, starred: boolean) => invoke<number | null>("message_star", { id, starred }),
+  /** 一次性生成：增量走 transient://{requestId}，结束返回全文；取消用 cancelGeneration(requestId) */
+  aiTransient: (requestId: number, task: TransientTask) => invoke<string>("ai_transient", { requestId, task }),
   messageSetActive: (id: number) => invoke<ChatMessage>("message_set_active", { id }),
   messageSetAdopted: (id: number, adopted: boolean) => invoke<ChatMessage>("message_set_adopted", { id, adopted }),
   cancelGeneration: (sessionId: number) => invoke<void>("cancel_generation", { sessionId }),

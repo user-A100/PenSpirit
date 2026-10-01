@@ -186,6 +186,37 @@ pub struct ChatSession {
     /// 最近一次使用（发消息）的时间，会话列表按它倒序
     #[serde(default)]
     pub updated_at: String,
+    /// 阶段 2B：置顶（列表最前）/ 归档（默认不显示）
+    #[serde(default)]
+    pub pinned: bool,
+    #[serde(default)]
+    pub archived: bool,
+}
+
+/// 会话搜索命中（阶段 2B）：会话 + 所在章 + 命中摘录（标题命中时为空）
+#[derive(Debug, Clone, Serialize)]
+pub struct SessionHit {
+    pub session: ChatSession,
+    pub chapter_title: String,
+    pub message_id: Option<i64>,
+    pub snippet: String,
+}
+
+/// 一次性生成（阶段 2B）：不落进对话历史，按 kind 组装——
+/// extract = 从文本抽取设定卡（只出 JSON）；inline_edit = 改写选区；continue = 光标处续写
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct TransientTask {
+    pub kind: String,
+    pub chapter_id: Option<i64>,
+    pub text: String,
+    pub extract_kind: String,
+    pub before: String,
+    pub after: String,
+    pub selection: String,
+    pub instruction: String,
+    pub target_chars: Option<i64>,
+    pub temperature: Option<f64>,
 }
 
 fn default_session_source() -> String {
@@ -211,6 +242,9 @@ pub struct ChatMessage {
     /// JSON 元信息（mode / command / error / truncated）
     #[serde(default = "default_meta")]
     pub meta: String,
+    /// 阶段 2B：已收藏（同时存进素材库）
+    #[serde(default)]
+    pub starred: bool,
 }
 
 fn default_true() -> bool {

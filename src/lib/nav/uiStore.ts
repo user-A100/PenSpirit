@@ -29,6 +29,9 @@ interface UiNavState {
   /** AI 对话卡折叠态（会话内状态；EditorPane 与面板尺寸双向同步） */
   aiCollapsed: boolean;
   setAiCollapsed: (v: boolean) => void;
+  /** 阶段 2B：AI 卡最大化（读长回答） */
+  aiMaximized: boolean;
+  setAiMaximized: (v: boolean) => void;
   /** 专注模式（Zen 紧凑模式）：隐去全部 chrome 只留稿纸；左缘悬停唤出目录（会话内状态） */
   focusMode: boolean;
   toggleFocusMode: () => void;
@@ -79,7 +82,9 @@ export const useUiNav = create<UiNavState>((set) => ({
   readReturn: null,
   typewriter: readStoredTypewriter(),
   aiCollapsed: false,
-  setAiCollapsed: (v) => set({ aiCollapsed: v }),
+  setAiCollapsed: (v) => set({ aiCollapsed: v, ...(v ? { aiMaximized: false } : {}) }),
+  aiMaximized: false,
+  setAiMaximized: (v) => set({ aiMaximized: v, ...(v ? { aiCollapsed: false } : {}) }),
   focusMode: false,
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode, activeView: s.focusMode ? s.activeView : "write" })),
   dockPanels: readStoredDockPanels(),

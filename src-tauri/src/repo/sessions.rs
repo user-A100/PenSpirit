@@ -12,11 +12,13 @@ fn session_from_row(row: &rusqlite::Row) -> rusqlite::Result<ChatSession> {
         created_at: row.get(4)?,
         source: row.get(5)?,
         updated_at: row.get(6)?,
+        pinned: row.get::<_, i64>(7)? != 0,
+        archived: row.get::<_, i64>(8)? != 0,
     })
 }
 
-const SESSION_COLS: &str = "id, book_id, chapter_id, title, created_at, source, updated_at";
-const MESSAGE_COLS: &str = "id, session_id, role, content, created_at, reply_to, active, adopted, meta";
+const SESSION_COLS: &str = "id, book_id, chapter_id, title, created_at, source, updated_at, pinned, archived";
+const MESSAGE_COLS: &str = "id, session_id, role, content, created_at, reply_to, active, adopted, meta, starred";
 
 /// 按创建先后（最早在前）：get_or_create 取首个，保持 M1 语义。
 pub fn list_by_chapter(conn: &Connection, chapter_id: i64) -> AppResult<Vec<ChatSession>> {
@@ -31,10 +33,102 @@ pub fn list_by_chapter(conn: &Connection, chapter_id: i64) -> AppResult<Vec<Chat
 pub fn list_recent_by_chapter(conn: &Connection, chapter_id: i64) -> AppResult<Vec<ChatSession>> {
     let mut stmt = conn.prepare(&format!(
         "SELECT {SESSION_COLS} FROM sessions WHERE chapter_id = ?1 \
-         ORDER BY CASE WHEN updated_at = '' THEN created_at ELSE updated_at END DESC, id DESC"
+         ORDER BY pinned DESC, CASE WHEN updated_at = '' THEN created_at ELSE updated_at END DESC, id DESC"
     ))?;
     let rows = stmt.query_map([chapter_id], session_from_row)?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+/// 阶段 2B：置顶 / 归档
+pub fn set_pinned(conn: &Connection, id: i64, pinned: bool) -> AppResult<ChatSession> {
+    conn.execute("UPDATE sessions SET pinned = ?2 WHERE id = ?1", params![id, pinned as i64])?;
+    get(conn, id)
+}
+pub fn set_archived(conn: &Connection, id: i64, archived: bool) -> AppResult<ChatSession> {
+    conn.execute("UPDATE sessions SET archived = ?2 WHERE id = ?1", params![id, archived as i64])?;
+    get(conn, id)
+}
+
+/// 阶段 2B：收藏回答
+pub fn set_starred(conn: &Connection, message_id: i64, starred: bool) -> AppResult<ChatMessage> {
+    conn.execute("UPDATE messages SET starred = ?2 WHERE id = ?1", params![message_id, starred as i64])?;
+    get_message(conn, message_id)
+}
+
+/// 阶段 2B：从某条消息处分叉——新会话（同章、同后端）复制到这条为止的对话（含各版本），
+/// 分叉点若是某个回答版本，则它在新会话里是选用版本。
+pub fn fork(conn: &Connection, session_id: i64, upto_message_id: i64) -> AppResult<ChatSession> {
+    let src = get(conn, session_id)?;
+    let upto = get_message(conn, upto_message_id)?;
+    if upto.session_id != session_id {
+        return Err(AppError::Invalid("消息不属于这个会话".into()));
+    }
+    conn.execute(
+        "INSERT INTO sessions (book_id, chapter_id, title, source, updated_at) VALUES (?1, ?2, ?3, ?4, datetime('now'))",
+        params![src.book_id, src.chapter_id, format!("{}（分叉）", src.title), src.source],
+    )?;
+    let new_id = conn.last_insert_rowid();
+    let msgs: Vec<ChatMessage> = list_messages(conn, session_id)?.into_iter().filter(|m| m.id <= upto_message_id).collect();
+    let mut map = std::collections::HashMap::new();
+    for m in &msgs {
+        let reply_to = m.reply_to.and_then(|r| map.get(&r).copied());
+        let active = if upto.role == "assistant" && m.reply_to.is_some() && m.reply_to == upto.reply_to { m.id == upto.id } else { m.active };
+        conn.execute(
+            "INSERT INTO messages (session_id, role, content, created_at, reply_to, active, adopted, meta, starred) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0)",
+            params![new_id, m.role, m.content, m.created_at, reply_to, active as i64, m.adopted as i64, m.meta],
+        )?;
+        map.insert(m.id, conn.last_insert_rowid());
+    }
+    get(conn, new_id)
+}
+
+/// 阶段 2B：在书里搜会话——标题或任一消息内容包含关键词；每个会话取第一处命中做摘录
+pub fn search(conn: &Connection, book_id: i64, query: &str) -> AppResult<Vec<(ChatSession, Option<i64>, String)>> {
+    let q = query.trim();
+    if q.is_empty() {
+        return Ok(Vec::new());
+    }
+    let like = format!("%{}%", q.replace('%', "").replace('_', ""));
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {SESSION_COLS} FROM sessions s WHERE s.book_id = ?1 AND (s.title LIKE ?2 OR EXISTS \
+         (SELECT 1 FROM messages m WHERE m.session_id = s.id AND m.content LIKE ?2)) \
+         ORDER BY CASE WHEN s.updated_at = '' THEN s.created_at ELSE s.updated_at END DESC, s.id DESC LIMIT 50"
+    ))?;
+    let sessions = stmt.query_map(params![book_id, like], session_from_row)?.collect::<Result<Vec<_>, _>>()?;
+    let mut out = Vec::new();
+    for s in sessions {
+        let hit: Option<(i64, String)> = conn
+            .query_row(
+                "SELECT id, content FROM messages WHERE session_id = ?1 AND content LIKE ?2 ORDER BY id LIMIT 1",
+                params![s.id, like],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        let (mid, snippet) = match hit {
+            Some((id, content)) => (Some(id), snippet_around(&content, q)),
+            None => (None, String::new()),
+        };
+        out.push((s, mid, snippet));
+    }
+    Ok(out)
+}
+
+/// 命中处前后各约 24 字的摘录
+fn snippet_around(text: &str, q: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let lower: String = text.to_lowercase();
+    let pos = lower.find(&q.to_lowercase()).map(|b| lower[..b].chars().count()).unwrap_or(0);
+    let start = pos.saturating_sub(24);
+    let end = (pos + q.chars().count() + 24).min(chars.len());
+    let mut s: String = chars[start..end].iter().collect::<String>().replace('\n', " ");
+    if start > 0 {
+        s.insert(0, '…');
+    }
+    if end < chars.len() {
+        s.push('…');
+    }
+    s
 }
 
 /// 按 id 读单个会话（不存在时 NotFound）。
@@ -109,6 +203,7 @@ fn message_from_row(row: &rusqlite::Row) -> rusqlite::Result<ChatMessage> {
         active: row.get::<_, i64>(6)? != 0,
         adopted: row.get::<_, i64>(7)? != 0,
         meta: row.get(8)?,
+        starred: row.get::<_, i64>(9)? != 0,
     })
 }
 
