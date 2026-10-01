@@ -162,7 +162,9 @@ pub fn purge_chapter_inner(s: &AppState, id: i64) -> AppResult<()> {
     } else if p.exists() {
         fs::remove_file(&p)?;
     }
-    lock(s).and_then(|conn| repo::chapters::delete(&*conn, id))
+    let conn = lock(s)?;
+    repo::settings::purge_chapter_keys(&*conn, id)?;
+    repo::chapters::delete(&*conn, id)
 }
 
 /// 清空当前书回收站：逐章彻底删除
@@ -245,5 +247,7 @@ pub fn purge_book_inner(s: &AppState, id: i64) -> AppResult<()> {
     if p.exists() {
         fs::remove_dir_all(&p)?;
     }
-    lock(s).and_then(|conn| repo::books::delete(&*conn, id))
+    let conn = lock(s)?;
+    repo::settings::purge_book_keys(&*conn, id)?;
+    repo::books::delete(&*conn, id)
 }

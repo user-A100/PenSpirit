@@ -68,6 +68,33 @@ pub fn remove(conn: &Connection, key: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// 阶段 2B：挂在书 / 卷 / 章 id 上的 AI 键前缀（本书记忆、卷记忆、本章作者注、AI 写入着色片段）
+pub const MEMORY_BOOK: &str = "memory:book:";
+pub const MEMORY_VOLUME: &str = "memory:volume:";
+pub const AUTHOR_NOTE: &str = "authornote:chapter:";
+pub const AI_TINT: &str = "ai_tint:";
+
+/// 章（或卷）被彻底删除：清掉挂在它 id 上的 AI 键，不留孤儿
+pub fn purge_chapter_keys(conn: &Connection, chapter_id: i64) -> AppResult<()> {
+    for prefix in [MEMORY_VOLUME, AUTHOR_NOTE, AI_TINT] {
+        remove(conn, &format!("{prefix}{chapter_id}"))?;
+    }
+    Ok(())
+}
+
+/// 书被彻底删除：本书记忆 + 书内全部章 / 卷的 AI 键（须在删章行之前调用）
+pub fn purge_book_keys(conn: &Connection, book_id: i64) -> AppResult<()> {
+    remove(conn, &format!("{MEMORY_BOOK}{book_id}"))?;
+    let ids: Vec<i64> = conn
+        .prepare("SELECT id FROM chapters WHERE book_id = ?1")?
+        .query_map([book_id], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    for id in ids {
+        purge_chapter_keys(conn, id)?;
+    }
+    Ok(())
+}
+
 pub fn delete_provider(conn: &Connection, id: i64) -> AppResult<()> {
     let mut list = providers(conn)?;
     list.retain(|x| x.id != id);

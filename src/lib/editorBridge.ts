@@ -37,6 +37,12 @@ export interface EditorBridge {
   resetContent?(md: string): void;
   /** 防抖窗口内未落盘的改动立即写盘（合并 / 拆分前调用） */
   flush?(): Promise<void>;
+  /** 阶段 2B：在指定位置插入（分段规则同 insertAtCursor） */
+  insertAt?(pos: number, text: string): boolean;
+  /** 阶段 2B：更新 AI 着色的片段表 */
+  setTint?(snippets: string[]): void;
+  /** 阶段 2B：程序化替换全文——进撤销栈、置 dirty 交自动保存（恢复采纳检查点） */
+  restoreContent?(md: string): void;
 }
 
 const bridges = new Map<PaneId, EditorBridge>();

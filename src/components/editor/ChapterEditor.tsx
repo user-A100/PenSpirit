@@ -18,7 +18,13 @@ import {
   Trash2,
   Type,
   Scissors,
+  Highlighter,
+  Sparkles,
 } from "lucide-react";
+import { AiTint, aiTintKey } from "./aiTint";
+import { InlineAi } from "./InlineAi";
+import { useInlineAi } from "../../stores/inlineAi";
+import { loadTint, pruneTint } from "../../lib/ai/aiTint";
 import { openMenuAt, type MenuEntry } from "../../stores/menu";
 import { commandShortcut, runCommand } from "../../lib/commands";
 import { useWorkspace, type PaneId } from "../../stores/workspace";
@@ -74,6 +80,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   const typewriter = useUiNav((s) => s.typewriter);
   const toggleTypewriter = useUiNav((s) => s.toggleTypewriter);
   const focusMode = useUiNav((s) => s.focusMode);
+  const aiTintOn = useUiNav((s) => s.aiTint);
   // 正文滚离顶部后顶栏才显发丝线（Zen：边界只在需要时出现）
   const [scrolled, setScrolled] = useState(false);
   const dirty = useRef<string | null>(null);
@@ -97,7 +104,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   const [placeholderOpen, setPlaceholderOpen] = useState(false);
 
   const editor = useEditor({
-    extensions: [StarterKit, Markdown, WikiLinks],
+    extensions: [StarterKit, Markdown, WikiLinks, AiTint],
     content: "",
     immediatelyRender: false,
     // wiki 链接点击跳转（M7 批次3）：[[章题]] 是纯文本装饰，同书章题精确匹配选中
@@ -169,6 +176,25 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
     savedRef.current = null;
     loadedIdRef.current = chapterId;
   }, [chapterId, content, editor]);
+
+  // AI 写入着色（阶段 2B）：换章先清空，再读该章片段表；正文里已不存在的片段顺手剪掉
+  useEffect(() => {
+    if (!editor || chapterId == null) return;
+    let cancelled = false;
+    editor.view.dispatch(editor.state.tr.setMeta(aiTintKey, { snippets: [] }));
+    void loadTint(chapterId).then(async (sn) => {
+      if (cancelled || editor.isDestroyed || loadedIdRef.current !== chapterId || sn.length === 0) return;
+      const kept = await pruneTint(chapterId, sn, editor.state.doc.textContent);
+      if (cancelled || editor.isDestroyed || loadedIdRef.current !== chapterId) return;
+      editor.view.dispatch(editor.state.tr.setMeta(aiTintKey, { snippets: kept }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [editor, chapterId, content]);
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(aiTintKey, { on: aiTintOn }));
+  }, [editor, aiTintOn]);
 
   // 搜索结果跳转：正文就位后定位到首个匹配并滚动到可见（本 effect 声明在灌内容之后，
   // 故同一次提交里 chapterContent 先落地）。只在活动窗格消费——搜索跳装载的章在活动窗格。
@@ -279,6 +305,19 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
           if (!hit) return false;
           return editor.chain().focus().insertContentAt(hit.pos, text).run();
         }),
+      insertAt: (pos, text) => {
+        if (pos < 0 || pos > editor.state.doc.content.size) return false;
+        editor.commands.setTextSelection(pos);
+        return bridge.insertAtCursor(text);
+      },
+      setTint: (snippets) => {
+        if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(aiTintKey, { snippets }));
+      },
+      restoreContent: (md) =>
+        void write(() => {
+          editor.commands.setContent(md);
+          return true;
+        }),
       splitAtCursor: () => splitMarkdownAt(editor, editor.state.selection.from),
       markdown: () => editorMarkdown(editor),
       resetContent: (md) => {
@@ -368,6 +407,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
       ],
     },
     { label: "打字机滚动", icon: Type, checked: typewriter, onSelect: toggleTypewriter },
+    { label: "标出 AI 写入的文字", icon: Highlighter, checked: aiTintOn, onSelect: () => useUiNav.getState().toggleAiTint() },
     { label: "悬浮大纲", icon: ListTree, checked: outlineOpen, shortcut: commandShortcut("editor.toggleOutline"), onSelect: () => useOutline.getState().toggle() },
     { label: focusMode ? "退出专注模式" : "专注模式", icon: Maximize2, shortcut: commandShortcut("view.focusMode"), onSelect: () => useUiNav.getState().toggleFocusMode() },
     { type: "separator" },
@@ -486,6 +526,16 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
               <span aria-hidden className="mx-0.5 h-4 w-px bg-[var(--hairline)]" />
               <button
                 onMouseDown={(e) => e.preventDefault()}
+                onClick={() => useInlineAi.getState().open("edit", pane)}
+                data-tip="就地改写，不进对话"
+                data-tip-key={commandShortcut("ai.inlineEdit")}
+                className="flex items-center gap-1 rounded-[4px] px-2 py-1 text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-fast)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
+              >
+                <Sparkles size={12} />
+                就地改
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => askAiAboutSelection()}
                 className="rounded-[4px] px-2 py-1 font-medium text-[color:var(--accent)] transition-colors duration-[var(--dur-fast)] hover:bg-[var(--fill-hover)]"
               >
@@ -494,6 +544,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
             </div>
           </BubbleMenu>
         )}
+        {editor && <InlineAi editor={editor} chapterId={chapterId} pane={pane} />}
       </div>
 
       {historyOpen && (

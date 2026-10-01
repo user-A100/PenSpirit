@@ -68,9 +68,7 @@ pub(crate) fn assemble_with(bundle: &ContextBundle, instruction: &str, opts: &Ai
 
 // ---------- 阶段 2B：常驻记忆 / 作者注 / 写作规则 ----------
 
-const MEMORY_BOOK: &str = "memory:book:";
-const MEMORY_VOLUME: &str = "memory:volume:";
-const AUTHOR_NOTE: &str = "authornote:chapter:";
+use crate::repo::settings::{AUTHOR_NOTE, MEMORY_BOOK, MEMORY_VOLUME};
 
 /// 读记忆三件套：本书记忆、章所在卷的记忆、本章作者注（chapter_id 为空时只给本书）
 pub fn ai_memory_get_inner(s: &AppState, book_id: i64, chapter_id: Option<i64>) -> AppResult<AiMemory> {

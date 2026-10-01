@@ -524,6 +524,31 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
   cursor: pointer;
 }
 
+/* ---------- AI 写入着色 / 就地改写待改区（阶段 2B） ---------- */
+/* 采纳进正文、尚未改过的段落淡淡打底；改一个字即不再匹配、底色消失。纯装饰，不落盘 */
+.ai-text {
+  background-color: color-mix(in srgb, var(--accent) 7%, transparent);
+  border-radius: 2px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.ai-pending {
+  background-color: color-mix(in srgb, var(--accent) 20%, transparent);
+  border-radius: 2px;
+}
+.ai-pending-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin: 0 1px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: ai-pending-blink 1s steps(2) infinite;
+}
+@keyframes ai-pending-blink {
+  50% { opacity: 0; }
+}
+
 /* ---------- 长按 Esc 退出阅读（ReadView，作家助手同款 1500ms） ---------- */
 /* 按下 Esc 出现提示胶囊，内嵌进度条 1500ms 线性填满即退出；松开即取消 */
 .esc-hold-bar {

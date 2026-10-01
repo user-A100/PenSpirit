@@ -9,6 +9,8 @@ import { useBinder } from "../stores/binder";
 import { usePalette } from "../stores/palette";
 import { useGroupView, type LensMode } from "../stores/groupView";
 import { askAiAboutSelection } from "./ai/actions";
+import { getActiveEditor } from "./editorBridge";
+import { useInlineAi } from "../stores/inlineAi";
 import { canMerge, isVolume, mergeChapters, newChapterAfter, newCollection, newVolume, splitCurrentChapter } from "./binderActions";
 
 /** 新建一章、打开它并进入行内改名（Scrivener：新建即命名）；位置 = Binder 选中章（多选取最后一章）之后，否则当前章之后 */
@@ -93,6 +95,23 @@ export function builtinCommands(): Command[] {
         nav.setAiCollapsed(!nav.aiCollapsed);
       },
     },
+    {
+      id: "ai.inlineEdit",
+      title: "就地改写选区（无选区 = 当前段）",
+      category: "AI",
+      keys: ["Alt+K"],
+      when: () => useUiNav.getState().activeView === "write" && getActiveEditor() != null,
+      run: () => useInlineAi.getState().open("edit"),
+    },
+    {
+      id: "ai.continueHere",
+      title: "从光标处续写（浮条预览）",
+      category: "AI",
+      keys: ["Alt+Enter"],
+      when: () => useUiNav.getState().activeView === "write" && getActiveEditor() != null,
+      run: () => useInlineAi.getState().open("continue"),
+    },
+    { id: "ai.tint", title: "标出 AI 写入的文字", category: "AI", run: () => useUiNav.getState().toggleAiTint() },
     {
       id: "ai.quote",
       title: "把选区引用到 AI 对话",

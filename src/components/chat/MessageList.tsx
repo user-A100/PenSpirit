@@ -17,6 +17,7 @@ import {
   GitBranch,
   Wand2,
   NotebookPen,
+  History,
 } from "lucide-react";
 import { api, type ChatMessage } from "../../lib/tauri";
 import { useWorkspace } from "../../stores/workspace";
@@ -29,6 +30,7 @@ import { estimateTokens } from "../../lib/ai/tokens";
 import { EXTRACT_LABEL, runExtraction, type ExtractItem, type ExtractKind } from "../../lib/ai/extract";
 import { errMsg } from "../../lib/errors";
 import { ExtractDialog } from "./ExtractDialog";
+import { checkpointFor, restoreCheckpoint } from "../../lib/ai/checkpoint";
 import { openMenuAt } from "../../stores/menu";
 import { confirmDialog, promptDialog } from "../../stores/confirm";
 import { toast } from "../../stores/toast";
@@ -166,13 +168,38 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
       },
     ]);
 
-  const adopt = (how: AdoptHow) => shown && void adoptReply(shown, how, quote);
-  const adoptMenu = (el: Element) =>
+  // 只采纳选中部分（阶段 2B）：在这条回答里划选一段，采纳按钮就只用选中的文字
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [picked, setPicked] = useState("");
+  useEffect(() => {
+    const onSel = () => {
+      const el = bodyRef.current;
+      const sel = document.getSelection();
+      const inside = !!el && !!sel && !sel.isCollapsed && !!sel.anchorNode && !!sel.focusNode && el.contains(sel.anchorNode) && el.contains(sel.focusNode);
+      setPicked(inside ? sel!.toString().trim() : "");
+    };
+    document.addEventListener("selectionchange", onSel);
+    return () => document.removeEventListener("selectionchange", onSel);
+  }, []);
+  const adopt = (how: AdoptHow, part = picked) => shown && void adoptReply(shown, how, quote, part || undefined);
+  const adoptMenu = (el: Element) => {
+    const part = picked;
     openMenuAt(el, [
-      { label: "插入光标处", icon: CornerDownLeft, onSelect: () => adopt("insert") },
-      { label: "替换选区（先看差异）", icon: Replace, onSelect: () => adopt("replace") },
-      { label: "追加到章末", icon: ArrowDown, onSelect: () => adopt("append") },
+      { label: "插入光标处", icon: CornerDownLeft, onSelect: () => adopt("insert", part) },
+      { label: "替换选区（先看差异）", icon: Replace, onSelect: () => adopt("replace", part) },
+      { label: "追加到章末", icon: ArrowDown, onSelect: () => adopt("append", part) },
     ]);
+  };
+  const restore = async (m: ChatMessage) => {
+    const ok = await confirmDialog({
+      title: "恢复到采纳之前？",
+      message: "本章会回到采纳这条回答之前的样子，之后的改动一并撤回。当前版本会先存进版本历史，也可以 Ctrl+Z 撤回这次恢复。",
+      confirmLabel: "恢复",
+    });
+    if (!ok || !(await restoreCheckpoint(m.id))) return;
+    void useChat.getState().markAdopted(m.id, false);
+    toast.success("已恢复到采纳之前（当前版本已存进历史）");
+  };
 
   const later = useChat.getState().messages.filter((m) => turn.user && m.id > turn.user.id).length;
 
@@ -342,6 +369,11 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                         已采纳
                       </span>
                     )}
+                    {shown.adopted && checkpointFor(shown.id) && (
+                      <button data-restore-checkpoint="" onClick={() => void restore(shown)} className="text-[color:var(--text-faint)] underline-offset-2 hover:text-[color:var(--text-primary)] hover:underline">
+                        恢复到采纳之前
+                      </button>
+                    )}
                   </div>
                 )}
                 {command?.id === "compact" && (
@@ -367,25 +399,32 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                     ))}
                   </div>
                 ) : (
-                  <ReplyBody text={shown.content} mode={mode} />
+                  <div ref={bodyRef}>
+                    <ReplyBody text={shown.content} mode={mode} />
+                  </div>
                 )}
                 <div
                   className={`flex flex-wrap items-center gap-0.5 transition-opacity duration-[var(--dur-md)] ${
                     isLast ? "opacity-100" : "opacity-0 group-hover/ai:opacity-100 focus-within:opacity-100"
                   }`}
                 >
+                  {picked && (
+                    <span data-partial={picked.length} className="mr-1 rounded-[4px] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] px-1.5 py-0.5 text-2xs text-[color:var(--accent)]">
+                      只采纳选中的 {picked.replace(/\s/g, "").length} 字
+                    </span>
+                  )}
                   {output !== "chat" ? (
                     <span className="mr-1 flex items-stretch overflow-hidden rounded-[var(--r-control)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-2xs font-medium text-[color:var(--accent)]">
-                      <button onClick={() => adopt(output === "replace" ? "replace" : "insert")} className="flex items-center gap-1 px-2 py-1 transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]">
+                      <button onMouseDown={(e) => e.preventDefault()} onClick={() => adopt(output === "replace" ? "replace" : "insert")} className="flex items-center gap-1 px-2 py-1 transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]">
                         {output === "replace" ? <Replace size={12} /> : <CornerDownLeft size={12} />}
                         {output === "replace" ? "替换选区" : "插入光标处"}
                       </button>
-                      <button aria-label="更多采纳方式" onClick={(e) => adoptMenu(e.currentTarget)} className="border-l border-[color:color-mix(in_srgb,var(--accent)_25%,transparent)] px-1 transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]">
+                      <button aria-label="更多采纳方式" onMouseDown={(e) => e.preventDefault()} onClick={(e) => adoptMenu(e.currentTarget)} className="border-l border-[color:color-mix(in_srgb,var(--accent)_25%,transparent)] px-1 transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]">
                         <ChevronDown size={12} />
                       </button>
                     </span>
                   ) : (
-                    <button onClick={(e) => adoptMenu(e.currentTarget)} className={ACT} aria-label="采纳进正文">
+                    <button onMouseDown={(e) => e.preventDefault()} onClick={(e) => adoptMenu(e.currentTarget)} className={ACT} aria-label="采纳进正文">
                       <CornerDownLeft size={12} />
                       采纳…
                     </button>
@@ -452,6 +491,7 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                           })),
                         },
                         { label: "存为本章梗概", icon: NotebookPen, onSelect: () => void saveAsSynopsis(shown) },
+                        ...(shown.adopted && checkpointFor(shown.id) ? [{ label: "恢复到采纳之前", icon: History, onSelect: () => void restore(shown) }] : []),
                         { type: "separator" },
                         { label: "删除这个版本", icon: Trash2, danger: true, onSelect: () => void deleteMessage(shown.id) },
                       ])
