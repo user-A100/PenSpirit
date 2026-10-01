@@ -41,7 +41,7 @@ function ToastItem({ t }: { t: Toast }) {
       data-testid="toast"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
-      className={`pointer-events-auto flex min-h-10 w-[22rem] max-w-[calc(100vw-2rem)] items-center gap-2.5 rounded-[var(--radius-lg)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] py-2 pl-3 pr-1.5 text-ui text-[color:var(--text-primary)] [box-shadow:var(--shadow-overlay,0_10px_30px_rgba(0,0,0,0.3))] ${
+      className={`pointer-events-auto flex min-h-10 w-[22rem] max-w-[calc(100vw-2rem)] items-center gap-2.5 rounded-[var(--radius-lg)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)] py-2 pl-3 pr-1.5 text-ui text-[color:var(--text-primary)] [box-shadow:var(--shadow-overlay,0_10px_30px_rgba(0,0,0,0.3))] ${
         leaving ? "toast-out" : "toast-in"
       }`}
     >
@@ -52,7 +52,7 @@ function ToastItem({ t }: { t: Toast }) {
           onClick={() => {
             void Promise.resolve(t.action!.run()).finally(close);
           }}
-          className="shrink-0 rounded-[var(--radius-sm)] px-2 py-1 text-ui font-medium text-[color:var(--accent)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--bg-hover)]"
+          className="shrink-0 rounded-[var(--radius-sm)] px-2 py-1 text-ui font-medium text-[color:var(--accent)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--fill-hover)]"
         >
           {t.action.label}
         </button>
@@ -61,7 +61,7 @@ function ToastItem({ t }: { t: Toast }) {
         onClick={close}
         title="关闭"
         aria-label="关闭提示"
-        className="shrink-0 rounded-[var(--radius-sm)] p-1 text-[color:var(--text-faint)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
+        className="shrink-0 rounded-[var(--radius-sm)] p-1 text-[color:var(--text-faint)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-secondary)]"
       >
         <X size={13} />
       </button>

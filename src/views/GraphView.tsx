@@ -31,7 +31,7 @@ export function GraphView() {
   return (
     <ViewShell title="图谱" wide>
       <div className="flex h-full flex-col">
-        <div className="flex shrink-0 border-b border-[color:var(--border-subtle)]">
+        <div className="flex shrink-0 border-b border-[color:var(--hairline)]">
           {TABS.map((t) => (
             <button
               key={t.id}

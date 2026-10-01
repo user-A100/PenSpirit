@@ -92,7 +92,7 @@ export function WikiSuggest({ editor }: { editor: Editor | null }) {
   const coords = editor.view.coordsAtPos(state.from);
   return (
     <div
-      className="fixed z-50 max-h-56 w-56 overflow-y-auto rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] py-1 text-xs [box-shadow:var(--shadow-pop)]"
+      className="fixed z-50 max-h-56 w-56 overflow-y-auto rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] py-1 text-xs [box-shadow:var(--shadow-pop)]"
       style={{ left: coords.left, top: coords.bottom + 4 }}
       data-testid="wiki-suggest"
     >

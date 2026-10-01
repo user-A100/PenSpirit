@@ -285,7 +285,7 @@ function InlinePanel({ editor, chapterId, pane, mode }: { editor: Editor; chapte
             <button
               disabled={status !== "done"}
               onClick={() => void apply()}
-              className="flex items-center gap-1 rounded-[var(--r-control)] bg-[var(--accent)] px-2.5 py-1 font-medium text-white disabled:opacity-40"
+              className="flex items-center gap-1 rounded-[var(--r-control)] bg-[var(--accent-solid)] px-2.5 py-1 font-medium text-white disabled:opacity-40"
             >
               <Check size={12} /> 应用 <CornerDownLeft size={11} className="opacity-70" />
             </button>

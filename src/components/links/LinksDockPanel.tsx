@@ -63,7 +63,7 @@ export function LinksDockPanel() {
       <button
         onClick={() => setReload((v) => v + 1)}
         title="重新扫描（保存后更新链接）"
-        className="mb-2 flex shrink-0 items-center justify-center gap-1 rounded-md border border-[color:var(--border-subtle)] py-1 text-[color:var(--text-secondary)] transition-colors duration-150 hover:border-[color:var(--accent)] hover:text-[color:var(--text-primary)]"
+        className="mb-2 flex shrink-0 items-center justify-center gap-1 rounded-md border border-[color:var(--hairline)] py-1 text-[color:var(--text-secondary)] transition-colors duration-150 hover:border-[color:var(--accent)] hover:text-[color:var(--text-primary)]"
       >
         <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
         重新扫描
@@ -80,7 +80,7 @@ export function LinksDockPanel() {
               onClick={() => resolved && void selectChapter(l.to_id!)}
               disabled={!resolved}
               title={resolved ? `跳到「${l.to_title}」` : "目标章不存在"}
-              className="mb-1 block w-full rounded-md border border-[color:var(--border-subtle)] px-2 py-1.5 text-left transition-colors duration-150 disabled:cursor-default disabled:opacity-60 enabled:hover:border-[color:var(--accent)]"
+              className="mb-1 block w-full rounded-md border border-[color:var(--hairline)] px-2 py-1.5 text-left transition-colors duration-150 disabled:cursor-default disabled:opacity-60 enabled:hover:border-[color:var(--accent)]"
             >
               <span className="flex items-center gap-1.5">
                 {resolved ? (
@@ -106,7 +106,7 @@ export function LinksDockPanel() {
             key={`${b.from_id}-${i}`}
             onClick={() => void selectChapter(b.from_id)}
             title={`跳到「${b.from_title}」`}
-            className="mb-1 block w-full rounded-md border border-[color:var(--border-subtle)] px-2 py-1.5 text-left transition-colors duration-150 hover:border-[color:var(--accent)]"
+            className="mb-1 block w-full rounded-md border border-[color:var(--hairline)] px-2 py-1.5 text-left transition-colors duration-150 hover:border-[color:var(--accent)]"
           >
             <span className="flex items-center gap-1.5">
               <ArrowLeft size={11} className="shrink-0 text-[color:var(--accent)]" />
@@ -124,7 +124,7 @@ export function LinksDockPanel() {
           <div
             key={row.name}
             title={row.chapters.join("、")}
-            className="mb-1 flex items-center gap-1.5 rounded-md border border-[color:var(--border-subtle)] px-2 py-1.5"
+            className="mb-1 flex items-center gap-1.5 rounded-md border border-[color:var(--hairline)] px-2 py-1.5"
           >
             <UserRound size={11} className="shrink-0 text-[color:var(--accent)]" />
             <span className="min-w-0 flex-1 truncate text-[color:var(--text-primary)]">{row.name}</span>

@@ -28,11 +28,11 @@ export function Card({
   const state = selected
     ? "border-[color:var(--accent)] bg-[var(--accent-dim)]"
     : interactive
-      ? "border-[color:var(--border-subtle)] transition-colors duration-[var(--dur-md)] hover:border-[color:var(--accent)]"
-      : "border-[color:var(--border-subtle)]";
+      ? "border-[color:var(--hairline)] transition-colors duration-[var(--dur-md)] hover:border-[color:var(--accent)]"
+      : "border-[color:var(--hairline)]";
   return (
     <div
-      className={`group rounded-[var(--radius-md)] border ${padCls} ${surface} ${state} ${className}`}
+      className={`group rounded-[var(--r-card)] border ${padCls} ${surface} ${state} ${className}`}
       {...rest}
     >
       {children}

@@ -45,7 +45,7 @@ export function ConfirmHost() {
             aria-label={req.title}
             placeholder={req.input.placeholder}
             onChange={(e) => setText(e.target.value)}
-            className="mt-3 w-full rounded-[var(--r-control)] border border-[color:var(--border-subtle)] bg-[var(--fill-element)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-[var(--dur-md)] placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
+            className="mt-3 w-full rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--fill-element)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-[var(--dur-md)] placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
           />
         )}
         <div className="mt-5 flex justify-end gap-2">

@@ -94,11 +94,11 @@ export function ContextPreview({
   return (
     <div className="flex h-full flex-col">
       {/* 注入设置：每书四槽位开关 + 预算 + 勾选 */}
-      <div className="shrink-0 border-b border-[color:var(--border-subtle)] px-3 py-1.5">
+      <div className="shrink-0 border-b border-[color:var(--hairline)] px-3 py-1.5">
         <button
           onClick={() => setCfgOpen((v) => !v)}
           title="注入设置"
-          className="flex w-full items-center gap-1.5 rounded px-0.5 py-0.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+          className="flex w-full items-center gap-1.5 rounded px-0.5 py-0.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
         >
           {cfgOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           <Settings2 size={12} />
@@ -121,7 +121,7 @@ export function ContextPreview({
                   onChange={(e) => setBudget(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
                   aria-label="上下文预算"
                   data-testid="inj-budget-total"
-                  className="w-20 rounded border border-[color:var(--border-subtle)] bg-transparent px-1 py-0.5 text-right text-xs text-[color:var(--text-primary)] outline-none focus:border-[color:var(--accent)]"
+                  className="w-20 rounded border border-[color:var(--hairline)] bg-transparent px-1 py-0.5 text-right text-xs text-[color:var(--text-primary)] outline-none focus:border-[color:var(--accent)]"
                 />
                 <span className="text-[color:var(--text-faint)]">tokens（0 = 不限）</span>
               </label>
@@ -156,14 +156,14 @@ export function ContextPreview({
                             patch(key, { ...slot, budget: Math.max(0, Math.floor(Number(e.target.value) || 0)) })
                           }
                           data-testid={`inj-budget-${key}`}
-                          className="w-14 rounded border border-[color:var(--border-subtle)] bg-transparent px-1 py-0.5 text-right text-xs text-[color:var(--text-primary)] outline-none focus:border-[color:var(--accent)]"
+                          className="w-14 rounded border border-[color:var(--hairline)] bg-transparent px-1 py-0.5 text-right text-xs text-[color:var(--text-primary)] outline-none focus:border-[color:var(--accent)]"
                         />
                         字
                       </label>
                     </div>
                     {(key === "plots" || key === "ideas") && slot.enabled && items.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1 pl-5" data-testid={`inj-items-${key}`}>
-                        <label className="flex cursor-pointer items-center gap-1 rounded border border-[color:var(--border-subtle)] px-1.5 py-0.5 text-[color:var(--text-secondary)]">
+                        <label className="flex cursor-pointer items-center gap-1 rounded border border-[color:var(--hairline)] px-1.5 py-0.5 text-[color:var(--text-secondary)]">
                           <input
                             type="checkbox"
                             checked={slot.ids == null}
@@ -176,7 +176,7 @@ export function ContextPreview({
                           <label
                             key={it.id}
                             title={it.label}
-                            className="flex max-w-40 cursor-pointer items-center gap-1 rounded border border-[color:var(--border-subtle)] px-1.5 py-0.5 text-[color:var(--text-secondary)]"
+                            className="flex max-w-40 cursor-pointer items-center gap-1 rounded border border-[color:var(--hairline)] px-1.5 py-0.5 text-[color:var(--text-secondary)]"
                           >
                             <input
                               type="checkbox"
@@ -216,7 +216,7 @@ export function ContextPreview({
               <div
                 key={i}
                 data-slot-card={s.name}
-                className={`rounded-md border border-[color:var(--border-subtle)] p-2.5 ${s.disabled || s.trimmed ? "opacity-55" : ""}`}
+                className={`rounded-md border border-[color:var(--hairline)] p-2.5 ${s.disabled || s.trimmed ? "opacity-55" : ""}`}
               >
                 <div className="flex items-baseline gap-2">
                   <span className="shrink-0 text-xs font-medium text-[color:var(--text-primary)]">{s.name}</span>

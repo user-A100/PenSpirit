@@ -92,7 +92,7 @@ export function HistoryPanel(props: {
 
   return (
     <div className="absolute right-0 top-0 z-40 flex h-full w-[380px] flex-col border-l border-[color:var(--border-strong)] bg-[var(--bg-elevated)] shadow-xl">
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-[color:var(--border-subtle)] pl-3 pr-2">
+      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-[color:var(--hairline)] pl-3 pr-2">
         <History size={13} className="text-[color:var(--text-faint)]" />
         <span className="flex-1 text-xs font-medium text-[color:var(--text-primary)]">
           版本历史
@@ -110,7 +110,7 @@ export function HistoryPanel(props: {
       {error && <div className="px-3 py-2 text-2xs text-[color:var(--danger)]">{error}</div>}
 
       {/* 快照列表（新→旧） */}
-      <div className="max-h-56 shrink-0 overflow-y-auto border-b border-[color:var(--border-subtle)] p-1.5">
+      <div className="max-h-56 shrink-0 overflow-y-auto border-b border-[color:var(--hairline)] p-1.5">
         {items.length === 0 ? (
           <div className="px-3 py-4 text-center text-xs text-[color:var(--text-faint)]">还没有历史版本</div>
         ) : (
@@ -123,7 +123,7 @@ export function HistoryPanel(props: {
                 className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-150 ${
                   active
                     ? "bg-[var(--accent-dim)] text-[color:var(--text-primary)]"
-                    : "text-[color:var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+                    : "text-[color:var(--text-secondary)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
                 }`}
               >
                 <span className="min-w-0 flex-1 truncate text-xs">{s.ts}</span>
@@ -148,7 +148,7 @@ export function HistoryPanel(props: {
                       setConfirmFile(s.file);
                     }}
                     title="恢复此版本"
-                    className="shrink-0 rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--accent-hover)]"
+                    className="shrink-0 rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--accent-hover)]"
                   >
                     <RotateCcw size={12} />
                   </button>
@@ -182,7 +182,7 @@ export function HistoryPanel(props: {
             return lines.map((l, j) => <Line key={`${i}-${j}`} text={l} kind={kind} />);
           })}
         </div>
-        <div className="shrink-0 border-t border-[color:var(--border-subtle)] px-3 py-1.5 text-2xs text-[color:var(--text-faint)]">
+        <div className="shrink-0 border-t border-[color:var(--hairline)] px-3 py-1.5 text-2xs text-[color:var(--text-faint)]">
           自动保存每 5 分钟记一版（大段改动立即记）；恢复前会先保留当前内容
         </div>
       </div>

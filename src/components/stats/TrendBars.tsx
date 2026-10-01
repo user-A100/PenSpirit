@@ -74,11 +74,12 @@ export function TrendBars({ data, goal }: { data: { date: string; words: number 
           i === 0 || (i + 1) % 10 === 0 ? (
             <text
               key={d.date}
-              x={1 + i * (barW + gap) + barW / 2}
+              x={i === 0 ? 0 : i === data.length - 1 ? width : 1 + i * (barW + gap) + barW / 2}
               y={SVG_H - 3}
               fontSize={9}
               fill="var(--text-faint)"
-              textAnchor="middle"
+              // 首尾日期贴边对齐，免得被画布裁掉半个字
+              textAnchor={i === 0 ? "start" : i === data.length - 1 ? "end" : "middle"}
             >
               {d.date.slice(5)}
             </text>

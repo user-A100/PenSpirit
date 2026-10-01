@@ -69,7 +69,7 @@ export function BumpWorkspace() {
                     setConfirmClear(false);
                   }}
                   title="确认清空词库"
-                  className="rounded px-1.5 py-0.5 text-2xs text-[color:var(--danger)] transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+                  className="rounded px-1.5 py-0.5 text-2xs text-[color:var(--danger)] transition-colors duration-150 hover:bg-[var(--fill-hover)]"
                 >
                   确认清空
                 </button>
@@ -77,7 +77,7 @@ export function BumpWorkspace() {
                 <button
                   onClick={() => setConfirmClear(true)}
                   title="清空词库"
-                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--danger)]"
                 >
                   <Eraser size={11} />
                   清空
@@ -89,13 +89,13 @@ export function BumpWorkspace() {
             {words.map((w) => (
               <span
                 key={w.id}
-                className="group flex items-center gap-1 rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] py-1 pl-2.5 pr-1.5 text-xs text-[color:var(--text-secondary)]"
+                className="group flex items-center gap-1 rounded-full border border-[color:var(--hairline)] bg-[var(--bg-elevated)] py-1 pl-2.5 pr-1.5 text-xs text-[color:var(--text-secondary)]"
               >
                 {w.word}
                 <button
                   onClick={() => void removeWord(w.id)}
                   title={`删除「${w.word}」`}
-                  className="rounded-full p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
+                  className="rounded-full p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--danger)]"
                 >
                   <X size={10} />
                 </button>
@@ -130,7 +130,7 @@ export function BumpWorkspace() {
           {previewing && (
             <div
               data-testid="batch-preview"
-              className="mb-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] px-3 py-2.5"
+              className="mb-3 rounded-lg border border-[color:var(--hairline)] bg-[var(--bg-panel)] px-3 py-2.5"
             >
               <div className="mb-2 flex items-center gap-2">
                 <span className="text-xs font-medium text-[color:var(--text-secondary)]">
@@ -138,7 +138,7 @@ export function BumpWorkspace() {
                 </span>
                 <button
                   onClick={() => void addAll()}
-                  className="rounded-md bg-[var(--accent)] px-2.5 py-1 text-2xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)]"
+                  className="rounded-md bg-[var(--accent-solid)] px-2.5 py-1 text-2xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)]"
                 >
                   全部添加
                 </button>
@@ -150,7 +150,7 @@ export function BumpWorkspace() {
                   return (
                     <span
                       key={w}
-                      className={`flex items-center gap-1 rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] py-1 pl-2.5 pr-1.5 text-xs ${
+                      className={`flex items-center gap-1 rounded-full border border-[color:var(--hairline)] bg-[var(--bg-elevated)] py-1 pl-2.5 pr-1.5 text-xs ${
                         exists
                           ? "text-[color:var(--text-faint)] line-through opacity-70"
                           : "text-[color:var(--text-secondary)]"
@@ -163,7 +163,7 @@ export function BumpWorkspace() {
                       <button
                         onClick={() => setPending(pending.filter((p) => p !== w))}
                         title={`移除「${w}」`}
-                        className="rounded-full p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
+                        className="rounded-full p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--danger)]"
                       >
                         <X size={10} />
                       </button>
@@ -189,7 +189,7 @@ export function BumpWorkspace() {
             <button
               onClick={() => void draw()}
               disabled={busy || words.length < count}
-              className="flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-md bg-[var(--accent-solid)] px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:opacity-40"
             >
               <Shuffle size={13} />
               {drawn.length > 0 ? "换一组" : "碰撞"}
@@ -210,17 +210,17 @@ export function BumpWorkspace() {
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="备注（可选）"
-                  className="w-56 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
+                  className="w-56 rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
                 />
                 <input
                   value={tags}
                   onChange={(e) => setTags(e.target.value)}
                   placeholder="标签，空格分隔"
-                  className="w-40 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
+                  className="w-40 rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
                 />
                 <button
                   onClick={() => void saveIdea()}
-                  className="flex items-center gap-1.5 rounded-md border border-[color:var(--border-subtle)] px-3 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+                  className="flex items-center gap-1.5 rounded-md border border-[color:var(--hairline)] px-3 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
                 >
                   <Sparkles size={13} />
                   存为灵感卡
@@ -230,7 +230,7 @@ export function BumpWorkspace() {
           )}
 
           {drawn.length === 0 && words.length >= count && (
-            <div className="rounded-[var(--radius-lg)] border border-dashed border-[color:var(--border-subtle)] px-6 py-12 text-center text-xs text-[color:var(--text-faint)]">
+            <div className="rounded-[var(--radius-lg)] border border-dashed border-[color:var(--hairline)] px-6 py-12 text-center text-xs text-[color:var(--text-faint)]">
               点「碰撞」抽一组词
             </div>
           )}

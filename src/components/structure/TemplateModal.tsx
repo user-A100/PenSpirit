@@ -10,7 +10,7 @@ import type { ChapterTemplate } from "../../lib/tauri";
 // 「当前章存为模板」取 workspace.chapterContent（防抖窗口内的最近一次保存）。
 
 const INPUT =
-  "w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-xs leading-relaxed text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]";
+  "w-full rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2 py-1 text-xs leading-relaxed text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]";
 
 export function TemplateModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const list = useTemplates((s) => s.list);
@@ -53,7 +53,7 @@ export function TemplateModal({ open, onClose }: { open: boolean; onClose: () =>
     <Modal open={open} onClose={onClose} title="章节模板" widthClass="max-w-2xl">
       <div className="flex min-h-0 flex-1">
         {/* 左列：模板清单 */}
-        <div className="w-56 shrink-0 overflow-y-auto border-r border-[color:var(--border-subtle)] p-2">
+        <div className="w-56 shrink-0 overflow-y-auto border-r border-[color:var(--hairline)] p-2">
           {list.length === 0 && (
             <div className="px-2 py-6 text-center text-xs leading-relaxed text-[color:var(--text-faint)]">
               还没有模板
@@ -64,7 +64,7 @@ export function TemplateModal({ open, onClose }: { open: boolean; onClose: () =>
             <div
               key={t.id}
               className={`group mb-1 flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors duration-150 ${
-                editing?.id === t.id ? "bg-[var(--accent-dim)]" : "hover:bg-[var(--bg-hover)]"
+                editing?.id === t.id ? "bg-[var(--accent-dim)]" : "hover:bg-[var(--fill-hover)]"
               }`}
               onClick={() => startEdit(t)}
             >
@@ -98,7 +98,7 @@ export function TemplateModal({ open, onClose }: { open: boolean; onClose: () =>
           ))}
           <button
             onClick={startNew}
-            className="mt-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+            className="mt-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)]"
           >
             <Plus size={12} />
             新建模板
@@ -107,7 +107,7 @@ export function TemplateModal({ open, onClose }: { open: boolean; onClose: () =>
             <button
               onClick={() => void saveCurrentAsTemplate()}
               title="把当前章的正文存为新模板"
-              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)]"
             >
               <PenLine size={12} />
               当前章存为模板
@@ -137,7 +137,7 @@ export function TemplateModal({ open, onClose }: { open: boolean; onClose: () =>
                   <button
                     onClick={startNew}
                     title="放弃编辑"
-                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-secondary)]"
                   >
                     <X size={12} />
                     取消
@@ -147,7 +147,7 @@ export function TemplateModal({ open, onClose }: { open: boolean; onClose: () =>
                   onClick={() => void save()}
                   disabled={!name.trim()}
                   title="保存模板"
-                  className="flex items-center gap-1 rounded-md bg-[var(--accent-dim)] px-2.5 py-1 text-xs text-[color:var(--accent)] transition-colors duration-150 hover:bg-[var(--bg-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex items-center gap-1 rounded-md bg-[var(--accent-dim)] px-2.5 py-1 text-xs text-[color:var(--accent)] transition-colors duration-150 hover:bg-[var(--fill-hover)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Save size={12} />
                   保存

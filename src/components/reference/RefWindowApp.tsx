@@ -52,7 +52,7 @@ export function RefWindowApp({ bookId, initialChapterId }: { bookId: number | nu
             value={selected ?? ""}
             onChange={(e) => setSelected(e.target.value === "" ? null : Number(e.target.value))}
             data-testid="ref-window-chapter-select"
-            className="min-w-0 flex-1 rounded-md border border-[color:var(--border-subtle)] bg-transparent px-1.5 py-1 text-xs text-[color:var(--text-primary)] outline-none focus:border-[color:var(--accent)]"
+            className="min-w-0 flex-1 rounded-md border border-[color:var(--hairline)] bg-transparent px-1.5 py-1 text-xs text-[color:var(--text-primary)] outline-none focus:border-[color:var(--accent)]"
           >
             <option value="">选择要参考的章…</option>
             {chapters.map((c) => (

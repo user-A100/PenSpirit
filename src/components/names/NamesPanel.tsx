@@ -12,7 +12,7 @@ const OBSCURITY_LABEL = { any: "不限", common: "常见", rare: "生僻" } as c
 // 注意：此处不带 w-full——真实 CSS 里 w-full 会压过同元素上的 w-14（生成顺序靠后），
 // 把旁边 flex-1 的生成按钮挤出面板（实机核验踩过）。
 const INPUT =
-  "rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-xs leading-relaxed text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]";
+  "rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2 py-1 text-xs leading-relaxed text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]";
 
 export function NamesPanel() {
   const [gender, setGender] = useState<NameRequest["gender"]>("any");
@@ -96,7 +96,7 @@ export function NamesPanel() {
           <button
             onClick={() => void generate()}
             data-testid="names-generate"
-            className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:border-[color:var(--accent)] hover:text-[color:var(--text-primary)]"
+            className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:border-[color:var(--accent)] hover:text-[color:var(--text-primary)]"
           >
             <Dices size={13} />
             生成
@@ -116,7 +116,7 @@ export function NamesPanel() {
               onClick={() => void copy(n)}
               data-testid="names-result"
               title="复制"
-              className="flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left transition-colors duration-150 hover:border-[color:var(--accent)] hover:bg-[var(--bg-hover)]"
+              className="flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left transition-colors duration-150 hover:border-[color:var(--accent)] hover:bg-[var(--fill-hover)]"
             >
               <span className="text-sm text-[color:var(--text-primary)]">{n.full}</span>
               <span className="text-2xs text-[color:var(--text-faint)]">

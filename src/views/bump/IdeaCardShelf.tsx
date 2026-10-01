@@ -37,7 +37,7 @@ export function IdeaCardShelf() {
                     <button
                       onClick={() => void removeIdea(idea.id)}
                       title="删除灵感卡"
-                      className="shrink-0 rounded p-1 text-[color:var(--text-faint)] opacity-0 transition-opacity duration-[var(--dur-fast)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)] group-hover:opacity-100"
+                      className="shrink-0 rounded p-1 text-[color:var(--text-faint)] opacity-0 transition-opacity duration-[var(--dur-fast)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--danger)] group-hover:opacity-100"
                     >
                       <Trash2 size={14} />
                     </button>

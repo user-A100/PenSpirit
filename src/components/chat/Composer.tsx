@@ -566,7 +566,7 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
 
         <div className="flex items-start gap-1.5 px-2.5 pt-2">
           {command && (
-            <span className="mt-0.5 flex shrink-0 items-center gap-0.5 rounded-[4px] bg-[var(--accent)] py-0.5 pl-1.5 pr-1 text-2xs font-medium text-white">
+            <span className="mt-0.5 flex shrink-0 items-center gap-0.5 rounded-[4px] bg-[var(--accent-solid)] py-0.5 pl-1.5 pr-1 text-2xs font-medium text-white">
               /{command.name}
               <button aria-label="取消命令" onClick={() => setCommand(null)} className="rounded-[3px] p-px hover:bg-white/20">
                 <X size={10} />
@@ -738,7 +738,7 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
               aria-label="发送"
               data-tip="发送"
               data-tip-key="Enter"
-              className="flex items-center justify-center rounded-[var(--r-control)] bg-[var(--accent)] p-1.5 text-white transition-[filter,opacity] hover:brightness-110 disabled:opacity-35"
+              className="flex items-center justify-center rounded-[var(--r-control)] bg-[var(--accent-solid)] p-1.5 text-white transition-[filter,opacity] hover:brightness-110 disabled:opacity-35"
             >
               <SendHorizontal size={14} />
             </button>

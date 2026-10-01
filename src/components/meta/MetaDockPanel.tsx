@@ -10,7 +10,7 @@ import type { CustomFieldDef } from "../../lib/tauri";
 // 定义管理（增删改名改色）内联在「管理定义」展开区，不做弹窗。
 
 const INPUT =
-  "w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-xs leading-relaxed text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]";
+  "w-full rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2 py-1 text-xs leading-relaxed text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]";
 
 function SectionTitle({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
   return (
@@ -113,12 +113,12 @@ export function MetaDockPanel() {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      <div className="border-b border-[color:var(--border-subtle)] px-3 py-2 text-sm font-medium text-[color:var(--text-primary)]">
+      <div className="border-b border-[color:var(--hairline)] px-3 py-2 text-sm font-medium text-[color:var(--text-primary)]">
         {chapter.title}
       </div>
 
       {/* 大纲梗概：独立于正文的展示字段（卡片墙/大纲列用），失焦保存 */}
-      <div className="border-b border-[color:var(--border-subtle)] p-3">
+      <div className="border-b border-[color:var(--hairline)] p-3">
         <SectionTitle>大纲梗概</SectionTitle>
         <textarea
           key={chapter.id}
@@ -135,7 +135,7 @@ export function MetaDockPanel() {
       </div>
 
       {/* 写作状态（单选下拉） */}
-      <div className="border-b border-[color:var(--border-subtle)] p-3">
+      <div className="border-b border-[color:var(--hairline)] p-3">
         <SectionTitle>状态</SectionTitle>
         <select
           key={`st-${chapter.id}`}
@@ -154,7 +154,7 @@ export function MetaDockPanel() {
       </div>
 
       {/* 彩色标签（单选色块；再点一次取消） */}
-      <div className="border-b border-[color:var(--border-subtle)] p-3">
+      <div className="border-b border-[color:var(--hairline)] p-3">
         <SectionTitle>标签</SectionTitle>
         <div className="flex flex-wrap gap-1.5">
           {labels.length === 0 && (
@@ -183,7 +183,7 @@ export function MetaDockPanel() {
       </div>
 
       {/* 目标字数 + 进度 */}
-      <div className="border-b border-[color:var(--border-subtle)] p-3">
+      <div className="border-b border-[color:var(--hairline)] p-3">
         <SectionTitle>目标字数</SectionTitle>
         <div className="flex items-center gap-2">
           <input
@@ -213,7 +213,7 @@ export function MetaDockPanel() {
       </div>
 
       {/* 关键词：章内已挂 chips + 词库补挂/新建（Enter） */}
-      <div className="border-b border-[color:var(--border-subtle)] p-3">
+      <div className="border-b border-[color:var(--hairline)] p-3">
         <SectionTitle>关键词</SectionTitle>
         <div className="mb-1.5 flex flex-wrap gap-1.5">
           {chapterKeywords.length === 0 && (
@@ -229,7 +229,7 @@ export function MetaDockPanel() {
               <button
                 onClick={() => void toggleChapterKeyword(k.id)}
                 title="摘除"
-                className="rounded-full p-0.5 transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+                className="rounded-full p-0.5 transition-colors duration-150 hover:bg-[var(--fill-hover)]"
               >
                 <X size={10} />
               </button>
@@ -258,7 +258,7 @@ export function MetaDockPanel() {
 
       {/* 自定义字段（M7 批次7）：按书定义四型字段，值挂当前章 */}
       {customDefs.length > 0 && (
-        <div className="border-b border-[color:var(--border-subtle)] p-3" data-testid="custom-fields">
+        <div className="border-b border-[color:var(--hairline)] p-3" data-testid="custom-fields">
           <SectionTitle>自定义字段</SectionTitle>
           <div className="space-y-1.5">
             {customDefs.map((d) => {
@@ -330,7 +330,7 @@ export function MetaDockPanel() {
           {manageOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
         </button>
         {manageOpen && (
-          <div className="mt-2 space-y-3 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] p-2">
+          <div className="mt-2 space-y-3 rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] p-2">
             {/* 标签定义：改色即时存，改名失焦存 */}
             <div>
               <div className="mb-1 text-xs text-[color:var(--text-faint)]">标签</div>
@@ -458,7 +458,7 @@ export function MetaDockPanel() {
                     <button
                       onClick={() => void deleteKeyword(k.id)}
                       title="删除（章上引用一并清除）"
-                      className="rounded-full p-0.5 transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+                      className="rounded-full p-0.5 transition-colors duration-150 hover:bg-[var(--fill-hover)]"
                     >
                       <X size={10} />
                     </button>

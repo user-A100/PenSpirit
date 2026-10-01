@@ -217,6 +217,53 @@ Backlog（不做承诺）：OS keyring 存密钥、SillyTavern PNG 角色卡导�
 | 抽取消耗 token | 默认仅手动触发「本章抽取」+ 可选「保存后自动」开关 |
 | 文风 skill 格式多样 | 导入仅接受 markdown 正文（SKILL.md 取正文段落）；复杂格式手动粘贴 |
 
+## 7.5 体验层重建增补（2026-10）
+
+体验层重建的计划、诊断与逐阶段实施记录见 `docs/specs/2026-10-01-experience-rebuild-plan.md`。这里只记对本规格有影响的部分。数据流铁律不变：正文以磁盘 Markdown 为唯一真源，SQLite 可随时从磁盘重建，迁移一律只加列 / 加表。
+
+**磁盘布局（§4.1 增补）**
+
+- 卷 = `manuscript/` 下的一层子目录，卷首语存在卷目录的 `_index.md`。只支持一层（卷 → 章），不做卷中卷。
+- 卷与章共用一条全书序号（先序），按文件名排序即全书顺序。
+- 重排、升降级、拆分 / 合并都同步重编文件序号；删库重建后，顺序与层级都由磁盘恢复。
+
+**迁移（§4.2 增补）**
+
+| 迁移 | 内容 |
+|---|---|
+| `0019_chat_v2` | `messages.reply_to / active / adopted / meta`，`sessions.updated_at`：重新生成保留版本、采纳标记、每轮元信息（槽位、工具调用、改动、附件） |
+| `0020_volumes` | `chapters.kind`（text / folder）+ `parent_id`：卷层级 |
+| `0021_ai_context` | 设定类表的 `ai_hidden`（对 AI 隐藏，防剧透）、`characters.secret_note`（仅作者可见）、`writing_rules`（常驻 / 指定章卷 / 手动） |
+| `0022_sessions_v3` | `sessions.pinned / archived`、`messages.starred` |
+| `0023_chat_rating` | `messages.rating`（👍👎，按斜杠命令统计） |
+| `0024_phrase_bias` | `phrase_bias`：禁用 / 偏好用词，`book_id` 为空表示所有书通用 |
+
+按章 / 按书的键值设置（记忆、作者批注、AI 着色、上下文包）存在 `settings`，删章、删书时一并清理。
+
+**上下文组装（§4.4 增补）**
+
+- 两种模式：写正文 / 讨论，各自有 system 提示与对话历史预算。
+- 新增槽位：光标前后文、选区、引用资料（含相关段落）、用词要求、作者批注、附件。
+- 超出预算时按固定顺序裁剪：灵感卡 → 情节块 → 对话历史 → 伏笔提醒 → 角色卡 → 上一章结尾 → 光标后文 → 附件 → 引用资料；仍超出时再缩窗当前章正文。
+- 相关章节 / 素材检索在本地完成：字二元组 TF-IDF（`context/related.rs`），不依赖嵌入接口。
+
+**模块（§3 增补）**
+
+- Rust：
+  - `agents/`：ACP agent 会话、工具调用记录（`tools.rs`）、本轮文件改动与撤销（`changes.rs`）；
+  - `context/`：组装器、正文指令 `directives.rs`、相关检索 `related.rs`；
+  - `llm/stream.rs`：流式输出，含 logprobs 备选词。
+- 前端：
+  - 命令中枢 `lib/commands.ts`：快捷键、命令面板、快捷键速查都从这里取数；
+  - 主题对比度修正 `themes/defs.ts` 的 `accessible()`；
+  - 编辑器内 AI 插件：着色、幽灵补全、指令高亮。
+
+**界面与质量基线**
+
+- 十套主题全部过 WCAG AA：正文档 4.5:1，提示档 3:1。审计脚本 `src/themes/contrast.test.ts`。
+- 所有可交互控件都有键盘焦点环。
+- 性能基线：10 万字长章按键延迟 p95 < 50 ms、300 章目录滚动无长帧、主题切换无闪烁。数字与复跑方法见 `docs/perf-baseline.md`。
+
 ## 8. 术语表
 
 - **真源**：章节正文只认磁盘 md 文件；DB 中 chapters 行只是索引

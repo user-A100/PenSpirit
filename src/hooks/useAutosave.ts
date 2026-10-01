@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
+/**
+ * 防抖自动保存。阶段 4：按「编辑版本号」触发，不再每次渲染都取内容比较——
+ * 取内容（整篇序列化成 Markdown）推迟到防抖到期时只做一次（10 万字长章按键延迟从 ~240ms 降下来的关键之一）。
+ */
 export function useAutosave(
+  getVersion: () => number,
   getDirty: () => string | null,
   save: (content: string) => Promise<void>,
   delayMs = 800,
@@ -14,27 +19,29 @@ export function useAutosave(
   const saveRef = useRef(save);
   saveRef.current = save;
 
-  // effect 无依赖数组，每次渲染都检查——依赖 getDirty 返回内容比较，
-  // 模板组件 onUpdate 后触发重渲染即可驱动。
+  // effect 无依赖数组，每次渲染都看一眼版本号（很便宜）；版本变了才重置防抖。
+  // 到期时才取内容：期间多少次输入都只序列化一次、只保存最后一次输入。
+  const scheduled = useRef<number | null>(null);
   useEffect(() => {
-    const content = getDirty();
-    if (content == null || content === lastSaved.current) return;
+    const v = getVersion();
+    if (v === scheduled.current) return;
+    scheduled.current = v;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
-      // 触发时重读最新内容：即使期间没有重渲染，也只保存最后一次输入
+      timer.current = null;
       const latest = getDirtyRef.current();
       if (latest == null || latest === lastSaved.current) return;
       setStatus("saving");
-      await save(latest);
+      await saveRef.current(latest);
       lastSaved.current = latest;
       setStatus("saved");
     }, delayMs);
-    return () => { if (timer.current) clearTimeout(timer.current); };
   });
 
   // 卸载冲刷：分屏切换/切章会卸载编辑器实例，防抖窗口内的改动不能丢
   useEffect(
     () => () => {
+      if (timer.current) clearTimeout(timer.current);
       const latest = getDirtyRef.current();
       if (latest == null || latest === lastSaved.current) return;
       void saveRef.current(latest).catch((e) => console.warn("autosave flush on unmount:", e));

@@ -173,7 +173,7 @@ export function SettingPanel() {
 
   const segBtn = (active: boolean) =>
     `px-2.5 py-1 transition-colors ${
-      active ? "bg-[var(--accent-dim)] text-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+      active ? "bg-[var(--accent-dim)] text-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--fill-hover)]"
     }`;
 
   return (
@@ -186,7 +186,7 @@ export function SettingPanel() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="搜索设置…"
-          className="w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-base)] px-2 py-1 text-xs outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--border-strong)]"
+          className="w-full rounded-md border border-[color:var(--hairline)] bg-[var(--bg-base)] px-2 py-1 text-xs outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--border-strong)]"
         />
       </div>
 
@@ -220,7 +220,7 @@ export function SettingPanel() {
                 aria-label="自定义底色"
                 value={prefs.bgColor}
                 onChange={(e) => prefs.set({ bgColor: e.target.value })}
-                className="h-6 w-8 cursor-pointer rounded border border-[var(--border-subtle)] bg-transparent p-0"
+                className="h-6 w-8 cursor-pointer rounded border border-[color:var(--hairline)] bg-transparent p-0"
               />
             </label>
             <label className="flex items-center gap-1.5">
@@ -230,7 +230,7 @@ export function SettingPanel() {
                 aria-label="自定义文字色"
                 value={prefs.textColor}
                 onChange={(e) => prefs.set({ textColor: e.target.value })}
-                className="h-6 w-8 cursor-pointer rounded border border-[var(--border-subtle)] bg-transparent p-0"
+                className="h-6 w-8 cursor-pointer rounded border border-[color:var(--hairline)] bg-transparent p-0"
               />
             </label>
           </div>
@@ -262,7 +262,7 @@ export function SettingPanel() {
                       className={`block aspect-[4/3] w-full rounded-md border bg-cover bg-center ${
                         active
                           ? "border-[var(--accent)] ring-2 ring-[var(--accent)]"
-                          : "border-[var(--border-subtle)]"
+                          : "border-[color:var(--hairline)]"
                       }`}
                       style={{ backgroundImage: `url(${convertFileSrc(img.path)})` }}
                     />
@@ -350,7 +350,7 @@ export function SettingPanel() {
               aria-label="字体"
               value={prefs.fontFamily}
               onChange={(e) => prefs.set({ fontFamily: e.target.value })}
-              className="min-w-0 flex-1 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-base)] px-1.5 py-1 text-2xs outline-none"
+              className="min-w-0 flex-1 rounded-md border border-[color:var(--hairline)] bg-[var(--bg-base)] px-1.5 py-1 text-2xs outline-none"
             >
               {FONT_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -361,7 +361,7 @@ export function SettingPanel() {
           </label>
           <div className="flex items-center gap-2 text-2xs text-[var(--text-secondary)]">
             <span className="w-8 shrink-0">对齐</span>
-            <div className="flex overflow-hidden rounded-md border border-[var(--border-subtle)]">
+            <div className="flex overflow-hidden rounded-md border border-[color:var(--hairline)]">
               <button aria-label="左对齐" onClick={() => prefs.set({ textAlign: "left" })} className={segBtn(prefs.textAlign === "left")}>
                 左
               </button>

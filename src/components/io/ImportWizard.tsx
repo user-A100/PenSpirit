@@ -137,17 +137,17 @@ export function ImportWizard(props: {
       widthClass="max-w-lg"
       testId="import-backdrop"
     >
-        <div className="flex shrink-0 items-center gap-2 border-b border-[color:var(--border-subtle)] px-4 py-3">
+        <div className="flex shrink-0 items-center gap-2 border-b border-[color:var(--hairline)] px-4 py-3">
           <button
             onClick={() => void choose()}
-            className="flex items-center gap-1.5 rounded-md border border-[color:var(--border-subtle)] px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            className="flex items-center gap-1.5 rounded-md border border-[color:var(--hairline)] px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
           >
             <FileUp size={13} />
             选择文件
           </button>
           <button
             onClick={() => void chooseDir()}
-            className="flex items-center gap-1.5 rounded-md border border-[color:var(--border-subtle)] px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            className="flex items-center gap-1.5 rounded-md border border-[color:var(--hairline)] px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
           >
             <FolderOpen size={13} />
             选文件夹
@@ -166,7 +166,7 @@ export function ImportWizard(props: {
         {report && <div className="px-4 py-2 text-xs text-[color:var(--success)]">{report}</div>}
 
         {props.bookId != null && items.length > 0 && (
-          <label className="flex shrink-0 cursor-pointer items-center gap-2 border-b border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-secondary)]">
+          <label className="flex shrink-0 cursor-pointer items-center gap-2 border-b border-[color:var(--hairline)] px-4 py-2 text-xs text-[color:var(--text-secondary)]">
             <input
               type="checkbox"
               checked={intoCurrent}
@@ -193,7 +193,7 @@ export function ImportWizard(props: {
                   c.volume !== vol ? null : (
                     <label
                       key={i}
-                      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+                      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-[var(--fill-hover)]"
                     >
                       <input
                         type="checkbox"
@@ -220,7 +220,7 @@ export function ImportWizard(props: {
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[color:var(--border-subtle)] px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[color:var(--hairline)] px-4 py-3">
           <button
             onClick={() =>
               setPicked(picked.size === items.length ? new Set() : new Set(items.map((_, i) => i)))
@@ -237,7 +237,7 @@ export function ImportWizard(props: {
             <button
               onClick={() => void run()}
               disabled={busy || picked.size === 0}
-              className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:opacity-40"
+              className="rounded-md bg-[var(--accent-solid)] px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:opacity-40"
             >
               {busy ? "导入中…" : `导入 ${picked.size} 章`}
             </button>

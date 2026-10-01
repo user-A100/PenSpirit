@@ -42,7 +42,7 @@ export function ExtractDialog({ kind, items, onClose }: { kind: ExtractKind; ite
               if (n > 0) toast.success(`已创建 ${n} 张${EXTRACT_LABEL[kind]}`);
               onClose();
             }}
-            className="rounded-[var(--r-control)] bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+            className="rounded-[var(--r-control)] bg-[var(--accent-solid)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
           >
             创建 {picked.length} 张
           </button>

@@ -50,15 +50,15 @@ export function Modal({
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
         style={{ animation: "zen-pop-in var(--dur-md) ease-in-out" }}
-        className={`flex w-full ${widthClass} ${maxHeightClass} flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] [box-shadow:var(--shadow-pop)]`}
+        className={`flex w-full ${widthClass} ${maxHeightClass} flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[color:var(--hairline)] bg-[var(--bg-panel)] [box-shadow:var(--shadow-pop)]`}
       >
         {title !== undefined && (
-          <div className="flex h-12 shrink-0 items-center justify-between border-b border-[color:var(--border-subtle)] pl-4 pr-2">
+          <div className="flex h-12 shrink-0 items-center justify-between border-b border-[color:var(--hairline)] pl-4 pr-2">
             <div className="min-w-0 truncate text-sm font-semibold text-[color:var(--text-primary)]">{title}</div>
             <button
               onClick={onClose}
               title="关闭"
-              className="rounded-[var(--radius-md)] p-1.5 text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+              className="rounded-[var(--r-card)] p-1.5 text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
             >
               <X size={15} />
             </button>

@@ -67,7 +67,7 @@ export function ExportDialog(props: {
       testId="export-backdrop"
     >
         {/* 格式与选项 */}
-        <div className="flex shrink-0 flex-wrap items-center gap-4 border-b border-[color:var(--border-subtle)] px-4 py-3">
+        <div className="flex shrink-0 flex-wrap items-center gap-4 border-b border-[color:var(--hairline)] px-4 py-3">
           <div className="flex items-center gap-1">
             {(["txt", "docx"] as const).map((f) => (
               <button
@@ -76,7 +76,7 @@ export function ExportDialog(props: {
                 className={`rounded-md px-2.5 py-1 text-xs transition-colors duration-150 ${
                   format === f
                     ? "bg-[var(--accent-dim)] text-[color:var(--text-primary)]"
-                    : "text-[color:var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                    : "text-[color:var(--text-secondary)] hover:bg-[var(--fill-hover)]"
                 }`}
               >
                 {f.toUpperCase()}
@@ -108,7 +108,7 @@ export function ExportDialog(props: {
             props.chapters.map((c) => (
               <label
                 key={c.id}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-[var(--fill-hover)]"
               >
                 <input
                   type="checkbox"
@@ -127,7 +127,7 @@ export function ExportDialog(props: {
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[color:var(--border-subtle)] px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[color:var(--hairline)] px-4 py-3">
           <button
             onClick={() =>
               setPicked(allPicked ? new Set() : new Set(props.chapters.map((c) => c.id)))
@@ -144,7 +144,7 @@ export function ExportDialog(props: {
             <button
               onClick={() => void run()}
               disabled={busy || picked.size === 0}
-              className="flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-md bg-[var(--accent-solid)] px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:opacity-40"
             >
               <FileDown size={13} />
               {busy ? "导出中…" : "导出"}

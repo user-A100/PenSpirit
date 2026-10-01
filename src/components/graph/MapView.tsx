@@ -73,7 +73,7 @@ function PlaceModal(props: {
       widthClass="max-w-md"
       testId="place-modal"
       footer={
-        <div className="flex items-center justify-between border-t border-[color:var(--border-subtle)] px-4 py-3">
+        <div className="flex items-center justify-between border-t border-[color:var(--hairline)] px-4 py-3">
           {props.initial ? (
             <Button
               variant="danger"
@@ -138,7 +138,7 @@ function PlaceModal(props: {
                     className={`rounded-full border px-2.5 py-1 text-xs transition-colors duration-[var(--dur-md)] ${
                       on
                         ? "border-[color:var(--accent)] bg-[var(--accent-dim)] text-[color:var(--accent)]"
-                        : "border-[color:var(--border-subtle)] text-[color:var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                        : "border-[color:var(--hairline)] text-[color:var(--text-secondary)] hover:bg-[var(--fill-hover)]"
                     }`}
                   >
                     {c.name}
@@ -214,14 +214,14 @@ export function MapView() {
   return (
     <div className="flex h-full gap-3">
       {/* 地图清单 */}
-      <div className="flex w-44 shrink-0 flex-col rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-panel)]">
+      <div className="flex w-44 shrink-0 flex-col rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-panel)]">
         <div className="flex items-center justify-between px-3 py-2.5">
           <span className="text-xs font-semibold text-[color:var(--text-secondary)]">地图</span>
           <button
             data-testid="map-import"
             title="导入地图"
             onClick={() => void pickImage()}
-            className="rounded-[var(--radius-md)] p-1 text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            className="rounded-[var(--r-control)] p-1 text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
           >
             <Plus size={15} />
           </button>
@@ -231,10 +231,10 @@ export function MapView() {
             <div
               key={m.id}
               data-testid={`map-item-${m.id}`}
-              className={`group flex items-center gap-1 rounded-[var(--radius-md)] px-2 py-1.5 text-sm transition-colors duration-[var(--dur-md)] ${
+              className={`group flex items-center gap-1 rounded-[var(--r-control)] px-2 py-1.5 text-sm transition-colors duration-[var(--dur-md)] ${
                 m.id === activeMapId
-                  ? "bg-[var(--bg-hover)] text-[color:var(--text-primary)]"
-                  : "text-[color:var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                  ? "bg-[var(--fill-element)] text-[color:var(--text-primary)]"
+                  : "text-[color:var(--text-secondary)] hover:bg-[var(--fill-hover)]"
               }`}
             >
               <button className="min-w-0 flex-1 truncate text-left" onClick={() => void select(m.id)} title={m.name}>
@@ -268,7 +268,7 @@ export function MapView() {
         <div
           ref={pz.ref}
           data-testid="map-canvas"
-          className="h-full cursor-grab overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)]"
+          className="h-full cursor-grab overflow-hidden rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)]"
           onPointerDown={pz.onPointerDown}
           onPointerMove={pz.onPointerMove}
           onPointerUp={pz.onPointerUp}
@@ -376,7 +376,7 @@ export function MapView() {
         widthClass="max-w-sm"
         testId="map-rename-modal"
         footer={
-          <div className="flex justify-end gap-2 border-t border-[color:var(--border-subtle)] px-4 py-3">
+          <div className="flex justify-end gap-2 border-t border-[color:var(--hairline)] px-4 py-3">
             <Button variant="ghost" onClick={() => setRenaming(null)}>
               取消
             </Button>

@@ -25,7 +25,7 @@
   /* 文字 */
   --text-primary: #e8e8ea;
   --text-secondary: #a0a0a8;
-  --text-faint: #6b6b74;
+  --text-faint: #6e6e77;
   /* 编辑器正文（衬线区，随主题） */
   --prose-fg: #e4e4e8;
   /* 选中标签页浮卡底色（Zen 选中项浮纸卡手法） */
@@ -33,11 +33,15 @@
   /* 背板：窗口底色比内容浮卡再深一档（默认主题的 backdropOf 派生值，mix(#17171a,#000,0.7)） */
   --bg-backdrop: #101012;
   /* 强调与状态 */
-  --accent: #7c6ff0;
-  --accent-hover: #8f83f5;
-  --accent-dim: rgba(124, 111, 240, 0.15);
+  /* 已过对比度修正（src/themes/defs.ts accessible()；审计 src/themes/contrast.test.ts） */
+  --accent: #9097ff;
+  --accent-hover: #9ca4ff;
+  --accent-dim: rgba(144, 151, 255, 0.15);
+  /* 强调色 / 危险色实底：填充按钮的底，白字达标 */
+  --accent-solid: #7765cd;
+  --danger-solid: #cc455b;
   --success: #4ade80;
-  --danger: #f87171;
+  --danger: #fc7573;
   --warning: #fbbf24;
 }
 
@@ -66,6 +70,8 @@
   --fill-active: color-mix(in srgb, var(--text-primary) 11%, transparent);
   --fill-element: color-mix(in srgb, var(--text-primary) 6%, transparent);
   --hairline: color-mix(in srgb, var(--text-primary) 9%, transparent);
+  /* 滚动条 thumb：同样从前景色派生（部分主题的 --bg-hover 与卡片色几乎相同，滚动条会看不见） */
+  --fill-thumb: color-mix(in srgb, var(--text-primary) 16%, transparent);
   /* 选中项 = 一小片稿纸（Zen 选中标签：近卡片色 + 极薄阴影） */
   --fill-selected: var(--bg-panel);
   /* 阴影：深色档（浅色档见 html[data-tone="light"]） */
@@ -125,15 +131,32 @@ body {
   font-family: "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
 }
 
-/* 滚动条：6px 细条，thumb 常态 bg-hover、hover 变 border-strong */
-* { scrollbar-width: thin; scrollbar-color: var(--bg-hover) transparent; }
+/* 滚动条：6px 细条，thumb 常态 --fill-thumb、hover 变 border-strong */
+* { scrollbar-width: thin; scrollbar-color: var(--fill-thumb) transparent; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--fill-thumb); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
-/* 键盘焦点环（kindling app.css 同款）：鼠标点击不出环，Tab 导航可见 */
-:where(button, [role="button"]):focus-visible {
+/* 键盘焦点环（kindling app.css 同款）：鼠标点击不出环，Tab 导航可见。
+   阶段 4：覆盖到所有可聚焦的交互元素（零特异性 :where——组件自带的焦点样式照常优先） */
+:where(
+    button,
+    [role="button"],
+    a[href],
+    [tabindex]:not([tabindex="-1"]),
+    [role="menuitem"],
+    [role="menuitemcheckbox"],
+    [role="option"],
+    [role="tab"],
+    [role="switch"],
+    [role="radio"],
+    summary,
+    select,
+    input[type="checkbox"],
+    input[type="radio"],
+    input[type="range"]
+  ):focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
 }
@@ -342,7 +365,7 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
 }
 .outline-list li:hover {
   color: var(--text-primary);
-  background: var(--bg-hover);
+  background: var(--fill-hover);
   border-left-color: var(--border-strong);
   border-bottom-color: var(--border-strong);
 }
@@ -498,7 +521,7 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
 
 /* 目录列表（NavPanel）：hover 反馈 + 当前章 accent */
 .read-nav-list li { color: var(--text-secondary); }
-.read-nav-list li:hover { background: var(--bg-hover); color: var(--text-primary); }
+.read-nav-list li:hover { background: var(--fill-hover); color: var(--text-primary); }
 .read-nav-list li[data-current="true"] { color: var(--accent); background: var(--accent-dim); }
 
 /* 底栏进度滑条 */

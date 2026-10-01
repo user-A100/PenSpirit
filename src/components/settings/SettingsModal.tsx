@@ -118,7 +118,7 @@ export function SettingsModal() {
   return (
     <Modal open={modalOpen} onClose={close} title="设置" testId="settings-backdrop">
       {/* 顶部 tab */}
-      <div className="flex shrink-0 gap-1 border-b border-[color:var(--border-subtle)] px-3">
+      <div className="flex shrink-0 gap-1 border-b border-[color:var(--hairline)] px-3">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -144,7 +144,7 @@ export function SettingsModal() {
           <div className="mb-1.5 text-xs text-[color:var(--text-faint)]">服务商</div>
           <div className="mb-3 flex flex-col gap-2">
             {providers.length === 0 && (
-              <div className="rounded-md border border-[color:var(--border-subtle)] px-2.5 py-3 text-center text-xs text-[color:var(--text-faint)]">
+              <div className="rounded-md border border-[color:var(--hairline)] px-2.5 py-3 text-center text-xs text-[color:var(--text-faint)]">
                 尚未配置服务商，请在下方填写并保存
               </div>
             )}
@@ -155,12 +155,12 @@ export function SettingsModal() {
                 <button
                   key={p.id}
                   onClick={() => { setForm(p); setErrors({}); }}
-                  className={`flex w-full items-center gap-2 rounded-[var(--radius-md)] border px-3 py-2.5 text-left transition-colors duration-[var(--dur-md)] ${
+                  className={`flex w-full items-center gap-2 rounded-[var(--r-control)] border px-3 py-2.5 text-left transition-colors duration-[var(--dur-md)] ${
                     isActive
                       ? "border-[color:var(--accent)] bg-[var(--accent-dim)]"
                       : isEditing
                         ? "border-[color:var(--border-strong)]"
-                        : "border-[color:var(--border-subtle)] hover:border-[color:var(--accent)]"
+                        : "border-[color:var(--hairline)] hover:border-[color:var(--accent)]"
                   }`}
                 >
                   <span className="min-w-0 flex-1">
@@ -177,7 +177,7 @@ export function SettingsModal() {
             })}
             <button
               onClick={() => { setForm(EMPTY); setErrors({}); }}
-              className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+              className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
             >
               <Plus size={14} />
               新增服务商
@@ -211,7 +211,7 @@ export function SettingsModal() {
 
         {/* 底部操作：仅服务商 tab（外观 tab 实时生效，无保存按钮） */}
         {tab === "provider" && (
-        <div className="flex shrink-0 items-center gap-2 border-t border-[color:var(--border-subtle)] p-3">
+        <div className="flex shrink-0 items-center gap-2 border-t border-[color:var(--hairline)] p-3">
           <Button variant="primary" onClick={handleSave} disabled={busy}>
             保存
           </Button>

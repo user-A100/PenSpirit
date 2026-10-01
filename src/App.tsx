@@ -10,6 +10,7 @@ import { CommandPalette } from "./components/ui/CommandPalette";
 import { DiffReview } from "./components/chat/DiffReview";
 import { VarsDialog } from "./components/chat/VarsDialog";
 import { SpeechChip } from "./components/ui/SpeechChip";
+import { ShortcutSheet } from "./components/ui/ShortcutSheet";
 import { WriteView } from "./views/WriteView";
 import { FocusEdge } from "./components/layout/FocusEdge";
 import { getView, getViews } from "./lib/nav/registry";
@@ -101,6 +102,7 @@ export default function App() {
       <DiffReview />
       <VarsDialog />
       <SpeechChip />
+      <ShortcutSheet />
     </ThemeProvider>
   );
 }

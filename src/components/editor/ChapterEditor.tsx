@@ -2,7 +2,9 @@ import { BubbleMenu, EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef, useState } from "react";
-import type { Node as PMNode } from "@tiptap/pm/model";
+import type { Fragment as PMFragment, Node as PMNode } from "@tiptap/pm/model";
+import type { Transaction } from "@tiptap/pm/state";
+import { ReplaceStep } from "@tiptap/pm/transform";
 import {
   ArrowLeft,
   ArrowRight,
@@ -62,6 +64,22 @@ import { WikiSuggest } from "./WikiSuggest";
 const MAX_WORD_DELTA = 500;
 /** 幽灵补全：停顿多久后请求建议（毫秒） */
 const GHOST_IDLE_MS = 1200;
+/** 标题栏字数 / 悬浮大纲：停顿多久后重算（毫秒） */
+const DERIVED_DEBOUNCE_MS = 250;
+
+/** 这次事务增减的字数：只看各替换步骤删掉与插入的文字（与章节字数同一口径），代价与改动大小成正比 */
+function wordDelta(tr: Transaction): number {
+  let d = 0;
+  tr.steps.forEach((step, i) => {
+    if (!(step instanceof ReplaceStep)) return;
+    const s = step as unknown as { from: number; to: number; slice: { content: PMFragment } };
+    const before = tr.docs[i];
+    const removed = s.to > s.from ? before.textBetween(s.from, s.to, "\n", " ") : "";
+    const added = s.slice.content.size > 0 ? s.slice.content.textBetween(0, s.slice.content.size, "\n", " ") : "";
+    d += countWords(added) - countWords(removed);
+  });
+  return d;
+}
 
 /** 在文档里找首个包含 needle 的文本区间（不跨文本节点，作为「跳到此行」的近似定位足够） */
 function findTextPos(doc: PMNode, needle: string): { from: number; to: number } | null {
@@ -108,7 +126,17 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   const bubblePrompts = prompts.filter((p) => p.inBubble && p.name.trim() && p.template.trim());
   // 正文滚离顶部后顶栏才显发丝线（Zen：边界只在需要时出现）
   const [scrolled, setScrolled] = useState(false);
-  const dirty = useRef<string | null>(null);
+  // 有未落盘改动时记下那一刻的文档（null = 干净）。整篇序列化成 Markdown 推迟到真正要用时
+  // （自动保存到期 / 冲刷 / 切章），并按文档对象缓存——每次按键都整篇序列化会让 10 万字长章的输入卡到 200ms+
+  // （阶段 4 性能基线发现）。
+  const dirtyDoc = useRef<PMNode | null>(null);
+  const mdCache = useRef<{ doc: PMNode; md: string } | null>(null);
+  const editVersion = useRef(0);
+  // 标题栏字数与悬浮大纲：停顿后再算（防抖），不在每次按键时整篇计算
+  const [wordCount, setWordCount] = useState(0);
+  const [outlineMd, setOutlineMd] = useState("");
+  const derivedTimer = useRef<number | null>(null);
+  const refreshDerived = useRef<(now?: boolean) => void>(() => {});
   // 编辑器里的正文属于哪一章（与 chapterId 区分：换章时新内容到达前，编辑器里仍是上一章）。
   // 自动保存与换章冲刷都按它落盘——修复「防抖窗口内切章，最后几秒的改动丢失」。
   const loadedIdRef = useRef<number | null>(null);
@@ -164,7 +192,9 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
       if (ws.activePane !== pane) ws.focusPane(pane);
     },
     onUpdate: ({ editor: ed }) => {
-      dirty.current = editorMarkdown(ed);
+      dirtyDoc.current = ed.state.doc;
+      editVersion.current++;
+      refreshDerived.current();
     },
     // M2-T11 差量统计：按字计（与章节字数同一口径），粘贴与程序化改动不计
     onTransaction: ({ editor: ed, transaction: tr }) => {
@@ -188,8 +218,8 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
       if (tr.getMeta("paste") || tr.getMeta("uiEvent") === "paste") return;
       const bookId = bookIdRef.current;
       if (bookId == null) return;
-      // tr.before 是（步骤应用前的）ProseMirror Node，tr.doc 是新的
-      const delta = countWords(tr.doc.textContent) - countWords(tr.before.textContent);
+      // 只数这次改动涉及的文字（按步骤的删 / 增），不再每次按键整篇数两遍
+      const delta = wordDelta(tr);
       // 跳变过大 = 切章/恢复/清空等程序化改动（上一条是兜底，正常输入不会触及）
       if (delta === 0 || Math.abs(delta) > MAX_WORD_DELTA) return;
 
@@ -200,22 +230,65 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
     },
   });
 
+  /** 当前文档的 Markdown（按文档对象缓存；编辑器已销毁时退回缓存） */
+  const markdownOf = (): string | null => {
+    if (!editor) return mdCache.current?.md ?? null;
+    try {
+      const doc = editor.state.doc;
+      if (mdCache.current?.doc === doc) return mdCache.current.md;
+      const md = editorMarkdown(editor);
+      mdCache.current = { doc, md };
+      return md;
+    } catch {
+      return mdCache.current?.md ?? null;
+    }
+  };
+  /** 有未落盘改动时返回当前 Markdown，否则 null */
+  const dirtyMd = (): string | null => (dirtyDoc.current ? markdownOf() : null);
+  const markDirtyNow = () => {
+    if (!editor) return;
+    dirtyDoc.current = editor.state.doc;
+    editVersion.current++;
+    refreshDerived.current();
+  };
+  refreshDerived.current = (now = false) => {
+    if (derivedTimer.current != null) window.clearTimeout(derivedTimer.current);
+    const run = () => {
+      derivedTimer.current = null;
+      if (!editor || editor.isDestroyed) return;
+      const doc = editor.state.doc;
+      setWordCount(countWords(doc.textBetween(0, doc.content.size, "\n", " ")));
+      if (useOutline.getState().open) setOutlineMd(markdownOf() ?? "");
+    };
+    if (now) run();
+    else derivedTimer.current = window.setTimeout(run, DERIVED_DEBOUNCE_MS);
+  };
+  // 悬浮大纲打开 / 切换活动窗格时立刻刷一次
+  useEffect(() => {
+    if (outlineOpen && isActive) refreshDerived.current(true);
+  }, [outlineOpen, isActive]);
+  useEffect(() => () => {
+    if (derivedTimer.current != null) window.clearTimeout(derivedTimer.current);
+  }, []);
+
   useEffect(() => {
     if (!editor || content == null) return;
     const loaded = loadedIdRef.current;
     // 同一章被重新读取（如再次点击当前章）：编辑器里已有改动时以编辑器为准，不回灌磁盘旧文
-    if (loaded === chapterId && dirty.current != null) return;
-    if (loaded != null && loaded !== chapterId && dirty.current != null && dirty.current !== savedRef.current) {
-      const pending = dirty.current;
-      void api.writeChapter(loaded, pending).catch((e) => console.warn("切章冲刷上一章失败:", e));
+    if (loaded === chapterId && dirtyDoc.current != null) return;
+    if (loaded != null && loaded !== chapterId && dirtyDoc.current != null) {
+      const pending = dirtyMd();
+      if (pending != null && pending !== savedRef.current) void api.writeChapter(loaded, pending).catch((e) => console.warn("切章冲刷上一章失败:", e));
     }
     suppressStats.current = true;
     // 载入不进撤销栈（否则载入后很快的输入 / 采纳会与它并成一步，撤销即清空正文并被自动保存）
     loadDocument(editor, content);
     suppressStats.current = false;
-    dirty.current = null;
+    dirtyDoc.current = null;
     savedRef.current = null;
     loadedIdRef.current = chapterId;
+    refreshDerived.current(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapterId, content, editor]);
 
   chapterIdRef.current = chapterId;
@@ -306,9 +379,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   // 每次写入都是单个事务（Ctrl+Z 一步撤销）；AI 写入不计入今日手写字数；显式置 dirty 交自动保存。
   useEffect(() => {
     if (!editor || chapterId == null) return;
-    const markDirty = () => {
-      dirty.current = editorMarkdown(editor);
-    };
+    const markDirty = () => markDirtyNow();
     const blocks = (text: string) => toParagraphs(text).map((t) => ({ type: "paragraph", content: [{ type: "text", text: t }] }));
     const write = (fn: () => boolean) => {
       suppressStats.current = true;
@@ -400,9 +471,9 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
           editor.commands.setContent(md);
           return true;
         }),
-      isDirty: () => dirty.current != null && dirty.current !== savedRef.current,
+      isDirty: () => dirtyDoc.current != null && dirtyMd() !== savedRef.current,
       splitAtCursor: () => splitMarkdownAt(editor, editor.state.selection.from),
-      markdown: () => editorMarkdown(editor),
+      markdown: () => markdownOf() ?? editorMarkdown(editor),
       resetContent: (md) => {
         suppressStats.current = true;
         try {
@@ -410,22 +481,27 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
         } finally {
           suppressStats.current = false;
         }
-        dirty.current = null;
+        dirtyDoc.current = null;
         savedRef.current = null;
+        refreshDerived.current(true);
       },
       flush: async () => {
-        const pending = dirty.current;
+        const doc = dirtyDoc.current;
+        const pending = dirtyMd();
         if (pending == null || pending === savedRef.current) return;
         await api.writeChapter(chapterId, pending);
         savedRef.current = pending;
-        dirty.current = null;
+        // 写盘期间又有输入：仍然是脏的，留给自动保存
+        if (dirtyDoc.current === doc) dirtyDoc.current = null;
       },
     };
     return registerEditorBridge(pane, bridge);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, chapterId, pane]);
 
   const { status } = useAutosave(
-    () => dirty.current,
+    () => editVersion.current,
+    () => dirtyMd(),
     async (content) => {
       const id = loadedIdRef.current;
       if (id == null) return;
@@ -434,8 +510,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
     },
   );
 
-  const currentMarkdown = () =>
-    editor ? editorMarkdown(editor) : "";
+  const currentMarkdown = () => markdownOf() ?? "";
 
   // 版本恢复：把快照文本灌进编辑器并显式置 dirty（TipTap 的 setContent 不触发 onUpdate），
   // 落盘交给上面的自动保存——与 AI 采纳路径同构。
@@ -444,7 +519,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
     suppressStats.current = true;
     editor.commands.setContent(content);
     suppressStats.current = false;
-    dirty.current = editorMarkdown(editor);
+    markDirtyNow();
   };
 
   const book = books.find((b) => b.id === currentBookId);
@@ -475,7 +550,6 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
     );
   }
 
-  const text = editor?.state.doc.textBetween(0, editor.state.doc.content.size, "\n", " ") ?? "";
 
   // 「⋯」更多：低频动作收进菜单（Zen 安静界面——次要控件不常驻）
   const moreMenu = (): MenuEntry[] => [
@@ -549,7 +623,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
             />
             {status === "saving" && <span>保存中</span>}
           </span>
-          <span className="mr-1 tabular-nums">{countWords(text).toLocaleString()} 字</span>
+          <span className="mr-1 tabular-nums">{wordCount.toLocaleString()} 字</span>
           <button
             onClick={() => void useWorkspace.getState().goBack()}
             disabled={!canBack}
@@ -694,7 +768,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
 
       {/* 悬浮大纲：fixed 定位不占版面；正文传编辑器实时 markdown，大纲随写随刷。
           大纲是全局浮层，只在活动窗格挂载，避免分屏时出现两份。 */}
-      {isActive && <FloatingOutline markdown={currentMarkdown()} />}
+      {isActive && <FloatingOutline markdown={outlineOpen ? outlineMd : ""} />}
     </div>
   );
 }

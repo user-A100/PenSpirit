@@ -14,7 +14,7 @@ export function StatCard({
   icon?: LucideIcon;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] p-3">
+    <div className="flex min-w-0 flex-col gap-1 rounded-[var(--r-card)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)] p-3">
       <div className="flex items-center gap-1.5 text-xs text-[color:var(--text-faint)]">
         {Icon && <Icon size={14} className="shrink-0" aria-hidden />}
         <span className="truncate">{label}</span>

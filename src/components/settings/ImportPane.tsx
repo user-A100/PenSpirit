@@ -81,7 +81,7 @@ export function ImportPane() {
         <SectionTitle>自定义分章规则</SectionTitle>
         <div className="flex flex-col gap-1.5">
           {rules.length === 0 && (
-            <div className="rounded-md border border-[color:var(--border-subtle)] px-2.5 py-3 text-center text-xs text-[color:var(--text-faint)]">
+            <div className="rounded-md border border-[color:var(--hairline)] px-2.5 py-3 text-center text-xs text-[color:var(--text-faint)]">
               暂无自定义规则；内置已识别「第X章 / 卷X / 1.标题 / Chapter 1」等常见格式
             </div>
           )}
@@ -102,7 +102,7 @@ export function ImportPane() {
               <button
                 title="删除"
                 onClick={() => persist(rules.filter((_, j) => j !== i))}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--r-control)] text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--danger)]"
               >
                 <Trash2 size={14} />
               </button>

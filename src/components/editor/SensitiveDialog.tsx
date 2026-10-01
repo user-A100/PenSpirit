@@ -80,11 +80,11 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
       widthClass="max-w-lg"
       testId="sensitive-backdrop"
     >
-        <div className="flex shrink-0 items-center gap-2 border-b border-[color:var(--border-subtle)] px-4 py-3">
+        <div className="flex shrink-0 items-center gap-2 border-b border-[color:var(--hairline)] px-4 py-3">
           <button
             onClick={() => void scan()}
             disabled={busy || wordCount === 0}
-            className="flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-md bg-[var(--accent-solid)] px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:opacity-40"
           >
             <ScanSearch size={13} />
             {busy ? "检查中…" : "检查本章"}
@@ -104,7 +104,7 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
 
         {/* 检查结果 */}
         {hits != null && hits.length > 0 && (
-          <div className="max-h-48 shrink-0 overflow-y-auto border-b border-[color:var(--border-subtle)] px-4 py-2">
+          <div className="max-h-48 shrink-0 overflow-y-auto border-b border-[color:var(--hairline)] px-4 py-2">
             {hits.map((h, i) => (
               <div key={i} className="flex items-baseline gap-2 py-1">
                 <span className="shrink-0 rounded bg-[color:var(--danger)]/15 px-1.5 py-0.5 text-2xs text-[color:var(--danger)]">
@@ -124,7 +124,7 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
             <span className="text-xs text-[color:var(--text-secondary)]">词库（一行一词）</span>
             <button
               onClick={() => void importTxt()}
-              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
             >
               <FileUp size={11} />
               从 txt 导入
@@ -146,17 +146,17 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
             }}
             placeholder={"一行一个词\n# 以 # 开头的行会被忽略"}
             spellCheck={false}
-            className="min-h-32 flex-1 resize-none rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] p-2 font-mono text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
+            className="min-h-32 flex-1 resize-none rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] p-2 font-mono text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
           />
         </div>
 
-        <div className="flex shrink-0 justify-end gap-2 border-t border-[color:var(--border-subtle)] px-4 py-3">
+        <div className="flex shrink-0 justify-end gap-2 border-t border-[color:var(--hairline)] px-4 py-3">
           <span className="mr-auto self-center text-2xs text-[color:var(--text-faint)]">
             检查不会改动正文
           </span>
           <button
             onClick={props.onClose}
-            className="rounded-md border border-[color:var(--border-subtle)] px-3 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            className="rounded-md border border-[color:var(--hairline)] px-3 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
           >
             全部忽略
           </button>

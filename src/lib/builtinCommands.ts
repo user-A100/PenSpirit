@@ -12,6 +12,7 @@ import { askAiAboutSelection } from "./ai/actions";
 import { getActiveEditor } from "./editorBridge";
 import { useInlineAi } from "../stores/inlineAi";
 import { useChatFind } from "../components/chat/ChatFind";
+import { useShortcutSheet } from "../components/ui/ShortcutSheet";
 import { canMerge, isVolume, mergeChapters, newChapterAfter, newCollection, newVolume, splitCurrentChapter } from "./binderActions";
 
 /** 新建一章、打开它并进入行内改名（Scrivener：新建即命名）；位置 = Binder 选中章（多选取最后一章）之后，否则当前章之后 */
@@ -114,6 +115,14 @@ export function builtinCommands(): Command[] {
     },
     { id: "ai.tint", title: "标出 AI 写入的文字", category: "AI", run: () => useUiNav.getState().toggleAiTint() },
     { id: "ai.ghost", title: "幽灵补全（停顿后灰字提示，Tab 接受）", category: "AI", run: () => useUiNav.getState().toggleGhost() },
+    {
+      id: "help.shortcuts",
+      title: "快捷键速查",
+      category: "导航",
+      keys: ["Mod+/"],
+      allowInModal: true,
+      run: () => useShortcutSheet.getState().toggle(),
+    },
     {
       id: "ai.find",
       title: "在 AI 对话中查找",

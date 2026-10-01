@@ -18,7 +18,7 @@ const STATUS_META: Record<PlotBlockStatus, { label: string; tone: BadgeTone; nex
 };
 
 const INPUT =
-  "w-full resize-none rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-xs leading-relaxed text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]";
+  "w-full resize-none rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2 py-1 text-xs leading-relaxed text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]";
 
 export function PlotBlocksPanel() {
   const currentBookId = useWorkspace((s) => s.currentBookId);
@@ -69,7 +69,7 @@ export function PlotBlocksPanel() {
   return (
     <div className="flex h-full flex-col">
       {/* 快速记灵感：Enter 保存，Shift+Enter 换行 */}
-      <div className="shrink-0 border-b border-[color:var(--border-subtle)] p-2">
+      <div className="shrink-0 border-b border-[color:var(--hairline)] p-2">
         <textarea
           value={draft}
           rows={2}
@@ -87,7 +87,7 @@ export function PlotBlocksPanel() {
           <button
             onClick={() => void add()}
             disabled={!draft.trim()}
-            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus size={12} /> 存为灵感
           </button>
@@ -112,7 +112,7 @@ export function PlotBlocksPanel() {
               return (
                 <li
                   key={b.id}
-                  className="group flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-3 py-2.5 transition-colors duration-[var(--dur-md)] hover:border-[color:var(--accent)]"
+                  className="group flex items-start gap-2 rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-3 py-2.5 transition-colors duration-[var(--dur-md)] hover:border-[color:var(--accent)]"
                 >
                   <button
                     onClick={() => cycleStatus(b)}
@@ -134,7 +134,7 @@ export function PlotBlocksPanel() {
                         title="上移"
                         onClick={() => move(i, -1)}
                         disabled={i === 0}
-                        className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)] disabled:opacity-30"
+                        className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-secondary)] disabled:opacity-30"
                       >
                         <ArrowUp size={14} />
                       </button>
@@ -142,7 +142,7 @@ export function PlotBlocksPanel() {
                         title="下移"
                         onClick={() => move(i, 1)}
                         disabled={i === list.length - 1}
-                        className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)] disabled:opacity-30"
+                        className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-secondary)] disabled:opacity-30"
                       >
                         <ArrowDown size={14} />
                       </button>
@@ -161,7 +161,7 @@ export function PlotBlocksPanel() {
                           </button>
                           <button
                             onClick={() => setConfirmDelId(null)}
-                            className="rounded p-0.5 text-[color:var(--text-faint)] hover:bg-[var(--bg-hover)]"
+                            className="rounded p-0.5 text-[color:var(--text-faint)] hover:bg-[var(--fill-hover)]"
                           >
                             <X size={12} />
                           </button>
@@ -170,7 +170,7 @@ export function PlotBlocksPanel() {
                         <button
                           title="删除"
                           onClick={() => setConfirmDelId(b.id)}
-                          className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
+                          className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--danger)]"
                         >
                           <Trash2 size={12} />
                         </button>

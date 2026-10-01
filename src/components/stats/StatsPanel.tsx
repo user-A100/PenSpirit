@@ -14,7 +14,7 @@ import { TrendBars } from "./TrendBars";
 
 const SECTION = "mb-1.5 text-xs font-medium text-[color:var(--text-secondary)]";
 const INPUT =
-  "w-20 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 focus:border-[color:var(--accent)]";
+  "w-20 rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 focus:border-[color:var(--accent)]";
 
 type BookRow = Book & { current: number };
 
@@ -132,7 +132,7 @@ export function StatsPanel() {
               <Badge tone="neutral">0 = 关闭</Badge>
             )}
           </div>
-          <p className="mt-1.5 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1.5 text-2xs leading-relaxed text-[color:var(--text-faint)]">
+          <p className="mt-1.5 rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2 py-1.5 text-2xs leading-relaxed text-[color:var(--text-faint)]">
             实打差量：粘贴与 AI 采纳不计；时长为活跃分钟（同分钟记一次）
           </p>
         </section>
@@ -175,7 +175,7 @@ export function StatsPanel() {
           <div className={SECTION}>每书进度</div>
           <div className="grid gap-2 @2xl:grid-cols-2 @4xl:grid-cols-3">
             {books.length === 0 && (
-              <div className="rounded-md border border-[color:var(--border-subtle)] px-2.5 py-3 text-center text-xs text-[color:var(--text-faint)]">
+              <div className="rounded-md border border-[color:var(--hairline)] px-2.5 py-3 text-center text-xs text-[color:var(--text-faint)]">
                 还没有书
               </div>
             )}
@@ -186,14 +186,14 @@ export function StatsPanel() {
                   : 0;
               const e = eta(b);
               return (
-                <div key={b.id} className="rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] p-3">
+                <div key={b.id} className="rounded-[var(--r-control)] border border-[color:var(--hairline)] p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="min-w-0 truncate text-sm text-[color:var(--text-primary)]">{b.title}</span>
                     <span className="shrink-0 text-xs tabular-nums text-[color:var(--text-faint)]">
                       {fmtWords(b.current)} 字
                     </span>
                   </div>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--bg-hover)]">
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--fill-element)]">
                     <div
                       className="h-full rounded-full transition-[width] duration-300"
                       style={{
@@ -222,7 +222,7 @@ export function StatsPanel() {
                       <button
                         onClick={() => startEdit(b)}
                         title="点击修改目标字数"
-                        className="rounded px-1 py-0.5 transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
+                        className="rounded px-1 py-0.5 transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-secondary)]"
                       >
                         {b.target_words != null ? `目标 ${fmtWords(b.target_words)}` : "目标：未设置"}
                       </button>

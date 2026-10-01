@@ -17,7 +17,7 @@ type EditorTarget =
   | { kind: "chapter"; chapterId: number; outlineId: number | null };
 
 const INPUT =
-  "w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 focus:border-[color:var(--accent)]";
+  "w-full rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 focus:border-[color:var(--accent)]";
 
 export function OutlineDockPanel() {
   const chapters = useWorkspace((s) => s.chapters);
@@ -117,7 +117,7 @@ export function OutlineDockPanel() {
           <button
             onClick={() => setEditing(null)}
             title="返回大纲树"
-            className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
           >
             <ChevronLeft size={15} />
           </button>
@@ -132,7 +132,7 @@ export function OutlineDockPanel() {
                 if (id != null) void remove(id);
                 setEditing(null);
               }}
-              className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
+              className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--danger)]"
             >
               <Trash2 size={13} />
             </button>
@@ -164,7 +164,7 @@ export function OutlineDockPanel() {
         <div className="flex justify-end gap-1.5">
           <button
             onClick={() => setEditing(null)}
-            className="rounded px-2 py-1 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
+            className="rounded px-2 py-1 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-secondary)]"
           >
             取消
           </button>
@@ -218,7 +218,7 @@ export function OutlineDockPanel() {
         <button
           title="新建卷纲"
           onClick={() => openEditor({ kind: "volume", id: null }, null)}
-          className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+          className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
         >
           <Plus size={12} />
         </button>

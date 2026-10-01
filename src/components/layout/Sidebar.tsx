@@ -152,7 +152,7 @@ export function Sidebar() {
           <BookOpen size={28} strokeWidth={1.5} className="text-[color:var(--text-faint)]" />
           <div className="text-ui text-[color:var(--text-secondary)]">还没有书</div>
           <div className="flex gap-2">
-            <button onClick={() => void newBook()} className="rounded-[var(--r-control)] bg-[var(--accent)] px-3 py-1.5 text-ui font-medium text-white transition-[filter] hover:brightness-110">
+            <button onClick={() => void newBook()} className="rounded-[var(--r-control)] bg-[var(--accent-solid)] px-3 py-1.5 text-ui font-medium text-white transition-[filter] hover:brightness-110">
               新建书
             </button>
             <button onClick={() => setImportOpen(true)} aria-label="导入章节" className="rounded-[var(--r-control)] px-3 py-1.5 text-ui text-[color:var(--text-secondary)] transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]">

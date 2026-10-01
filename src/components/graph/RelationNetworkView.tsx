@@ -41,7 +41,7 @@ export function RelationNetworkView() {
       <div
         ref={pz.ref}
         data-testid="network-canvas"
-        className="h-full cursor-grab overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)]"
+        className="h-full cursor-grab overflow-hidden rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)]"
         onPointerDown={pz.onPointerDown}
         onPointerMove={pz.onPointerMove}
         onPointerUp={pz.onPointerUp}
@@ -104,7 +104,7 @@ export function RelationNetworkView() {
       <button
         onClick={pz.reset}
         title="复位视图"
-        className="absolute right-3 top-3 rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] px-2.5 py-1 text-xs text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+        className="absolute right-3 top-3 rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-panel)] px-2.5 py-1 text-xs text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
       >
         复位
       </button>

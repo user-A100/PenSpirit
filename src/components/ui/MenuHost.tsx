@@ -157,11 +157,11 @@ function MenuPanel({ items, x, y, anchor, alignEnd, minWidth, depth, autoFocus, 
           opacity: pos ? undefined : 0,
           pointerEvents: pos ? undefined : "none",
         }}
-        className="menu-pop fixed z-[260] max-h-[70vh] max-w-[20rem] overflow-y-auto rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] p-1 text-ui outline-none [box-shadow:var(--shadow-overlay,0_10px_30px_rgba(0,0,0,0.3))]"
+        className="menu-pop fixed z-[260] max-h-[70vh] max-w-[20rem] overflow-y-auto rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)] p-1 text-ui outline-none [box-shadow:var(--shadow-overlay,0_10px_30px_rgba(0,0,0,0.3))]"
       >
         {items.map((it, i) => {
           if (it.type === "separator") {
-            return <div key={i} role="separator" className="mx-1.5 my-1 h-px bg-[var(--border-subtle)]" />;
+            return <div key={i} role="separator" className="mx-1.5 my-1 h-px bg-[var(--hairline)]" />;
           }
           if (it.type === "label") {
             return (
@@ -198,8 +198,8 @@ function MenuPanel({ items, x, y, anchor, alignEnd, minWidth, depth, autoFocus, 
                 it.disabled
                   ? "text-[color:var(--text-faint)]"
                   : it.danger
-                    ? `text-[color:var(--danger)] ${isActive ? "bg-[var(--bg-hover)]" : ""}`
-                    : `text-[color:var(--text-primary)] ${isActive ? "bg-[var(--bg-hover)]" : ""}`
+                    ? `text-[color:var(--danger)] ${isActive ? "bg-[var(--fill-element)]" : ""}`
+                    : `text-[color:var(--text-primary)] ${isActive ? "bg-[var(--fill-element)]" : ""}`
               }`}
             >
               <span className="flex w-4 shrink-0 items-center justify-center">

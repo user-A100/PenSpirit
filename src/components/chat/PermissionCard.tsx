@@ -29,7 +29,7 @@ export function PermissionCard() {
           <button
             key={o.option_id}
             onClick={() => void respond(o.option_id)}
-            className={`rounded border px-2 py-0.5 text-xs transition-colors duration-150 hover:bg-[var(--bg-hover)] ${
+            className={`rounded border px-2 py-0.5 text-xs transition-colors duration-150 hover:bg-[var(--fill-hover)] ${
               o.kind.startsWith("allow")
                 ? "border-[color:var(--success)] text-[color:var(--success)]"
                 : "border-[color:var(--danger)] text-[color:var(--danger)]"
@@ -42,7 +42,7 @@ export function PermissionCard() {
           <button
             onClick={() => void respond(allow.option_id, { always: true })}
             data-tip="同一会话里这一类操作以后都直接允许（关掉应用或在会话菜单清除即失效）"
-            className="rounded border border-dashed border-[color:var(--success)] px-2 py-0.5 text-xs text-[color:var(--success)] transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+            className="rounded border border-dashed border-[color:var(--success)] px-2 py-0.5 text-xs text-[color:var(--success)] transition-colors duration-150 hover:bg-[var(--fill-hover)]"
           >
             本会话一直允许「{kindLabel}」
           </button>

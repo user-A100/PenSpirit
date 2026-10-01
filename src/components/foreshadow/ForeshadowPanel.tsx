@@ -43,10 +43,10 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 const INPUT =
-  "w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 focus:border-[color:var(--accent)]";
+  "w-full rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 focus:border-[color:var(--accent)]";
 const SECTION = "mb-1 text-xs font-medium text-[color:var(--text-secondary)]";
 const ICON_BTN =
-  "rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)]";
+  "rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)]";
 
 interface Row {
   f: Foreshadow;
@@ -194,7 +194,7 @@ export function ForeshadowPanel() {
             onClick={openForm}
             disabled={currentBookId == null || chapters.length === 0}
             title={chapters.length === 0 ? "请先创建章节" : "登记一条伏笔"}
-            className="flex items-center gap-1 rounded-md border border-[color:var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1 rounded-md border border-[color:var(--hairline)] px-2 py-1 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus size={12} />
             登记
@@ -205,14 +205,14 @@ export function ForeshadowPanel() {
         </div>
 
         {/* 筛选 segmented（默认「全部」收起已回收） */}
-        <div className="flex rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] p-0.5 text-2xs">
+        <div className="flex rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] p-0.5 text-2xs">
           {FILTERS.map((ft) => (
             <button
               key={ft.key}
               onClick={() => setFilter(ft.key)}
               className={`flex-1 rounded px-1 py-1 transition-colors duration-150 ${
                 filter === ft.key
-                  ? "bg-[var(--bg-hover)] font-medium text-[color:var(--text-primary)]"
+                  ? "bg-[var(--fill-element)] font-medium text-[color:var(--text-primary)]"
                   : "text-[color:var(--text-faint)] hover:text-[color:var(--text-secondary)]"
               }`}
             >
@@ -284,7 +284,7 @@ export function ForeshadowPanel() {
             <div className="flex items-center justify-end gap-1.5">
               <button
                 onClick={() => setFormOpen(false)}
-                className="rounded px-2 py-1 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
+                className="rounded px-2 py-1 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-secondary)]"
               >
                 取消
               </button>
@@ -301,11 +301,11 @@ export function ForeshadowPanel() {
 
         {/* 列表 */}
         {currentBookId == null ? (
-          <div className="rounded-md border border-[color:var(--border-subtle)] px-2.5 py-4 text-center text-xs text-[color:var(--text-faint)]">
+          <div className="rounded-md border border-[color:var(--hairline)] px-2.5 py-4 text-center text-xs text-[color:var(--text-faint)]">
             请先选择书籍
           </div>
         ) : visible.length === 0 ? (
-          <div className="rounded-md border border-[color:var(--border-subtle)] px-2.5 py-4 text-center text-xs text-[color:var(--text-faint)]">
+          <div className="rounded-md border border-[color:var(--hairline)] px-2.5 py-4 text-center text-xs text-[color:var(--text-faint)]">
             {filter === "all" ? "还没有伏笔，点「登记」记一条" : "该筛选下没有伏笔"}
           </div>
         ) : (
@@ -314,7 +314,7 @@ export function ForeshadowPanel() {
             return (
               <div
                 key={r.f.id}
-                className="group rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] px-3 py-2.5 transition-colors duration-[var(--dur-md)] hover:border-[color:var(--accent)]"
+                className="group rounded-[var(--r-control)] border border-[color:var(--hairline)] px-3 py-2.5 transition-colors duration-[var(--dur-md)] hover:border-[color:var(--accent)]"
               >
                 <div className="flex items-center gap-1.5">
                   <span className="min-w-0 flex-1 truncate text-sm font-medium text-[color:var(--text-primary)]" title={r.f.title}>
@@ -396,7 +396,7 @@ export function ForeshadowPanel() {
                 </div>
                 {/* 标记回收：inline 弹层选章 */}
                 {resolvingId === r.f.id && (
-                  <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2 py-1.5">
+                  <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-[var(--fill-element)] px-2 py-1.5">
                     <span className="shrink-0 text-2xs text-[color:var(--text-secondary)]">回收于</span>
                     <select
                       title="回收章"
@@ -441,7 +441,7 @@ export function ForeshadowPanel() {
                     key={r.f.id}
                     data-gantt-row={r.f.id}
                     title={`${r.f.title}（${STATE_LABEL[r.state]}）`}
-                    className="relative h-3.5 overflow-hidden rounded-sm bg-[var(--bg-hover)]"
+                    className="relative h-3.5 overflow-hidden rounded-sm bg-[var(--fill-element)]"
                   >
                     {r.targetIdx != null ? (
                       <div

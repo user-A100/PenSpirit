@@ -78,12 +78,12 @@ export function TrashPanel(props: { bookId: number | null; onClose: () => void; 
   return (
     <div
       ref={ref}
-      className={`absolute left-2 z-50 w-72 rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] [box-shadow:var(--shadow-overlay)] ${
+      className={`absolute left-2 z-50 w-72 rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)] [box-shadow:var(--shadow-overlay)] ${
         props.placement === "above" ? "bottom-full mb-1" : "top-full mt-1"
       }`}
     >
       {/* 头部：标题 + 清空 + 关闭 */}
-      <div className="flex items-center gap-1 border-b border-[color:var(--border-subtle)] px-3 py-2">
+      <div className="flex items-center gap-1 border-b border-[color:var(--hairline)] px-3 py-2">
         <Trash2 size={13} className="text-[color:var(--text-faint)]" />
         <span className="flex-1 text-xs font-medium text-[color:var(--text-primary)]">
           回收站{items.length > 0 && <span className="ml-1 text-[color:var(--text-faint)]">({items.length})</span>}
@@ -93,7 +93,7 @@ export function TrashPanel(props: { bookId: number | null; onClose: () => void; 
             <button
               onClick={() => void empty()}
               title="确认清空"
-              className="rounded px-1.5 py-0.5 text-2xs text-[color:var(--danger)] transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+              className="rounded px-1.5 py-0.5 text-2xs text-[color:var(--danger)] transition-colors duration-150 hover:bg-[var(--fill-hover)]"
             >
               确认清空
             </button>
@@ -104,7 +104,7 @@ export function TrashPanel(props: { bookId: number | null; onClose: () => void; 
                 setConfirmPurgeId(null);
               }}
               title="清空回收站"
-              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--danger)]"
             >
               <Eraser size={12} />
               清空
@@ -132,7 +132,7 @@ export function TrashPanel(props: { bookId: number | null; onClose: () => void; 
           items.map((c) => (
             <div
               key={c.id}
-              className="mb-1 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+              className="mb-1 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-[var(--fill-hover)]"
             >
               <div className="flex items-center gap-1">
                 {c.kind === "folder" && <Folder size={12} aria-label="卷" className="shrink-0 text-[color:var(--accent)]" />}
@@ -142,7 +142,7 @@ export function TrashPanel(props: { bookId: number | null; onClose: () => void; 
                 <button
                   onClick={() => void restore(c.id)}
                   title="恢复"
-                  className="shrink-0 rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--accent-hover)]"
+                  className="shrink-0 rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--accent-hover)]"
                 >
                   <RotateCcw size={12} />
                 </button>
@@ -158,7 +158,7 @@ export function TrashPanel(props: { bookId: number | null; onClose: () => void; 
                   <button
                     onClick={() => setConfirmPurgeId(c.id)}
                     title="彻底删除"
-                    className="shrink-0 rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
+                    className="shrink-0 rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--danger)]"
                   >
                     <Trash2 size={12} />
                   </button>

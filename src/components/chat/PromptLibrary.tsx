@@ -182,7 +182,7 @@ function Editor({ initial, providers, onDone }: { initial: PromptTemplate; provi
         <button type="button" onClick={onDone} className="rounded-[var(--r-control)] px-3 py-1.5 text-xs text-[color:var(--text-secondary)] hover:bg-[var(--fill-hover)]">
           取消
         </button>
-        <button type="submit" className="rounded-[var(--r-control)] bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white">
+        <button type="submit" className="rounded-[var(--r-control)] bg-[var(--accent-solid)] px-3 py-1.5 text-xs font-medium text-white">
           {isNew ? "添加" : "保存"}
         </button>
       </div>
