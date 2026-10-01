@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, Bookmark, ChevronDown, ChevronRight, FolderPlus, ListPlus, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { api, type ChapterMeta, type Collection } from "../../lib/tauri";
 import { useWorkspace } from "../../stores/workspace";
+import { errMsg } from "../../lib/errors";
+import { confirmDialog } from "../../stores/confirm";
 
 // 集合面板（M7 批次4，Scrivener Collections 移植）：
 // 手动集合=固定成员（可增删）；搜索集合=存储查询，成员实时由搜索结果决定。
@@ -67,12 +69,18 @@ export function CollectionsDockPanel() {
       setExpanded(col.id);
       setMembers([]);
     } catch (e) {
-      setMsg(String(e).replace(/^.*?"|".*$/g, "") || String(e));
+      setMsg(errMsg(e));
     }
   };
 
   const removeCollection = async (col: Collection) => {
-    if (!window.confirm(`删除集合「${col.name}」？${col.kind === "manual" ? "（章节本身不受影响）" : ""}`)) return;
+    const ok = await confirmDialog({
+      title: `删除集合「${col.name}」？`,
+      message: col.kind === "manual" ? "章节本身不受影响。" : undefined,
+      confirmLabel: "删除",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api.collectionDelete(col.id);
       if (expanded === col.id) {
@@ -81,7 +89,7 @@ export function CollectionsDockPanel() {
       }
       setReload((v) => v + 1);
     } catch (e) {
-      setMsg(String(e));
+      setMsg(errMsg(e));
     }
   };
 
@@ -92,7 +100,7 @@ export function CollectionsDockPanel() {
       setMembers(await api.collectionChapters(col.id));
       setReload((v) => v + 1);
     } catch (e) {
-      setMsg(String(e));
+      setMsg(errMsg(e));
     }
   };
 
@@ -102,7 +110,7 @@ export function CollectionsDockPanel() {
       setMembers(await api.collectionChapters(col.id));
       setReload((v) => v + 1);
     } catch (e) {
-      setMsg(String(e));
+      setMsg(errMsg(e));
     }
   };
 
@@ -115,7 +123,7 @@ export function CollectionsDockPanel() {
       setMembers(await api.collectionChapters(col.id));
       setMsg(null);
     } catch (e) {
-      setMsg(String(e));
+      setMsg(errMsg(e));
     }
   };
 

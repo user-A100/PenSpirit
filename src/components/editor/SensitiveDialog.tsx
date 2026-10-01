@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { FileUp, ScanSearch } from "lucide-react";
 import { api, type SensitiveHit } from "../../lib/tauri";
 import { Modal } from "../ui/Modal";
+import { errMsg } from "../../lib/errors";
 
 // M2-T11 敏感词检测：手动检查当前章 + 词库管理（一行一词 / 从 txt 导入）。
 // 只报告，不改正文——是否修改由作者判断。
@@ -19,7 +20,7 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
     api
       .sensitiveGetWords()
       .then((w) => setBank(w.join("\n")))
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(errMsg(e)));
   }, []);
 
   const wordCount = bank.split("\n").filter((l) => l.trim() !== "").length;
@@ -31,7 +32,7 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
       setNote(null);
       setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -47,7 +48,7 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
       // 词库变了，已有检查结果作废
       setHits(null);
     } catch (e) {
-      setError(String(e));
+      setError(errMsg(e));
     }
   };
 
@@ -67,7 +68,7 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
       setNote(`从文件读入 ${imported.length} 个词，点「保存词库」后生效`);
       setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(errMsg(e));
     }
   };
 

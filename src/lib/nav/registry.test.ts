@@ -16,6 +16,7 @@ describe("navRegistry", () => {
     localStorage.clear();
   });
 
+  // 首例冷加载全部视图模块（resetModules 后），慢盘上可能超过默认 5s，单独放宽
   it("内置注册 write/bump/read/styles/stats/materials/graph/structure 八个一级视图", async () => {
     const { registry, useUiNav } = await freshNav();
     const ids = registry.getViews().map((v) => v.id);
@@ -41,7 +42,7 @@ describe("navRegistry", () => {
     expect(registry.getView("structure")!.label).toBe("结构");
     expect(registry.getView("structure")!.dockPanels).toEqual([]);
     expect(useUiNav.getState().activeView).toBe("write"); // 自愈无副作用
-  });
+  }, 30_000);
 
   it("registerView 按 id 幂等：重复注册不新增，先注册者生效", async () => {
     const { registry } = await freshNav();

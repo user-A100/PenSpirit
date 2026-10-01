@@ -4,6 +4,7 @@ import { StyleCard } from "../../lib/tauri";
 import { parseTags, toTagsJson, useStyles } from "../../stores/styles";
 import { useWorkspace } from "../../stores/workspace";
 import { Modal } from "../ui/Modal";
+import { confirmDialog } from "../../stores/confirm";
 
 interface FormState {
   id: number; name: string; prompt_md: string; sample_md: string; tagsText: string;
@@ -56,7 +57,7 @@ export function StylePanel() {
   };
 
   const handleRemove = async () => {
-    if (!editing || !window.confirm(`确定删除文风「${form.name}」？`)) return;
+    if (!editing || !(await confirmDialog({ title: `删除文风「${form.name}」？`, confirmLabel: "删除", danger: true }))) return;
     setBusy(true);
     try {
       await remove(form.id);

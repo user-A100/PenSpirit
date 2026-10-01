@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Eraser, RotateCcw, Trash2, X } from "lucide-react";
 import { trashApi, type TrashedChapter } from "../../lib/tauri_trash";
 import { useWorkspace } from "../../stores/workspace";
+import { errMsg } from "../../lib/errors";
 
 // 回收站下拉面板（当前书）：软删章列表 + 恢复/彻底删除/清空。
 // 由 Sidebar 书列表头部 Trash2 按钮唤起；父容器需 relative。
@@ -20,7 +21,7 @@ export function TrashPanel(props: { bookId: number | null; onClose: () => void }
       setItems(await trashApi.listTrash(bookId));
       setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(errMsg(e));
     }
   };
 
@@ -46,7 +47,7 @@ export function TrashPanel(props: { bookId: number | null; onClose: () => void }
       await fn();
       setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(errMsg(e));
     }
   };
 

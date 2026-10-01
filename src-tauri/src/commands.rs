@@ -48,6 +48,15 @@ pub fn delete_book_inner(s: &AppState, id: i64) -> AppResult<()> {
     trash::soft_delete_book_inner(s, id)
 }
 
+/// 改书名：只改标题，目录名（slug）不动——磁盘布局与既有引用全部保持
+pub fn rename_book_inner(s: &AppState, id: i64, title: &str) -> AppResult<Book> {
+    let title = title.trim();
+    if title.is_empty() {
+        return Err(AppError::Invalid("书名不能为空".into()));
+    }
+    repo::books::rename(&*lock(s)?, id, title)
+}
+
 pub fn list_chapters_inner(s: &AppState, book_id: i64) -> AppResult<Vec<ChapterMeta>> {
     repo::chapters::list_by_book(&*lock(s)?, book_id)
 }
@@ -205,6 +214,11 @@ pub fn create_book(s: State<AppState>, title: String) -> AppResult<Book> {
 #[tauri::command]
 pub fn delete_book(s: State<AppState>, id: i64) -> AppResult<()> {
     delete_book_inner(&s, id)
+}
+
+#[tauri::command]
+pub fn rename_book(s: State<AppState>, id: i64, title: String) -> AppResult<Book> {
+    rename_book_inner(&s, id, &title)
 }
 
 #[tauri::command]

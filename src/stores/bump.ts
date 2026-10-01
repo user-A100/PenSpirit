@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api, type BumpWord, type Idea } from "../lib/tauri";
+import { errMsg } from "../lib/errors";
 
 // M2-T10 碰碰车状态。碰撞结果只存内存（drawn）——想留下就「存为灵感卡」，
 // 这样词库/灵感卡两组数据各自独立，不会因为随手碰撞而堆积垃圾。
@@ -62,7 +63,7 @@ export const useBump = create<BumpState>((set, get) => ({
       const [words, ideas] = await Promise.all([api.bumpListWords(), api.ideasList()]);
       set({ words, ideas, error: null });
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
     }
   },
 
@@ -71,7 +72,7 @@ export const useBump = create<BumpState>((set, get) => ({
       await api.bumpAddWord(word);
       set({ words: await api.bumpListWords(), error: null });
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
     }
   },
 
@@ -84,7 +85,7 @@ export const useBump = create<BumpState>((set, get) => ({
       await Promise.all(fresh.map((w) => api.bumpAddWord(w)));
       await get().load();
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
     }
   },
 
@@ -93,7 +94,7 @@ export const useBump = create<BumpState>((set, get) => ({
       await api.bumpDeleteWord(id);
       set({ words: await api.bumpListWords(), error: null });
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
     }
   },
 
@@ -102,7 +103,7 @@ export const useBump = create<BumpState>((set, get) => ({
       await api.bumpClearWords();
       set({ words: [], drawn: [], error: null });
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
     }
   },
 
@@ -111,7 +112,7 @@ export const useBump = create<BumpState>((set, get) => ({
     try {
       set({ drawn: await api.bumpDraw(get().count), error: null });
     } catch (e) {
-      set({ drawn: [], error: String(e) });
+      set({ drawn: [], error: errMsg(e) });
     } finally {
       set({ busy: false });
     }
@@ -124,7 +125,7 @@ export const useBump = create<BumpState>((set, get) => ({
       await api.ideasCreate(note, JSON.stringify(drawn), JSON.stringify(parseTags(tags)));
       set({ ideas: await api.ideasList(), note: "", tags: "", error: null });
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
     }
   },
 
@@ -133,7 +134,7 @@ export const useBump = create<BumpState>((set, get) => ({
       await api.ideasDelete(id);
       set({ ideas: await api.ideasList(), error: null });
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
     }
   },
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { diffLines, type Change } from "diff";
 import { History, RotateCcw, X } from "lucide-react";
 import { api, type SnapshotInfo } from "../../lib/tauri";
+import { errMsg } from "../../lib/errors";
 
 // M2-T7 章节版本历史侧滑面板：快照列表 + 与当前编辑器内容的按行 diff + 恢复此版本。
 //
@@ -49,7 +50,7 @@ export function HistoryPanel(props: {
       setItems(await api.listHistory(chapterId));
       setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(errMsg(e));
     }
   };
 
@@ -69,7 +70,7 @@ export function HistoryPanel(props: {
       setConfirmFile(null);
       setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(errMsg(e));
     }
   };
 
@@ -83,7 +84,7 @@ export function HistoryPanel(props: {
       setParts(diffLines(text, text)); // 已恢复到该版本，diff 归零
       setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(errMsg(e));
     }
   };
 

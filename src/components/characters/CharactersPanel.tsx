@@ -4,6 +4,7 @@ import { useCharacters } from "../../stores/characters";
 import { useRelations } from "../../stores/relations";
 import { useWorkspace } from "../../stores/workspace";
 import { Badge } from "../ui/Badge";
+import { confirmDialog } from "../../stores/confirm";
 
 // 人物卡面板（M4，write 视图 dock 的 characters tab）——人物图谱的第一块底座：
 // 姓名必填，角色/别名（逗号分隔）/描述可选；别名供后续检索与图谱消歧用。
@@ -187,8 +188,8 @@ export function CharactersPanel() {
                       <Pencil size={14} />
                     </button>
                     <button
-                      onClick={() => {
-                        if (window.confirm(`删除人物卡「${c.name}」？`)) void remove(c.id);
+                      onClick={async () => {
+                        if (await confirmDialog({ title: `删除人物卡「${c.name}」？`, confirmLabel: "删除", danger: true })) void remove(c.id);
                       }}
                       title="删除"
                       className={ICON_BTN}

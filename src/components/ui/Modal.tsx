@@ -46,6 +46,8 @@ export function Modal({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
         onClick={(e) => e.stopPropagation()}
         style={{ animation: "zen-pop-in var(--dur-md) ease-in-out" }}
         className={`flex w-full ${widthClass} ${maxHeightClass} flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] [box-shadow:var(--shadow-pop)]`}

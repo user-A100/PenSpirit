@@ -10,6 +10,7 @@ import { usePanZoom } from "../../hooks/usePanZoom";
 import { Button } from "../ui/Button";
 import { Input, inputClass } from "../ui/Input";
 import { Modal } from "../ui/Modal";
+import { confirmDialog } from "../../stores/confirm";
 
 // 世界地图（M5-T6）：左列地图清单 + 右侧 pan/zoom 底图画布。
 // pin 用百分比坐标直接叠在图上（换图/缩放不失效）；双击图面落新 pin，
@@ -250,8 +251,8 @@ export function MapView() {
               <button
                 data-testid={`map-delete-${m.id}`}
                 title="删除地图"
-                onClick={() => {
-                  if (window.confirm(`删除地图「${m.name}」及其全部地点？`)) void removeMap(m.id);
+                onClick={async () => {
+                  if (await confirmDialog({ title: `删除地图「${m.name}」？`, message: "地图上的全部地点会一并删除。", confirmLabel: "删除", danger: true })) void removeMap(m.id);
                 }}
                 className="hidden shrink-0 rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-[var(--dur-md)] hover:text-[color:var(--danger)] group-hover:block"
               >

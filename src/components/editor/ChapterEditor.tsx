@@ -64,8 +64,11 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   const typewriter = useUiNav((s) => s.typewriter);
   const toggleTypewriter = useUiNav((s) => s.toggleTypewriter);
   const dirty = useRef<string | null>(null);
-  const chapterIdRef = useRef<number | null>(null);
-  chapterIdRef.current = chapterId;
+  // 编辑器里的正文属于哪一章（与 chapterId 区分：换章时新内容到达前，编辑器里仍是上一章）。
+  // 自动保存与换章冲刷都按它落盘——修复「防抖窗口内切章，最后几秒的改动丢失」。
+  const loadedIdRef = useRef<number | null>(null);
+  // 最近一次成功落盘的内容（换章冲刷时跳过已保存的内容，避免重复写）
+  const savedRef = useRef<string | null>(null);
   const bookIdRef = useRef<number | null>(null);
   bookIdRef.current = currentBookId;
   // 程序化改动（切章/恢复/AI 采纳）期间置位，其 transaction 不计入今日写作
@@ -139,12 +142,20 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   });
 
   useEffect(() => {
-    if (editor && content != null) {
-      suppressStats.current = true;
-      editor.commands.setContent(content);
-      suppressStats.current = false;
-      dirty.current = null;
+    if (!editor || content == null) return;
+    const loaded = loadedIdRef.current;
+    // 同一章被重新读取（如再次点击当前章）：编辑器里已有改动时以编辑器为准，不回灌磁盘旧文
+    if (loaded === chapterId && dirty.current != null) return;
+    if (loaded != null && loaded !== chapterId && dirty.current != null && dirty.current !== savedRef.current) {
+      const pending = dirty.current;
+      void api.writeChapter(loaded, pending).catch((e) => console.warn("切章冲刷上一章失败:", e));
     }
+    suppressStats.current = true;
+    editor.commands.setContent(content);
+    suppressStats.current = false;
+    dirty.current = null;
+    savedRef.current = null;
+    loadedIdRef.current = chapterId;
   }, [chapterId, content, editor]);
 
   // 搜索结果跳转：正文就位后定位到首个匹配并滚动到可见（本 effect 声明在灌内容之后，
@@ -191,9 +202,10 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   const { status } = useAutosave(
     () => dirty.current,
     async (content) => {
-      const id = chapterIdRef.current;
+      const id = loadedIdRef.current;
       if (id == null) return;
       await api.writeChapter(id, content);
+      if (loadedIdRef.current === id) savedRef.current = content;
     },
   );
 

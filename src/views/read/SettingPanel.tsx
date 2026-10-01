@@ -6,6 +6,7 @@ import { ImagePlus, Search, X } from "lucide-react";
 import { api } from "../../lib/tauri";
 import type { BgImage } from "../../lib/tauri";
 import { READING_BG_PRESETS, useReadingPrefs } from "./readingPrefs";
+import { confirmDialog } from "../../stores/confirm";
 
 // 右侧阅读设置面板（M3-T6，books-reader SettingPanel 简化移植）：
 // 分区带 data-search-key，顶部搜索框按标题打分（整词 1000 / 前缀 900 / 子序列 100），
@@ -155,7 +156,7 @@ export function SettingPanel() {
   };
 
   const onDelete = async (img: BgImage) => {
-    if (!window.confirm(`删除背景图「${img.name}」？`)) return;
+    if (!(await confirmDialog({ title: `删除背景图「${img.name}」？`, confirmLabel: "删除", danger: true }))) return;
     try {
       await api.readingBgDelete(img.id);
     } catch (e) {

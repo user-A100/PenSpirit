@@ -46,6 +46,28 @@
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
+/* 轻提示进出（Zen toast：弹簧 bounce≈0.2 入场，缩小淡出 0.16s） */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes toast-out {
+  to { opacity: 0; transform: scale(0.9); }
+}
+.toast-in { animation: toast-in 0.32s cubic-bezier(0.2, 1.25, 0.4, 1); }
+.toast-out { animation: toast-out 0.16s ease-in forwards; }
+
+/* 菜单弹出：极短缩放淡入，不过冲（高频操作） */
+@keyframes menu-pop {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.menu-pop { animation: menu-pop 0.1s ease-out; transform-origin: top left; }
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-in, .toast-out, .menu-pop { animation-duration: 0.01ms !important; }
+}
+
 /* 弹窗/浮卡入场：Zen zen-dialog-fade-in（下移 10px 淡入，0.15s ease） */
 @keyframes zen-pop-in {
   from { opacity: 0; transform: translateY(-10px); }

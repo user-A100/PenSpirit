@@ -184,6 +184,7 @@ export const api = {
   listBooks: () => invoke<Book[]>("list_books"),
   createBook: (title: string) => invoke<Book>("create_book", { title }),
   deleteBook: (id: number) => invoke<void>("delete_book", { id }),
+  renameBook: (id: number, title: string) => invoke<Book>("rename_book", { id, title }),
   listChapters: (bookId: number) => invoke<ChapterMeta[]>("list_chapters", { bookId }),
   createChapter: (bookId: number, title: string) => invoke<ChapterMeta>("create_chapter", { bookId, title }),
   renameChapter: (id: number, newTitle: string) => invoke<ChapterMeta>("rename_chapter", { id, newTitle }),

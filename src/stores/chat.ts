@@ -8,6 +8,7 @@ import {
   AcpTurnEvent,
 } from "../lib/tauri";
 import { useAgents } from "./agents";
+import { errCode, errMsg } from "../lib/errors";
 
 // 后端流式事件信封（serde tagged，对应 src-tauri/src/llm/stream.rs 的 StreamEvent）
 export type StreamEvent =
@@ -21,6 +22,8 @@ interface ChatState {
   streaming: boolean;
   streamText: string;
   error: string | null;
+  /** 结构化错误码（AppError.code），UI 据此给出处理入口（如「去设置服务商」） */
+  errorCode: string | null;
   // ACP 权限请求（一次一张；agent 请求工具授权时置入，应答后清除）
   permission: AcpPermissionEvent | null;
   // 采纳通道：adopt 置入，ChapterEditor 消费后 clearPendingAppend 清空（单一通道）
@@ -132,13 +135,14 @@ export const useChat = create<ChatState>((set, get) => ({
   streaming: false,
   streamText: "",
   error: null,
+  errorCode: null,
   permission: null,
   pendingAppend: null,
 
   initForChapter: async (chapterId) => {
     const seq = ++initSeq;
     detachListening();
-    set({ sessionId: null, messages: [], streaming: false, streamText: "", error: null, permission: null, pendingAppend: null });
+    set({ sessionId: null, messages: [], streaming: false, streamText: "", error: null, errorCode: null, permission: null, pendingAppend: null });
     try {
       const session = await api.getOrCreateSession(chapterId);
       if (seq !== initSeq) return;
@@ -158,7 +162,7 @@ export const useChat = create<ChatState>((set, get) => ({
       if (seq !== initSeq) return;
       set({ sessionId: session.id, messages });
     } catch (e) {
-      if (seq === initSeq) set({ error: String(e) });
+      if (seq === initSeq) set({ error: errMsg(e) });
     }
   },
 
@@ -167,7 +171,7 @@ export const useChat = create<ChatState>((set, get) => ({
     const trimmed = instruction.trim();
     if (sessionId == null || streaming || !trimmed) return false;
     // 此时监听必然已就绪（initForChapter 建立），可安全发起生成
-    set({ streaming: true, streamText: "", error: null });
+    set({ streaming: true, streamText: "", error: null, errorCode: null });
     const tempId = --tempIdSeq;
     set((st) => ({
       messages: [...st.messages, { id: tempId, session_id: sessionId, role: "user", content: trimmed, created_at: "" }],
@@ -181,7 +185,13 @@ export const useChat = create<ChatState>((set, get) => ({
       set((st) => ({ messages: st.messages.map((m) => (m.id === tempId ? userMsg : m)) }));
       return true;
     } catch (e) {
-      set({ streaming: false, error: String(e) });
+      // invoke 失败 = 后端未落库（服务商/上下文校验在落库前）：撤掉乐观气泡，输入框由调用方还原
+      set((st) => ({
+        streaming: false,
+        error: errMsg(e),
+        errorCode: errCode(e),
+        messages: st.messages.filter((m) => m.id !== tempId),
+      }));
       return false;
     }
   },
@@ -194,7 +204,7 @@ export const useChat = create<ChatState>((set, get) => ({
       if (isAcpBackend()) await api.cancelGenerationAcp(sessionId);
       else await api.cancelGeneration(sessionId);
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
     }
   },
 
@@ -217,7 +227,7 @@ export const useChat = create<ChatState>((set, get) => ({
       await api.deleteMessage(id);
       set((st) => ({ messages: st.messages.filter((m) => m.id !== id) }));
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
     }
   },
 
@@ -228,11 +238,11 @@ export const useChat = create<ChatState>((set, get) => ({
     try {
       await api.agentsRespondPermission(sessionId, permission.request_id, optionId);
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
     }
   },
 
-  clearError: () => set({ error: null }),
+  clearError: () => set({ error: null, errorCode: null }),
   clearPendingAppend: () => set({ pendingAppend: null }),
   dispose: () => detachListening(),
 }));

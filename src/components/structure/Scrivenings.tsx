@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, ChapterContent } from "../../lib/tauri";
 import { useWorkspace } from "../../stores/workspace";
+import { errMsg } from "../../lib/errors";
 
 // 串烧（Scrivener Scrivenings 移植）：多章按目录序拼接成一篇连读文档。
 // 只读——每章=标题 + 梗概（可选）+ 正文，章节间以横隔线分开。
@@ -19,7 +20,7 @@ export function Scrivenings() {
     setError(null);
     Promise.all(chapters.map((c) => api.readChapter(c.id)))
       .then((all) => !cancelled && setDocs(all))
-      .catch((e) => !cancelled && setError(String(e)));
+      .catch((e) => !cancelled && setError(errMsg(e)));
     return () => {
       cancelled = true;
     };

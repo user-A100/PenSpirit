@@ -4,6 +4,7 @@ import { FolderOpen, FileUp } from "lucide-react";
 import { api, type ParsedChapter } from "../../lib/tauri";
 import { Badge } from "../ui/Badge";
 import { Modal } from "../ui/Modal";
+import { errMsg } from "../../lib/errors";
 
 // M2-T8 导入向导：选文件 → Rust 侧编码检测 + 分章 → 勾选 → 批量落库。
 // 卷信息（volume）只用于这里的分组展示——chapters 表没有卷字段，不落库。
@@ -67,7 +68,7 @@ export function ImportWizard(props: {
     } catch (e) {
       setItems([]);
       setPicked(new Set());
-      setError(String(e));
+      setError(errMsg(e));
     }
   };
 
@@ -81,7 +82,7 @@ export function ImportWizard(props: {
     } catch (e) {
       setItems([]);
       setPicked(new Set());
-      setError(String(e));
+      setError(errMsg(e));
     }
   };
 
@@ -115,7 +116,7 @@ export function ImportWizard(props: {
       setError(null);
       props.onImported(bookId);
     } catch (e) {
-      setError(String(e));
+      setError(errMsg(e));
     } finally {
       setBusy(false);
     }

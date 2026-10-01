@@ -129,9 +129,17 @@ describe("chat store", () => {
     expect(ok).toBe(false);
     expect(useChat.getState().streaming).toBe(false);
     expect(useChat.getState().error).toContain("网络错误");
-    // 乐观气泡保留，用户可见自己发过的指令
-    expect(useChat.getState().messages).toHaveLength(1);
-    expect(useChat.getState().messages[0].role).toBe("user");
+    // 未落库：乐观气泡撤回（指令由输入框还原，不会出现两份）
+    expect(useChat.getState().messages).toHaveLength(0);
+  });
+
+  it("结构化错误显示中文 message 并带错误码", async () => {
+    vi.mocked(api.sendMessage).mockRejectedValue({ code: "invalid", message: "未配置可用的 AI 服务商" });
+    await init();
+    const ok = await useChat.getState().send("续写一段");
+    expect(ok).toBe(false);
+    expect(useChat.getState().error).toBe("未配置可用的 AI 服务商");
+    expect(useChat.getState().errorCode).toBe("invalid");
   });
 
   it("流式进行中或空指令时 send 拒绝", async () => {

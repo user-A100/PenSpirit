@@ -4,6 +4,7 @@ import { useSearch } from "../../stores/search";
 import { useWorkspace } from "../../stores/workspace";
 import { api, type SearchHit } from "../../lib/tauri";
 import { Modal } from "../ui/Modal";
+import { errMsg } from "../../lib/errors";
 
 // M2-T9 全书搜索结果面板（Ctrl+Shift+F 唤起，Esc 关闭）。
 // 输入 300ms 防抖后查询；结果按章分组，点击命中跳章并定位到该行。
@@ -58,7 +59,7 @@ export function SearchPanel() {
       await api.collectionUpsert({ id: null, book_id: bookId, name: query.trim(), kind: "saved", query: query.trim() });
       setSaveState("saved");
     } catch (e) {
-      setSaveState(String(e).replace(/^.*?"|".*$/g, "") || String(e));
+      setSaveState(errMsg(e));
     }
   };
 

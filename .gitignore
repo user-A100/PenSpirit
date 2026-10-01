@@ -40,3 +40,6 @@ scripts/m5-verify/ids.json
 .tmp-m7b7/
 scripts/m7-verify/ids.json
 scripts/m7b7-verify/ids.json
+
+# 阶段核验脚本（scripts/verify/）的截图暂存
+.tmp-verify/

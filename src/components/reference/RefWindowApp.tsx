@@ -3,6 +3,7 @@ import { BookOpen } from "lucide-react";
 import { api, type ChapterMeta } from "../../lib/tauri";
 import { ThemeProvider } from "../../themes/ThemeProvider";
 import { countWords } from "../../lib/words";
+import { errMsg } from "../../lib/errors";
 
 // 参考浮窗（M7 批次7）：主窗 ?refwindow 检测后独立渲染的轻量应用——
 // 只有章下拉 + 只读正文，不带 Ribbon/侧栏/编辑器。书在弹出时刻固定，
@@ -24,7 +25,7 @@ export function RefWindowApp({ bookId, initialChapterId }: { bookId: number | nu
     api
       .listChapters(bookId)
       .then(setChapters)
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(errMsg(e)));
   }, [bookId]);
 
   useEffect(() => {
@@ -34,7 +35,7 @@ export function RefWindowApp({ bookId, initialChapterId }: { bookId: number | nu
     api
       .readChapter(selected)
       .then((full) => !cancelled && setContent(full.content))
-      .catch((e) => !cancelled && setError(String(e)));
+      .catch((e) => !cancelled && setError(errMsg(e)));
     return () => {
       cancelled = true;
     };

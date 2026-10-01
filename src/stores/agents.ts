@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api, AgentDescriptor, ProbeResult } from "../lib/tauri";
+import { errMsg } from "../lib/errors";
 
 /**
  * 后端选择（localStorage `bixian.chat.backend`）：
@@ -67,7 +68,7 @@ export const useAgents = create<AgentsState>((set, get) => ({
       const backend = persistBackend(agents, localStorage.getItem(BACKEND_STORAGE_KEY));
       set({ agents, backend, error: null });
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
     }
   },
 
@@ -80,7 +81,7 @@ export const useAgents = create<AgentsState>((set, get) => ({
       }));
       return result;
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
       return null;
     } finally {
       set((st) => {
@@ -118,7 +119,7 @@ export const useAgents = create<AgentsState>((set, get) => ({
         try {
           await get().setDefault(nextId);
         } catch (e) {
-          set({ error: String(e) });
+          set({ error: errMsg(e) });
         }
       }
     }
@@ -134,7 +135,7 @@ export const useAgents = create<AgentsState>((set, get) => ({
     try {
       await get().setDefault(id);
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
     }
   },
 }));

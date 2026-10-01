@@ -1,13 +1,32 @@
-import { useEffect, useState } from "react";
-import { BookOpen, FileDown, FileText, FileUp, PanelLeftClose, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  BookOpen,
+  FileDown,
+  FilePlus,
+  FileText,
+  FileUp,
+  FolderOpen,
+  PanelLeftClose,
+  Pencil,
+  Plus,
+  RotateCcw,
+  SquareSplitHorizontal,
+  Trash2,
+} from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
 import { useMeta } from "../../stores/meta";
+import { useBinder } from "../../stores/binder";
+import { openContextMenu, type MenuEntry } from "../../stores/menu";
+import { confirmDialog } from "../../stores/confirm";
+import { toast } from "../../stores/toast";
 import { TrashPanel } from "../sidebar/TrashPanel";
 import { StatsBadge } from "../sidebar/StatsBadge";
 import { ImportWizard } from "../io/ImportWizard";
 import { ExportDialog } from "../io/ExportDialog";
 import { useUiNav } from "../../lib/nav/uiStore";
-import { api } from "../../lib/tauri";
+import { commandShortcut } from "../../lib/commands";
+import { errMsg } from "../../lib/errors";
+import { api, type Book, type ChapterMeta } from "../../lib/tauri";
 
 // 列表行选中态：accent-dim 底 + 左侧 2px accent 竖条（无动画跳变，仅颜色过渡）
 function rowTone(active: boolean): string {
@@ -39,7 +58,7 @@ function InlineInput(props: {
         value={props.value}
         onChange={(e) => props.onChange(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") props.onSubmit();
+          if (e.key === "Enter" && !e.nativeEvent.isComposing) props.onSubmit();
         }}
         placeholder={props.placeholder}
         className="min-w-0 flex-1 bg-transparent text-xs text-[color:var(--text-primary)] outline-none placeholder:text-[color:var(--text-faint)]"
@@ -55,10 +74,52 @@ function InlineInput(props: {
   );
 }
 
+/** 行内改名输入框：Enter 提交、Esc 取消、失焦提交；挂载即全选 */
+function RenameInput({ initial, onCommit, onCancel }: { initial: string; onCommit: (v: string) => void; onCancel: () => void }) {
+  const [value, setValue] = useState(initial);
+  const ref = useRef<HTMLInputElement>(null);
+  const done = useRef(false);
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+  const finish = (commit: boolean) => {
+    if (done.current) return;
+    done.current = true;
+    if (commit) onCommit(value);
+    else onCancel();
+  };
+  return (
+    <input
+      ref={ref}
+      value={value}
+      aria-label="新名称"
+      onChange={(e) => setValue(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.nativeEvent.isComposing) return;
+        if (e.key === "Enter") finish(true);
+        else if (e.key === "Escape") finish(false);
+      }}
+      onBlur={() => finish(true)}
+      className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[color:var(--accent)] bg-[var(--bg-elevated)] px-1.5 py-0 text-sm text-[color:var(--text-primary)] outline-none"
+    />
+  );
+}
+
 export function Sidebar() {
   const { books, chapters, currentBookId, currentChapterId, loadBooks, selectBook, createBook, createChapter, selectChapter, reloadChapters, reorderChapters } = useWorkspace();
+  const renameChapter = useWorkspace((s) => s.renameChapter);
+  const deleteChapter = useWorkspace((s) => s.deleteChapter);
+  const renameBook = useWorkspace((s) => s.renameBook);
+  const deleteBook = useWorkspace((s) => s.deleteBook);
   const labels = useMeta((s) => s.labels);
   const toggleSidebar = useUiNav((s) => s.toggleSidebar);
+  const renaming = useBinder((s) => s.renaming);
+  const startRename = useBinder((s) => s.startRename);
+  const stopRename = useBinder((s) => s.stopRename);
   const [newBook, setNewBook] = useState("");
   const [newChapter, setNewChapter] = useState("");
   const [trashOpen, setTrashOpen] = useState(false);
@@ -67,6 +128,49 @@ export function Sidebar() {
   const [dragId, setDragId] = useState<number | null>(null);
 
   useEffect(() => { loadBooks(); }, [loadBooks]);
+
+  const newChapterAfter = async (afterId: number | null) => {
+    const created = await createChapter("新章节", { afterId, select: true });
+    if (created) startRename({ kind: "chapter", id: created.id });
+  };
+
+  const chapterMenu = (c: ChapterMeta): MenuEntry[] => [
+    { label: "打开", icon: FileText, onSelect: () => void selectChapter(c.id) },
+    {
+      label: "在另一窗格打开",
+      icon: SquareSplitHorizontal,
+      onSelect: () => {
+        const ws = useWorkspace.getState();
+        if (ws.splitAxis === "none") ws.setSplitAxis("vertical");
+        ws.focusPane(ws.activePane === "a" ? "b" : "a");
+        void ws.selectChapter(c.id);
+      },
+    },
+    { type: "separator" },
+    { label: "在此后新建章节", icon: FilePlus, shortcut: commandShortcut("chapter.new"), onSelect: () => void newChapterAfter(c.id) },
+    { label: "重命名", icon: Pencil, shortcut: "F2", onSelect: () => startRename({ kind: "chapter", id: c.id }) },
+    { type: "separator" },
+    { label: "移到回收站", icon: Trash2, shortcut: "Del", danger: true, onSelect: () => void deleteChapter(c.id) },
+  ];
+
+  const askDeleteBook = async (b: Book) => {
+    const ok = await confirmDialog({
+      title: `删除《${b.title}》？`,
+      message: "整本书会移到书籍回收站（可从回收站或稍后弹出的提示里撤销）。",
+      confirmLabel: "移到回收站",
+      danger: true,
+    });
+    if (ok) await deleteBook(b.id);
+  };
+
+  const bookMenu = (b: Book): MenuEntry[] => [
+    { label: "打开", icon: FolderOpen, onSelect: () => void selectBook(b.id) },
+    { label: "重命名", icon: Pencil, shortcut: "F2", onSelect: () => startRename({ kind: "book", id: b.id }) },
+    { type: "separator" },
+    { label: "删除这本书…", icon: Trash2, danger: true, onSelect: () => void askDeleteBook(b) },
+  ];
+
+  const isRenaming = (kind: "chapter" | "book", id: number) => renaming?.kind === kind && renaming.id === id;
 
   return (
     <div className="flex h-full flex-col bg-[var(--bg-panel)] text-sm">
@@ -120,13 +224,37 @@ export function Sidebar() {
           return (
             <div
               key={b.id}
+              tabIndex={0}
+              data-book-row={b.id}
               onClick={() => selectBook(b.id)}
-              className={`relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-150 ${rowTone(active)}`}
+              onDoubleClick={() => startRename({ kind: "book", id: b.id })}
+              onContextMenu={(e) => openContextMenu(e, bookMenu(b))}
+              onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key === "F2") {
+                  e.preventDefault();
+                  startRename({ kind: "book", id: b.id });
+                } else if (e.key === "Enter") {
+                  void selectBook(b.id);
+                }
+              }}
+              className={`relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 outline-none transition-colors duration-150 focus-visible:[box-shadow:var(--focus-ring)] ${rowTone(active)}`}
             >
               {active && <ActiveBar />}
               <BookOpen size={14} className={active ? "shrink-0 text-[color:var(--accent)]" : "shrink-0"} />
-              <span className="min-w-0 flex-1 truncate">{b.title}</span>
-              {active && (
+              {isRenaming("book", b.id) ? (
+                <RenameInput
+                  initial={b.title}
+                  onCommit={(v) => {
+                    stopRename();
+                    void renameBook(b.id, v);
+                  }}
+                  onCancel={stopRename}
+                />
+              ) : (
+                <span className="min-w-0 flex-1 truncate">{b.title}</span>
+              )}
+              {active && !isRenaming("book", b.id) && (
                 <span className="shrink-0 text-xs text-[color:var(--text-faint)]">{chapters.length} 章</span>
               )}
             </div>
@@ -153,10 +281,13 @@ export function Sidebar() {
           const active = currentChapterId === c.id;
           // Scrivener 式标签色点：章打了标签时替换默认文件图标色
           const label = labels.find((l) => l.id === c.label_id) ?? null;
+          const editing = isRenaming("chapter", c.id);
           return (
             <div
               key={c.id}
-              draggable
+              tabIndex={0}
+              data-chapter-row={c.id}
+              draggable={!editing}
               onDragStart={() => setDragId(c.id)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
@@ -174,7 +305,21 @@ export function Sidebar() {
               }}
               onDragEnd={() => setDragId(null)}
               onClick={() => selectChapter(c.id)}
-              className={`relative flex cursor-pointer items-center gap-2 rounded-md py-1.5 pl-5 pr-2 transition-colors duration-150 ${rowTone(active)} ${dragId === c.id ? "opacity-40" : ""}`}
+              onDoubleClick={() => startRename({ kind: "chapter", id: c.id })}
+              onContextMenu={(e) => openContextMenu(e, chapterMenu(c))}
+              onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key === "F2") {
+                  e.preventDefault();
+                  startRename({ kind: "chapter", id: c.id });
+                } else if (e.key === "Delete") {
+                  e.preventDefault();
+                  void deleteChapter(c.id);
+                } else if (e.key === "Enter") {
+                  void selectChapter(c.id);
+                }
+              }}
+              className={`relative flex cursor-pointer items-center gap-2 rounded-md py-1.5 pl-5 pr-2 outline-none transition-colors duration-150 focus-visible:[box-shadow:var(--focus-ring)] ${rowTone(active)} ${dragId === c.id ? "opacity-40" : ""}`}
             >
               {active && <ActiveBar />}
               <FileText
@@ -182,8 +327,21 @@ export function Sidebar() {
                 className={`shrink-0 ${label ? "" : active ? "text-[color:var(--accent)]" : ""}`}
                 style={label ? { color: label.color } : undefined}
               />
-              <span className="min-w-0 flex-1 truncate">{c.title}</span>
-              <span className="shrink-0 text-xs text-[color:var(--text-faint)]">{c.word_count} 字</span>
+              {editing ? (
+                <RenameInput
+                  initial={c.title}
+                  onCommit={(v) => {
+                    stopRename();
+                    void renameChapter(c.id, v);
+                  }}
+                  onCancel={stopRename}
+                />
+              ) : (
+                <>
+                  <span className="min-w-0 flex-1 truncate">{c.title}</span>
+                  <span className="shrink-0 text-xs text-[color:var(--text-faint)]">{c.word_count} 字</span>
+                </>
+              )}
             </div>
           );
         })}
@@ -191,7 +349,7 @@ export function Sidebar() {
           <InlineInput
             value={newChapter}
             placeholder="新章节，回车创建…"
-            title="新建章节"
+            title="新建章节（Ctrl+N 在当前章后新建）"
             onChange={setNewChapter}
             onSubmit={async () => {
               if (newChapter.trim()) {
@@ -208,9 +366,14 @@ export function Sidebar() {
         <StatsBadge />
         <button
           onClick={async () => {
-            const n = await api.rescanLibrary();
-            await loadBooks();
-            alert(`已重建索引，共 ${n} 章`);
+            try {
+              const n = await api.rescanLibrary();
+              await loadBooks();
+              await reloadChapters();
+              toast.success(`已从磁盘重建索引，共 ${n} 章`);
+            } catch (e) {
+              toast.error(`重建索引失败：${errMsg(e)}`);
+            }
           }}
           title="从磁盘 markdown 文件重建数据库索引"
           className="flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"

@@ -77,6 +77,18 @@ pub fn restore(conn: &Connection, id: i64, restore_slug: &str) -> AppResult<()> 
     Ok(())
 }
 
+/// 改书名（只改展示标题；slug 即磁盘目录名，是身份，不随之改动）
+pub fn rename(conn: &Connection, id: i64, title: &str) -> AppResult<Book> {
+    let n = conn.execute(
+        "UPDATE books SET title = ?2, updated_at = datetime('now') WHERE id = ?1 AND deleted_at IS NULL",
+        params![id, title],
+    )?;
+    if n == 0 {
+        return Err(AppError::NotFound(format!("书 #{id} 不存在")));
+    }
+    get(conn, id)
+}
+
 /// 设置/清空完本目标字数（None = 清空）；返回更新后的书（M3）
 pub fn set_target(conn: &Connection, id: i64, target_words: Option<i64>) -> AppResult<Book> {
     let n = conn.execute(

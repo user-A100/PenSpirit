@@ -2,21 +2,20 @@ import { useEffect, useRef } from "react";
 import { Ribbon } from "./components/layout/Ribbon";
 import { SettingsModal } from "./components/settings/SettingsModal";
 import { SearchPanel } from "./components/search/SearchPanel";
+import { Toaster } from "./components/ui/Toaster";
+import { ConfirmHost } from "./components/ui/ConfirmHost";
+import { MenuHost } from "./components/ui/MenuHost";
 import { WriteView } from "./views/WriteView";
 import { getView, getViews } from "./lib/nav/registry";
 import { useUiNav } from "./lib/nav/uiStore";
-import { useOutline } from "./stores/outline";
-import { useSearch } from "./stores/search";
-import { useWorkspace } from "./stores/workspace";
+import { installKeyDispatcher } from "./lib/commands";
+import { registerBuiltinCommands } from "./lib/builtinCommands";
 import { ThemeProvider, useAppearance } from "./themes/ThemeProvider";
 import { findTexture, TEXTURE_TILE_PX } from "./themes/textures";
 
 export default function App() {
   const activeView = useUiNav((s) => s.activeView);
-  const toggleSidebar = useUiNav((s) => s.toggleSidebar);
-  const toggleDock = useUiNav((s) => s.toggleDock);
   const setReadReturn = useUiNav((s) => s.setReadReturn);
-  const openSearch = useSearch((s) => s.openPanel);
   const texture = useAppearance((s) => s.texture);
 
   // 双保险：registry 加载时已自愈无效视图 id，这里防御运行期脏值
@@ -31,80 +30,16 @@ export default function App() {
     prevViewRef.current = activeView;
   }, [activeView, setReadReturn]);
 
-  // Ctrl+B 折叠/展开侧栏
+  // 全局快捷键统一走命令中枢（lib/commands）：内置命令注册 + 捕获阶段分发。
+  // Ctrl+B 侧栏 / Ctrl+\ dock / Alt+O 悬浮大纲 / Ctrl+Shift+F 搜索 / Alt+←→ 历史 /
+  // Alt+S 分屏 / Ctrl+N 新建章节 / Ctrl+, 设置
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        toggleSidebar();
-      }
+    const offCommands = registerBuiltinCommands();
+    const offKeys = installKeyDispatcher();
+    return () => {
+      offKeys();
+      offCommands();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [toggleSidebar]);
-
-  // Ctrl+\ 折叠/展开右侧 dock（与 Ctrl+B 侧栏并排）
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key === "\\") {
-        e.preventDefault();
-        toggleDock();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [toggleDock]);
-
-  // Alt+O 悬浮大纲（写作模式下的章节导航浮窗）
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === "o") {
-        e.preventDefault();
-        useOutline.getState().toggle();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  // Ctrl+Shift+F 全书搜索（与 Ribbon 无关的全局快捷键）
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === "f") {
-        e.preventDefault();
-        openSearch();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [openSearch]);
-
-  // Alt+← / Alt+→ 章节导航后退/前进（M7 批次5）
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        void useWorkspace.getState().goBack();
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        void useWorkspace.getState().goForward();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  // Alt+S 分屏循环：无 → 左右 → 上下 → 无（M7 批次5）
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        useWorkspace.getState().cycleSplit();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   return (
@@ -145,6 +80,9 @@ export default function App() {
       </div>
       <SettingsModal />
       <SearchPanel />
+      <ConfirmHost />
+      <MenuHost />
+      <Toaster />
     </ThemeProvider>
   );
 }

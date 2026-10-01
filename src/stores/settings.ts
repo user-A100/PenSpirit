@@ -1,16 +1,20 @@
 import { create } from "zustand";
 import { api, ProviderProfile } from "../lib/tauri";
+import { errMsg } from "../lib/errors";
 
 interface SettingsState {
   providers: ProviderProfile[];
   activeProviderId: number | null;
   modalOpen: boolean;
+  /** 打开时直达的 tab（如「去设置服务商」→ "provider"）；消费后由弹窗自行忽略 */
+  initialTab: string | null;
   error: string | null;
   load: () => Promise<void>;
   save: (p: ProviderProfile) => Promise<ProviderProfile>;
   remove: (id: number) => Promise<void>;
   activate: (id: number) => Promise<void>;
-  open: () => void;
+  /** 打开设置；tab 可选（作为 onClick 处理器直接传入时会收到事件对象，此时忽略） */
+  open: (tab?: unknown) => void;
   close: () => void;
 }
 
@@ -18,6 +22,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
   providers: [],
   activeProviderId: null,
   modalOpen: false,
+  initialTab: null,
   error: null,
   load: async () => {
     try {
@@ -30,7 +35,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
         activeProviderId: active != null && providers.some((p) => p.id === active) ? active : null,
       });
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
     }
   },
   save: async (p) => {
@@ -48,6 +53,6 @@ export const useSettings = create<SettingsState>((set, get) => ({
     set({ activeProviderId: id });
     await get().load();
   },
-  open: () => set({ modalOpen: true }),
+  open: (tab) => set({ modalOpen: true, initialTab: typeof tab === "string" ? tab : null }),
   close: () => set({ modalOpen: false }),
 }));

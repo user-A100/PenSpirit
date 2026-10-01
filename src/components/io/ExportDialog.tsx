@@ -3,6 +3,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { FileDown } from "lucide-react";
 import { api, type ChapterMeta } from "../../lib/tauri";
 import { Modal } from "../ui/Modal";
+import { errMsg } from "../../lib/errors";
 
 // M2-T8 导出对话框：勾选章节 → 选格式 → 选保存路径。
 // 默认全选（导出整本是最常见诉求）；输出顺序由 Rust 侧按书内章节序决定，
@@ -48,7 +49,7 @@ export function ExportDialog(props: {
       setDone(`已导出到 ${dest}`);
       setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(errMsg(e));
     } finally {
       setBusy(false);
     }

@@ -8,6 +8,7 @@ import { ImportPane } from "./ImportPane";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Modal } from "../ui/Modal";
+import { confirmDialog } from "../../stores/confirm";
 
 const EMPTY: ProviderProfile = {
   id: 0, name: "", base_url: "", api_key: "", model: "", max_tokens: 4096, temperature: 0.7,
@@ -62,7 +63,7 @@ function Field(props: {
 }
 
 export function SettingsModal() {
-  const { providers, activeProviderId, modalOpen, error, load, save, remove, activate, close } = useSettings();
+  const { providers, activeProviderId, modalOpen, initialTab, error, load, save, remove, activate, close } = useSettings();
   const [tab, setTab] = useState<SettingsTab>("agent");
   const [form, setForm] = useState<ProviderProfile>(EMPTY);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -71,11 +72,11 @@ export function SettingsModal() {
   // 打开时刷新列表并回到首个 tab + 「新增」表单（Esc 关闭由 Modal 承担）
   useEffect(() => {
     if (!modalOpen) return;
-    setTab("agent");
+    setTab(TABS.some((t) => t.id === initialTab) ? (initialTab as SettingsTab) : "agent");
     setForm(EMPTY);
     setErrors({});
     load();
-  }, [modalOpen, load]);
+  }, [modalOpen, initialTab, load]);
 
   if (!modalOpen) return null;
 
@@ -103,7 +104,7 @@ export function SettingsModal() {
   };
 
   const handleRemove = async () => {
-    if (!editing || !window.confirm(`确定删除服务商「${form.name}」？`)) return;
+    if (!editing || !(await confirmDialog({ title: `删除服务商「${form.name}」？`, confirmLabel: "删除", danger: true }))) return;
     setBusy(true);
     try {
       await remove(form.id);

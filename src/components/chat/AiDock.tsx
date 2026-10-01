@@ -3,10 +3,12 @@ import { ChevronDown, ChevronUp, Eye, MessageSquare, RefreshCw, SendHorizontal, 
 import { useWorkspace } from "../../stores/workspace";
 import { useChat } from "../../stores/chat";
 import { api, AssemblyLog } from "../../lib/tauri";
+import { useSettings } from "../../stores/settings";
 import { BackendSelector } from "./BackendSelector";
 import { ContextPreview } from "./ContextPreview";
 import { MessageBubble } from "./MessageBubble";
 import { PermissionCard } from "./PermissionCard";
+import { errMsg } from "../../lib/errors";
 
 interface AiDockProps {
   // 折叠态由 EditorPane 持有（Panel collapsible + collapsedSize 36px），这里只负责渲染
@@ -21,6 +23,8 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
   const streaming = useChat((s) => s.streaming);
   const streamText = useChat((s) => s.streamText);
   const error = useChat((s) => s.error);
+  const errorCode = useChat((s) => s.errorCode);
+  const openSettings = useSettings((s) => s.open);
   const initForChapter = useChat((s) => s.initForChapter);
   const send = useChat((s) => s.send);
   const stop = useChat((s) => s.stop);
@@ -66,7 +70,7 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
     try {
       setLog(await api.previewContext(sessionId, input.trim()));
     } catch (e) {
-      setPreviewError(String(e));
+      setPreviewError(errMsg(e));
     } finally {
       setPreviewLoading(false);
     }
@@ -142,6 +146,17 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
       {error != null && (
         <div className="mx-2.5 mt-2 flex items-start gap-1.5 rounded-md border border-[color:var(--danger)] px-2.5 py-1.5">
           <span className="min-w-0 flex-1 break-all text-xs leading-relaxed text-[color:var(--danger)]">{error}</span>
+          {errorCode === "invalid" && error.includes("服务商") && (
+            <button
+              onClick={() => {
+                clearError();
+                openSettings("provider");
+              }}
+              className="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium text-[color:var(--accent)] transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+            >
+              去设置服务商
+            </button>
+          )}
           <button
             onClick={clearError}
             title="关闭"

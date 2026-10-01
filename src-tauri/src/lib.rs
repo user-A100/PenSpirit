@@ -79,6 +79,7 @@ pub fn run() {
             commands::list_books,
             commands::create_book,
             commands::delete_book,
+            commands::rename_book,
             commands::list_chapters,
             commands::create_chapter,
             commands::rename_chapter,

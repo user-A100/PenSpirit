@@ -2,6 +2,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionsDockPanel } from "./CollectionsDockPanel";
 import { useWorkspace } from "../../stores/workspace";
+import { confirmDialog } from "../../stores/confirm";
+
+vi.mock("../../stores/confirm", () => ({ confirmDialog: vi.fn() }));
 
 vi.mock("../../lib/tauri", () => ({
   api: {
@@ -102,8 +105,7 @@ describe("CollectionsDockPanel", () => {
   });
 
   it("删除集合需确认", async () => {
-    const confirm = vi.fn(() => true);
-    (window as unknown as { confirm: unknown }).confirm = confirm;
+    vi.mocked(confirmDialog).mockResolvedValue(true);
     (api.collectionDelete as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     render(<CollectionsDockPanel />);
 
@@ -111,7 +113,7 @@ describe("CollectionsDockPanel", () => {
     fireEvent.click(screen.getAllByTitle("删除集合")[0]);
 
     await waitFor(() => expect(api.collectionDelete).toHaveBeenCalledWith(1));
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("精选"));
+    expect(confirmDialog).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("精选") }));
   });
 
   it("还没有集合时给引导文案", async () => {

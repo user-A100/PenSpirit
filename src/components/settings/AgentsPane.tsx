@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Bot, Check, ChevronDown, ChevronRight, Copy, Loader2, Plus, RotateCcw, Star, Trash2 } from "lucide-react";
 import { AgentDescriptor } from "../../lib/tauri";
 import { useAgents } from "../../stores/agents";
+import { errMsg } from "../../lib/errors";
+import { confirmDialog } from "../../stores/confirm";
 
 // 与 Rust registry::builtin_templates 对齐（列表删光后可一键恢复）
 const BUILTIN_AGENTS: AgentDescriptor[] = [
@@ -120,7 +122,7 @@ function AddCustomForm(props: { onAdd: (desc: AgentDescriptor) => Promise<void> 
       setCommand("");
       setArgs("");
     } catch (e) {
-      setErr(String(e));
+      setErr(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -170,7 +172,7 @@ export function AgentsPane() {
   }, [load]);
 
   const handleRemove = async (a: AgentDescriptor) => {
-    if (!window.confirm(`确定删除 agent「${a.name}」？`)) return;
+    if (!(await confirmDialog({ title: `删除 agent「${a.name}」？`, confirmLabel: "删除", danger: true }))) return;
     await remove(a.id);
   };
 
