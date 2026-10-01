@@ -12,6 +12,7 @@ import { toast } from "../../stores/toast";
 import type { PaneId } from "../../stores/workspace";
 import { aiTintKey } from "./aiTint";
 import { CharDiff } from "../chat/DiffReview";
+import { directiveAt } from "../../lib/ai/directives";
 
 // 就地 AI 浮条（阶段 2B）：
 //  · Alt+K 就地改写：选区（无选区 = 光标所在段）→ 输入要求 → 流式出改写稿，浮条内看逐字差异 → 应用 / 重试 / 丢弃
@@ -27,6 +28,8 @@ interface Range {
   selection: string;
   before: string;
   after: string;
+  /** 阶段 2C：光标在 [待写指令] 里——按它写，应用时替换整个方括号 */
+  directive?: string;
 }
 
 function initialRange(editor: Editor, mode: InlineMode): Range | null {
@@ -38,7 +41,22 @@ function initialRange(editor: Editor, mode: InlineMode): Range | null {
     from = $f.start();
     to = $f.end();
   }
-  if (mode === "continue") from = to;
+  let directive: string | undefined;
+  if (mode === "continue") {
+    from = to;
+    // 光标落在 [待写指令] 里：取指令、区间扩到整个方括号（只处理纯文本段，偏移才对得上）
+    const $c = state.selection.$to;
+    let plain = $c.parent.isTextblock;
+    $c.parent.forEach((ch) => {
+      if (!ch.isText) plain = false;
+    });
+    const d = plain ? directiveAt($c.parent.textContent, $c.parentOffset) : null;
+    if (d) {
+      from = $c.start() + d.from;
+      to = $c.start() + d.to;
+      directive = d.inner;
+    }
+  }
   const doc = state.doc;
   return {
     from,
@@ -46,6 +64,7 @@ function initialRange(editor: Editor, mode: InlineMode): Range | null {
     selection: doc.textBetween(from, to, "\n", " "),
     before: doc.textBetween(0, from, "\n", " "),
     after: doc.textBetween(to, doc.content.size, "\n", " "),
+    directive,
   };
 }
 
@@ -124,7 +143,12 @@ function InlinePanel({ editor, chapterId, pane, mode }: { editor: Editor; chapte
         before: range.before,
         after: range.after,
         selection: range.selection,
-        instruction: mode === "edit" ? extra.trim() || "润色，让表达更准确流畅" : extra.trim(),
+        instruction:
+          mode === "edit"
+            ? extra.trim() || "润色，让表达更准确流畅"
+            : range.directive
+              ? `按这条指令写一段正文：${range.directive}${extra.trim() ? `；${extra.trim()}` : ""}`
+              : extra.trim(),
         target_chars: mode === "continue" ? 300 : null,
       },
       (all) => setText(all),
@@ -161,7 +185,11 @@ function InlinePanel({ editor, chapterId, pane, mode }: { editor: Editor; chapte
     if (!r || !bridge || !range || !out) return;
     const cp = await takeCheckpoint(bridge);
     const ok =
-      mode === "edit" ? bridge.replaceRange(r.from, r.to, range.selection, out) : bridge.insertAt ? bridge.insertAt(r.to, out) : bridge.insertAtCursor(out);
+      mode === "edit" || range.directive
+        ? bridge.replaceRange(r.from, r.to, range.selection, out)
+        : bridge.insertAt
+          ? bridge.insertAt(r.to, out)
+          : bridge.insertAtCursor(out);
     if (!ok) {
       toast.error(mode === "edit" ? "原文已改动，找不到要替换的段落" : "插入失败：编辑器不可用");
       return;
@@ -221,11 +249,13 @@ function InlinePanel({ editor, chapterId, pane, mode }: { editor: Editor; chapte
               }
             }}
             aria-label={mode === "edit" ? "怎么改" : "补充要求"}
-            placeholder={mode === "edit" ? "怎么改？如「更紧张」「改成第一人称」（留空 = 润色）" : "补充一句要求再重写（可留空）"}
+            placeholder={mode === "edit" ? "怎么改？如「更紧张」「改成第一人称」（留空 = 润色）" : range.directive ? `按「${range.directive}」重写时补充要求（可留空）` : "补充一句要求再重写（可留空）"}
             className="h-7 min-w-0 flex-1 bg-transparent text-ui text-[color:var(--text-primary)] outline-none placeholder:text-[color:var(--text-faint)]"
           />
         ) : (
-          <span className="flex-1 text-[color:var(--text-secondary)]">正在续写…</span>
+          <span className="min-w-0 flex-1 truncate text-[color:var(--text-secondary)]" data-inline-directive={range.directive ?? undefined}>
+            {range.directive ? `按指令写：${range.directive}` : "正在续写…"}
+          </span>
         )}
         <button aria-label="丢弃" data-tip="丢弃（Esc）" onClick={() => (close(), editor.commands.focus())} className="shrink-0 rounded-[4px] p-1 text-[color:var(--text-faint)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]">
           <X size={13} />

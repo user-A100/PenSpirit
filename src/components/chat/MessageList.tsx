@@ -34,6 +34,7 @@ import { parseDirections } from "../../lib/ai/directions";
 import { estimateTokens } from "../../lib/ai/tokens";
 import { cleanAiText } from "../../lib/ai/cleanText";
 import { fmtFull, fmtMsgTime } from "../../lib/time";
+import { banHits, usePhraseBias } from "../../lib/ai/phraseBias";
 import { EXTRACT_LABEL, runExtraction, type ExtractItem, type ExtractKind } from "../../lib/ai/extract";
 import { errMsg } from "../../lib/errors";
 import { ExtractDialog } from "./ExtractDialog";
@@ -239,16 +240,30 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
 
   const later = useChat.getState().messages.filter((m) => turn.user && m.id > turn.user.id).length;
   const agent = shown ? messageAgent(shown) : null;
+  // 阶段 2C：这一问带了哪些附件（记在回答的 meta 里）；回答里出现的 AI 腔
+  const attached = (() => {
+    const r = turn.replies[0];
+    if (!r?.meta) return [] as string[];
+    try {
+      const a = JSON.parse(r.meta).attachments;
+      return Array.isArray(a) ? (a as string[]) : [];
+    } catch {
+      return [];
+    }
+  })();
+  const phraseList = usePhraseBias((s) => s.list);
+  const cliches = shown && !streamingHere ? banHits(shown.content, phraseList) : [];
 
   return (
     <div className="flex flex-col gap-2">
       {extracting && <ExtractDialog kind={extracting.kind} items={extracting.items} onClose={() => setExtracting(null)} />}
       {turn.user && (
         <div className="group/user flex flex-col items-end gap-1">
-          {(command || quote) && (
+          {(command || quote || attached.length > 0) && (
             <div className="flex max-w-[85%] items-center gap-1 text-2xs text-[color:var(--text-faint)]">
               {command && <span className="rounded-[4px] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-1.5 py-px text-[color:var(--accent)]">/{command.name}</span>}
               {quote && <span className="truncate">选区「{quote.text.slice(0, 18)}{quote.text.length > 18 ? "…" : ""}」</span>}
+              {attached.length > 0 && <span className="truncate" data-attached="">📎 {attached.join("、")}</span>}
             </div>
           )}
           {editing ? (
@@ -450,6 +465,19 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                   </div>
                 )}
                 {agent && <AgentChanges changes={agent.changes} undone={agent.undone} canUndo={agent.canUndo} onToggle={() => useChat.getState().undoAgentTurn(shown.id)} />}
+                {cliches.length > 0 && turn.user && (
+                  <div data-cliches={cliches.length} className="flex flex-wrap items-center gap-1.5 rounded-[var(--r-control)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-2 py-1 text-2xs text-[color:var(--warning)]">
+                    <span>含 AI 腔 {cliches.length} 处：</span>
+                    <span className="min-w-0 flex-1 truncate">{cliches.join("、")}</span>
+                    <button
+                      disabled={streaming}
+                      onClick={() => void regenerate(turn.user!.id, { retryHint: `不要用这些表达：${cliches.join("、")}` })}
+                      className="shrink-0 rounded-[4px] px-1.5 py-0.5 text-[color:var(--accent)] hover:bg-[var(--fill-hover)] disabled:opacity-40"
+                    >
+                      去掉重写
+                    </button>
+                  </div>
+                )}
                 <div
                   className={`flex flex-wrap items-center gap-0.5 transition-opacity duration-[var(--dur-md)] ${
                     isLast ? "opacity-100" : "opacity-0 group-hover/ai:opacity-100 focus-within:opacity-100"

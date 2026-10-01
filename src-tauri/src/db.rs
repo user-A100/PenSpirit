@@ -36,5 +36,6 @@ pub fn migrations() -> Migrations<'static> {
         M::up(include_str!("../migrations/0021_ai_context.sql")),
         M::up(include_str!("../migrations/0022_sessions_v3.sql")),
         M::up(include_str!("../migrations/0023_chat_rating.sql")),
+        M::up(include_str!("../migrations/0024_phrase_bias.sql")),
     ])
 }

@@ -11,6 +11,7 @@ pub mod maps;
 pub mod materials;
 pub mod meta;
 pub mod outlines;
+pub mod phrase_bias;
 pub mod plot_blocks;
 pub mod relations;
 pub mod rules;

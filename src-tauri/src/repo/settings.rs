@@ -73,6 +73,8 @@ pub const MEMORY_BOOK: &str = "memory:book:";
 pub const MEMORY_VOLUME: &str = "memory:volume:";
 pub const AUTHOR_NOTE: &str = "authornote:chapter:";
 pub const AI_TINT: &str = "ai_tint:";
+/// 阶段 2C：上下文包（每书）
+pub const CTX_PRESETS: &str = "ctx_presets:";
 
 /// 章（或卷）被彻底删除：清掉挂在它 id 上的 AI 键，不留孤儿
 pub fn purge_chapter_keys(conn: &Connection, chapter_id: i64) -> AppResult<()> {
@@ -85,6 +87,7 @@ pub fn purge_chapter_keys(conn: &Connection, chapter_id: i64) -> AppResult<()> {
 /// 书被彻底删除：本书记忆 + 书内全部章 / 卷的 AI 键（须在删章行之前调用）
 pub fn purge_book_keys(conn: &Connection, book_id: i64) -> AppResult<()> {
     remove(conn, &format!("{MEMORY_BOOK}{book_id}"))?;
+    remove(conn, &format!("{CTX_PRESETS}{book_id}"))?;
     let ids: Vec<i64> = conn
         .prepare("SELECT id FROM chapters WHERE book_id = ?1")?
         .query_map([book_id], |r| r.get(0))?

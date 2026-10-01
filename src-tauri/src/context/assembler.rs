@@ -107,7 +107,16 @@ pub struct AssembleInput<'a> {
     pub budget_tokens: Option<i64>,
     /// 阶段 2B：重试选项追加在指令后（更长 / 更短 / 换写法…）
     pub retry_hint: Option<&'a str>,
+    /// 阶段 2C：词语偏置（已渲染：避免 / 可多用）
+    pub phrase_bias: Option<&'a str>,
+    /// 阶段 2C：正文里的 {作者批注}（正文上下文已剔除）
+    pub notes: Vec<String>,
+    /// 阶段 2C：本轮附件（名字, 文本）
+    pub attachments: Vec<(String, String)>,
 }
+
+/// 单个附件注入上限（字符数）：参考稿 / 仿写样本只取开头这么多
+pub const ATTACHMENT_MAX_CHARS: usize = 12000;
 
 /// 单个注入原子槽位：命令层渲染完成的整段文本 + 每书预算（0 = 不限）。
 #[derive(Debug, Clone)]
@@ -221,7 +230,7 @@ pub fn trim_history(history: &[(String, String)], mode: Mode) -> Vec<(String, St
 
 /// 超预算时的裁剪顺序（先裁前面的）：清单类注入 → 历史 → 提醒 → 前情 → 后文 → 主动引用；
 /// System / 文风 / 常驻记忆 / 写作规则 / 选中段落 / 作者注 / 写作指令永不裁；当前章正文最后缩窗。
-pub const TRIM_ORDER: [&str; 8] = ["灵感卡", "情节块", "对话历史", "伏笔提醒", "角色卡", "上一章结尾", "光标后文", "引用资料"];
+pub const TRIM_ORDER: [&str; 9] = ["灵感卡", "情节块", "对话历史", "伏笔提醒", "角色卡", "上一章结尾", "光标后文", "附件", "引用资料"];
 /// 缩窗后当前章正文至少保留的字数
 const MIN_CHAPTER_CHARS: usize = 500;
 
@@ -300,6 +309,15 @@ pub fn assemble(input: &AssembleInput) -> Assembled {
     if let Some(rules) = input.rules.as_ref().filter(|r| !r.text.is_empty()) {
         parts.push(Part::new(&rules.name, &rules.source, &rules.reason, rules.text.clone(), Place::System, &rules.name, off(&rules.name)));
     }
+    // 阶段 2C：词语偏置（AI 腔禁用 / 偏好用词）与正文里的 {作者批注}——都很短，不裁
+    if let Some(bias) = input.phrase_bias.filter(|s| !s.trim().is_empty()) {
+        parts.push(Part::new("用词要求", "词语偏置", "词语偏置：本书与通用的禁用 / 偏好表达", bias.to_string(), Place::System, "用词要求", off("用词要求")));
+    }
+    if !input.notes.is_empty() {
+        let text = input.notes.iter().map(|n| format!("- {n}")).collect::<Vec<_>>().join("\n");
+        let reason = format!("正文里用 {{…}} 写给 AI 的批注 {} 条（已从正文上下文剔除）", input.notes.len());
+        parts.push(Part::new("作者批注", "正文 {…}", &reason, text, Place::System, "作者批注（只遵守，不要写进正文）", off("作者批注")));
+    }
     // 注入原子（M7 批次6）：预算截断保头（清单丢尾），逐槽独立记日志
     for inj in &input.injections {
         if inj.text.is_empty() {
@@ -349,6 +367,17 @@ pub fn assemble(input: &AssembleInput) -> Assembled {
     if let Some(sel) = input.selection.filter(|s| !s.trim().is_empty()) {
         let kept = head_window(sel, SELECTION_MAX_CHARS);
         parts.push(Part::new("选中段落", "编辑器选区", "编辑器里选中的段落（改写 / 润色的对象）", kept, Place::User, "【选中段落】", off("选中段落")));
+    }
+    if !input.attachments.is_empty() {
+        let text = input
+            .attachments
+            .iter()
+            .map(|(name, t)| format!("《{name}》\n{}", head_window(t, ATTACHMENT_MAX_CHARS)))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        let names = input.attachments.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>().join("、");
+        let reason = format!("本轮附件：{names}（每个最多 {ATTACHMENT_MAX_CHARS} 字）");
+        parts.push(Part::new("附件", &format!("{} 个", input.attachments.len()), &reason, text, Place::User, "【附件（参考资料，借鉴其内容或风格，不要照抄）】", off("附件")));
     }
     if let Some(note) = input.author_note.filter(|s| !s.trim().is_empty()) {
         parts.push(Part::new(

@@ -22,6 +22,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { AiTint, aiTintKey } from "./aiTint";
+import { Directives } from "./directives";
 import { InlineAi } from "./InlineAi";
 import { useInlineAi } from "../../stores/inlineAi";
 import { loadTint, pruneTint } from "../../lib/ai/aiTint";
@@ -108,7 +109,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   const [placeholderOpen, setPlaceholderOpen] = useState(false);
 
   const editor = useEditor({
-    extensions: [StarterKit, Markdown, WikiLinks, AiTint],
+    extensions: [StarterKit, Markdown, WikiLinks, AiTint, Directives],
     content: "",
     immediatelyRender: false,
     // wiki 链接点击跳转（M7 批次3）：[[章题]] 是纯文本装饰，同书章题精确匹配选中

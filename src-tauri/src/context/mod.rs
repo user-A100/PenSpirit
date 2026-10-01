@@ -1,4 +1,5 @@
 pub mod assembler;
+pub mod directives;
 pub mod inject;
 
 pub use assembler::{

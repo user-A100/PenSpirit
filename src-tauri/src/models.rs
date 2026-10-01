@@ -250,6 +250,32 @@ pub struct ChatMessage {
     pub rating: i64,
 }
 
+/// 阶段 2C：词语偏置（ban = 避免使用的 AI 腔，prefer = 可多用）；book_id 为空 = 所有书通用
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PhraseBias {
+    pub id: i64,
+    pub book_id: Option<i64>,
+    pub phrase: String,
+    pub kind: String,
+    pub created_at: String,
+}
+
+/// 阶段 2C：本轮附件（txt / md / docx 读出的文本）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Attachment {
+    pub name: String,
+    pub text: String,
+}
+
+/// 读附件的结果（过长已截断）
+#[derive(Debug, Clone, Serialize)]
+pub struct AttachmentRead {
+    pub name: String,
+    pub text: String,
+    pub chars: i64,
+    pub truncated: bool,
+}
+
 /// 阶段 2C：按命令统计的评分（本地提示词调优）
 #[derive(Debug, Clone, Serialize)]
 pub struct RatingStat {
@@ -296,6 +322,8 @@ pub struct AiTurnOptions {
     pub candidates: Option<i64>,
     /// 阶段 2B：本轮用哪个服务商（自定义命令绑定的模型）；缺省 = 使用中
     pub provider_id: Option<i64>,
+    /// 阶段 2C：本轮附件（参考稿 / 仿写样本）
+    pub attachments: Vec<Attachment>,
 }
 
 /// 写作规则（阶段 2B）：mode = always（全书常驻）/ scoped（scope_ids 里的章或卷）/ manual（本轮手选）

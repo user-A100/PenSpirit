@@ -5,6 +5,7 @@ import {
   type AcpPermissionEvent,
   type AcpStreamEvent,
   type AcpToolEvent,
+  type Attachment,
   type AcpTurnEvent,
   type AgentToolEntry,
   type FileChange,
@@ -17,6 +18,7 @@ import { errCode, errMsg } from "../lib/errors";
 import { toast } from "./toast";
 import { syncAfterAgentChanges } from "../lib/ai/agentFiles";
 import { notifyIfAway } from "../lib/ai/notify";
+import { useCtxPresets } from "../lib/ai/ctxPresets";
 import { getActiveEditor } from "../lib/editorBridge";
 import { useAgents } from "./agents";
 
@@ -168,6 +170,10 @@ interface ChatState {
   undoAgentTurn: (messageId: number) => Promise<void>;
   /** 阶段 2C：回答评分 */
   rateMessage: (id: number, rating: number) => Promise<void>;
+  /** 阶段 2C：本轮附件（txt / md / docx 读出的文本；发出后清空） */
+  attachments: Attachment[];
+  addAttachment: (a: Attachment) => void;
+  removeAttachment: (name: string) => void;
   /** 阶段 2C：生成中输入的消息先排队，这一轮结束后自动依次发出 */
   queue: QueuedSend[];
   enqueue: (text: string, extra?: SendExtra) => void;
@@ -448,19 +454,23 @@ export function buildTurnOptions(extra: SendExtra & { quote?: QuoteRef | null })
   const ctx = ed && ed.chapterId === st.chapterId ? ed.getContext() : null;
   const mode = extra.mode ?? st.mode;
   const quote = extra.quote !== undefined ? extra.quote : st.quote;
-  const disabled = [...new Set([...st.disabledSlots, ...(extra.disable ?? [])])];
+  // 阶段 2C：常驻的上下文包与本轮临时设置合并
+  const preset = useCtxPresets.getState().active;
+  const disabled = [...new Set([...st.disabledSlots, ...(extra.disable ?? []), ...(preset?.disabledSlots ?? [])])];
+  const mentions = [...st.mentions, ...(preset?.mentions ?? []).filter((m) => !st.mentions.some((x) => x.kind === m.kind && x.id === m.id))];
   return {
     mode,
     cursor_before: ctx ? ctx.before : null,
     cursor_after: ctx ? ctx.after : null,
     selection: quote?.text ?? null,
     disabled_slots: disabled,
-    mentions: st.mentions.map(({ kind, id }) => ({ kind, id })),
+    mentions: mentions.map(({ kind, id }) => ({ kind, id })),
     target_chars: extra.targetChars !== undefined ? extra.targetChars : st.targetChars,
     temperature: extra.temperature ?? st.temperature,
     provider_id: extra.providerId ?? null,
     command: extra.command ?? null,
-    rules: st.manualRules,
+    rules: [...new Set([...st.manualRules, ...(preset?.rules ?? [])])],
+    attachments: st.attachments.map(({ name, text }) => ({ name, text })),
     retry_hint: extra.retryHint ?? null,
     candidates: extra.candidates && extra.candidates > 1 ? extra.candidates : null,
   };
@@ -504,6 +514,9 @@ export const useChat = create<ChatState>((set, get) => ({
   streamTools: [],
   queue: [],
   streamStartedAt: null,
+  attachments: [],
+  addAttachment: (a) => set((st) => ({ attachments: [...st.attachments.filter((x) => x.name !== a.name), a] })),
+  removeAttachment: (name) => set((st) => ({ attachments: st.attachments.filter((x) => x.name !== name) })),
   rateMessage: async (id, rating) => {
     try {
       await api.messageRate(id, rating);
@@ -600,7 +613,7 @@ export const useChat = create<ChatState>((set, get) => ({
     set({
       chapterId, sessions: [], sessionId: null, messages: [], streaming: false, streamText: "", streamReplyTo: null,
       error: null, errorCode: null, errorKind: null, lastFailure: null, permission: null, permissionQueue: [], streamTools: [], queue: [],
-      disabledSlots: [], manualRules: [], mentions: [], quote: null,
+      disabledSlots: [], manualRules: [], mentions: [], quote: null, attachments: [],
     });
     try {
       let sessions = await api.listSessions(chapterId);
@@ -704,11 +717,12 @@ export const useChat = create<ChatState>((set, get) => ({
         streamReplyTo: userMsg.id,
         quoteByMessage: quote ? { ...st.quoteByMessage, [userMsg.id]: quote } : st.quoteByMessage,
         commandByMessage: extra.command ? { ...st.commandByMessage, [userMsg.id]: extra.command } : st.commandByMessage,
-        // 本轮上下文用过即清（@ 引用 / 引用选区 / 关闭的槽位都是「这一轮」的）
+        // 本轮上下文用过即清（@ 引用 / 引用选区 / 关闭的槽位 / 附件都是「这一轮」的；常驻的上下文包不清）
         mentions: [],
         quote: null,
         disabledSlots: [],
         manualRules: [],
+        attachments: [],
         pendingCandidates: n > 1 ? { userMessageId: userMsg.id, remaining: n - 1, total: n } : null,
       }));
       const chapterId = get().chapterId;

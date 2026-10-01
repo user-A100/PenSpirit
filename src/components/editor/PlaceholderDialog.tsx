@@ -4,7 +4,8 @@ import { Badge } from "../ui/Badge";
 // M4 T6 占位符扫描（webnovel-writer placeholder_scanner 移植）：
 // 写前阻断——四类占位符命中即列出（章内 markdown 行号），替换完再交稿。
 const PATTERNS: { re: RegExp; label: string }[] = [
-  { re: /\[待[^\]\n]*\]/g, label: "[待…]" },
+  // 阶段 2C：正文里的 [待写指令]（[[章题]] 是 wiki 链接，不算）
+  { re: /(?<![[\w])\[(?![[]|[\d\s]+\])[^[\]\n]{1,300}\](?!\])/g, label: "[…] 待写指令" },
   { re: /（暂名[^）\n]*）|\(暂名[^)\n]*\)/g, label: "（暂名）" },
   { re: /【待[^】\n]*】/g, label: "【待…】" },
   { re: /\{[^}\n]{1,30}\}/g, label: "{…}" }, // 限长防误吞正文

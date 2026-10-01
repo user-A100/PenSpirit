@@ -335,7 +335,7 @@ pub fn split_txt_with(text: &str, custom: &[Regex]) -> Vec<ParsedChapter> {
 }
 
 /// docx 读段落 → 拼成纯文本（分章由调用方决定用哪套规则）
-fn docx_to_text(bytes: &[u8]) -> AppResult<String> {
+pub(crate) fn docx_to_text(bytes: &[u8]) -> AppResult<String> {
     let docx = docx_rs::read_docx(bytes).map_err(|e| AppError::Invalid(format!("docx 解析失败: {e}")))?;
     let mut text = String::new();
     for child in &docx.document.children {

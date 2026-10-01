@@ -75,7 +75,13 @@ export interface AiTurnOptions {
   candidates?: number | null;
   /** 阶段 2B：本轮用哪个服务商（自定义命令绑定的模型）；缺省 = 使用中 */
   provider_id?: number | null;
+  /** 阶段 2C：本轮附件 */
+  attachments?: Attachment[];
 }
+/** 阶段 2C：附件 / 词语偏置 */
+export interface Attachment { name: string; text: string }
+export interface AttachmentRead { name: string; text: string; chars: number; truncated: boolean }
+export interface PhraseBias { id: number; book_id: number | null; phrase: string; kind: "ban" | "prefer"; created_at: string }
 /** 阶段 2B：写作规则 */
 export type RuleMode = "always" | "scoped" | "manual";
 export interface WritingRule { id: number; book_id: number; title: string; content: string; mode: RuleMode; scope_ids: number[]; sort_key: number; created_at: string }
@@ -399,6 +405,12 @@ export const api = {
   cancelGenerationAcp: (sessionId: number) => invoke<void>("cancel_generation_acp", { sessionId }),
   agentsRespondPermission: (sessionId: number, requestId: string, optionId: string) =>
     invoke<void>("agents_respond_permission", { sessionId, requestId, optionId }),
+  /** 阶段 2C：附件（txt / md / docx）与词语偏置（AI 腔禁用 / 偏好用词；bookId 为空 = 所有书通用） */
+  attachmentRead: (path: string) => invoke<AttachmentRead>("attachment_read", { path }),
+  phraseBiasList: (bookId: number | null) => invoke<PhraseBias[]>("phrase_bias_list", { bookId }),
+  phraseBiasAdd: (bookId: number | null, phrase: string, kind: "ban" | "prefer") => invoke<boolean>("phrase_bias_add", { bookId, phrase, kind }),
+  phraseBiasDelete: (id: number) => invoke<void>("phrase_bias_delete", { id }),
+  phraseBiasImportDefaults: (bookId: number | null) => invoke<number>("phrase_bias_import_defaults", { bookId }),
   /** 阶段 2C：回答评分 / 按命令统计 / 导出对话 */
   messageRate: (id: number, rating: number) => invoke<ChatMessage>("message_rate", { id, rating }),
   ratingStats: () => invoke<RatingStat[]>("rating_stats"),

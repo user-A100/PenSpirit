@@ -67,7 +67,9 @@ export function startMockLlm(port = 0) {
       const sel = last.match(/【选中段落】\n([\s\S]*?)(?:\n\n|$)/)?.[1] ?? "";
       const pieces = sel.includes("逐段核验")
         ? [sel.replace(/原稿/g, "改稿")]
-        : last.includes("明显不同的走向")
+        : last.includes("【AI腔】")
+          ? ["他嘴角勾起一抹弧度，", "转身走进雨里。"]
+          : last.includes("明显不同的走向")
           ? ["1. 雪夜追兵逼近渡口\n", "2. 林晚负伤躲进旧城\n", "3. 旧城灯会突然失火"]
           : last.includes("压缩成一份要点摘要")
             ? ["摘要：沈砚守渡口；", "林晚递来半张地图。"]

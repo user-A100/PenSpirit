@@ -217,6 +217,12 @@ async function restoreFrom(app, p) {
     if (value == null) await app.invoke("setting_remove", { key }).catch(() => {});
     else await app.invoke("setting_set", { key, value }).catch(() => {});
   }
+  // 词语偏置的「所有书通用」条目（不挂在测试书上，书删了也不会跟着清）：删掉核验期间新增的
+  if (p.phraseIds) {
+    for (const r of await app.invoke("phrase_bias_list", { bookId: null }).catch(() => [])) {
+      if (r.book_id == null && !p.phraseIds.includes(r.id)) await app.invoke("phrase_bias_delete", { id: r.id }).catch(() => {});
+    }
+  }
   // agent 登记（agents.json，阶段 2B 起）：删掉核验加的，还原默认 agent
   if (p.agents) {
     for (const a of await app.invoke("agents_list").catch(() => [])) {
@@ -272,6 +278,8 @@ export async function withGuard(name, body) {
   };
   const agentsBefore = await agentState();
   const settingState = async () => Object.fromEntries(await Promise.all(GLOBAL_SETTING_KEYS.map(async (k) => [k, await app.invoke("setting_get", { key: k })])));
+  const phraseState = async () => (await app.invoke("phrase_bias_list", { bookId: null }).catch(() => [])).filter((r) => r.book_id == null).map((r) => r.id);
+  const phrasesBefore = await phraseState();
   const settingsBefore = await settingState();
   // 快照先落盘：进程崩溃 / 被杀也能在下次补做还原
   const pending = {
@@ -282,6 +290,7 @@ export async function withGuard(name, body) {
     materialsMaxId,
     agents: { ids: agentsBefore.ids, defaultId: agentsBefore.defaultId },
     settings: settingsBefore,
+    phraseIds: phrasesBefore,
     books: [],
   };
   const savePending = () => {
@@ -341,8 +350,8 @@ export async function withGuard(name, body) {
     if (strayDialogs > 0) console.log(`✘ 核验留下了 ${strayDialogs} 个原生对话框（已关闭）`);
     const agentsOk = (await agentState()).json === agentsBefore.json;
     console.log(agentsOk ? "✔ 状态还原：agent 登记与默认 agent 与运行前一致" : "✘ agent 登记未还原");
-    const settingsOk = JSON.stringify(await settingState()) === JSON.stringify(settingsBefore);
-    console.log(settingsOk ? `✔ 状态还原：全局设置（${GLOBAL_SETTING_KEYS.join("、")}）与运行前一致` : "✘ 全局设置未还原");
+    const settingsOk = JSON.stringify(await settingState()) === JSON.stringify(settingsBefore) && JSON.stringify(await phraseState()) === JSON.stringify(phrasesBefore);
+    console.log(settingsOk ? `✔ 状态还原：全局设置（${GLOBAL_SETTING_KEYS.join("、")}、通用词语偏置）与运行前一致` : "✘ 全局设置未还原");
     app.close();
     process.off("uncaughtException", onUncaught);
     if (diff.length || leaked.length || !providersOk || matsLeft.length || !agentsOk || !settingsOk || strayDialogs > 0) ok = false;

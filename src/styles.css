@@ -549,6 +549,19 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
   50% { opacity: 0; }
 }
 
+/* ---------- 正文里的 AI 指令（阶段 2C）：[待写指令] / {作者批注}——纯装饰 ---------- */
+.ai-directive-todo {
+  color: var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 3px;
+  text-decoration: underline dashed color-mix(in srgb, var(--accent) 50%, transparent);
+  text-underline-offset: 4px;
+}
+.ai-directive-note {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
 /* ---------- 会话内查找（阶段 2C）：CSS 自定义高亮，不改消息 DOM ---------- */
 ::highlight(chat-find) {
   background-color: color-mix(in srgb, var(--warning) 30%, transparent);

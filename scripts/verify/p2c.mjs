@@ -1,13 +1,15 @@
 // 阶段 2C 实机核验：AI P2（本地假服务，不需要真 Key）。
 // 组 C1 对话：时间戳 / 会话内查找 / 👍👎 评分（按命令统计）/ 导出 Markdown / 另存为新章节与素材片段 / 生成中排队与插话
+// 组 C2 输入与上下文：附件 / 上下文包（常驻）/ 词语偏置与「去掉重写」/ 正文 [待写指令] 与 {批注}
 // 用法（应用已带调试端口启动）：node scripts/verify/p2c.mjs
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { checker, sleep, waitFor, withGuard } from "./lib.mjs";
 import { startMockLlm } from "./mock-llm.mjs";
 
 const SHOTS = ".tmp-verify/p2c";
 const EXPORT = fileURLToPath(new URL("../../.tmp-verify/p2c/对话导出.md", import.meta.url));
+const ATTACH = fileURLToPath(new URL("../../.tmp-verify/p2c/仿写样本.txt", import.meta.url));
 const mock = await startMockLlm();
 
 await withGuard("p2c", async ({ app, makeBook }) => {
@@ -22,7 +24,9 @@ await withGuard("p2c", async ({ app, makeBook }) => {
     const { book, ids } = await makeBook("阶段二C", [
       ["第一章 渡口", "渡口的灯笼次第亮起。沈砚站在船头。"],
       ["第二章 旧城", "旧城灯会。林晚递来半张地图。\n\n她没有回头。"],
+      ["第三章 雨夜", "雨很大。{林晚此时还不知道真相}\n\n[写一场雨中打斗]\n\n他走了。"],
     ]);
+    await app.invoke("character_upsert", { input: { id: null, book_id: book.id, name: "沈砚", role: "主角", aliases: "", description: "守渡口的冷面剑客" } });
     await ev(`localStorage.setItem('bixian.lastBookId', '${book.id}'); localStorage.setItem('bixian.chat.backend', 'provider'); localStorage.setItem('bixian.nav.view', 'write'); true`);
     await app.reload();
     await ev(`(() => { window.__nativeDialogs = []; for (const k of ['alert','confirm','prompt']) { window[k] = (...a) => { window.__nativeDialogs.push(k + ':' + a[0]); return k === 'confirm' ? false : undefined; }; } return true })()`);
@@ -142,6 +146,81 @@ await withGuard("p2c", async ({ app, makeBook }) => {
     const replies = await ev(`[...document.querySelectorAll('[data-reply]')].map(r => r.innerText)`);
     check("插话：停下当前生成（已生成部分保留）并立即发出", interjected && replies.some((t) => t.includes("夜雨初歇") && !t.includes("生成中断")), `新请求 ${mock.requests.length - reqsBefore}`);
 
+    // ================= C2 输入与上下文 =================
+    // 附件：开发构建的核验钩子预置「打开文件」的路径
+    mkdirSync(fileURLToPath(new URL("../../.tmp-verify/p2c/", import.meta.url)), { recursive: true });
+    writeFileSync(ATTACH, "仿写样本：雪落无声，渡口只剩一盏灯。");
+    await ev(`window.__e2eOpenPath = ${JSON.stringify(ATTACH)}; true`);
+    await app.clickEl(`document.querySelector('button[aria-label="附件"]')`);
+    await waitFor(ev, `!!document.querySelector('[data-attachment="仿写样本.txt"]')`, 4000);
+    check("附件：读出文本、输入区出现附件胶囊", true);
+    await typeInComposer("照附件的味道写一段");
+    await app.press("Enter");
+    await waitIdle();
+    const ra = mock.lastRequest().messages.at(-1).content;
+    check("附件随本轮发送（用户消息里的【附件】块）", ra.includes("【附件") && ra.includes("《仿写样本.txt》") && ra.includes("雪落无声"), ra.slice(0, 40));
+    check("发出后附件胶囊清空、问题旁标出附件名", (await ev(`!document.querySelector('[data-attachment]')`)) && (await ev(`[...document.querySelectorAll('[data-attached]')].some(e => e.textContent.includes('仿写样本.txt'))`)));
+    // 上下文包：@ 引用人物 → 存为上下文包 → 之后每轮都带上
+    await typeInComposer("@沈");
+    await waitFor(ev, `!!document.querySelector('[role="listbox"][aria-label="引用"] [role="option"]')`, 4000);
+    await app.press("Enter");
+    await sleep(200);
+    await app.clickEl(`document.querySelector('button[aria-label="上下文包"]')`);
+    await menuItem("把当前设置存为上下文包");
+    await confirmPrompt("渡口戏");
+    await waitFor(ev, `!!document.querySelector('[data-ctx-preset="渡口戏"]')`, 3000);
+    await typeInComposer("第一轮");
+    await app.press("Enter");
+    await waitIdle();
+    await typeInComposer("第二轮（没再 @）");
+    await app.press("Enter");
+    await waitIdle();
+    const r2sys = mock.lastRequest().messages[0].content;
+    check("上下文包常驻：没再 @ 的下一轮也带着包里的引用", r2sys.includes("【引用资料】") && r2sys.includes("守渡口的冷面剑客") && (await ev(`!!document.querySelector('[data-ctx-preset="渡口戏"]')`)));
+    const stored = JSON.parse((await app.invoke("setting_get", { key: `ctx_presets:${book.id}` })) ?? "[]");
+    check("上下文包按书存进设置", stored.length === 1 && stored[0].name === "渡口戏" && stored[0].mentions.some((m) => m.label === "沈砚"));
+    await app.clickEl(`document.querySelector('button[aria-label="取消上下文包"]')`);
+    await sleep(200);
+    // 词语偏置：本书禁用一条 + 一条「所有书通用」（withGuard 清掉通用的）
+    await app.clickEl(`document.querySelector('button[aria-label="记忆与规则"]')`);
+    await waitFor(ev, `!!document.querySelector('[data-testid="phrase-bias"]')`, 4000);
+    await app.clickEl(`document.querySelector('input[aria-label="添加词语"]')`);
+    await app.typeText("嘴角勾起一抹弧度");
+    await app.press("Enter");
+    await waitFor(ev, `!!document.querySelector('[data-phrase="嘴角勾起一抹弧度"]')`, 3000);
+    await app.clickEl(`document.querySelector('input[aria-label="添加词语"]')`);
+    await app.typeText("核验通用词");
+    await app.clickEl(`[...document.querySelectorAll('[data-testid="phrase-bias"] label')].find(l => l.textContent.includes('所有书通用')).querySelector('input')`);
+    await app.clickEl(`[...document.querySelectorAll('[data-testid="phrase-bias"] button')].find(b => b.textContent === '添加')`);
+    await waitFor(ev, `!!document.querySelector('[data-phrase="核验通用词"]')`, 3000);
+    await app.screenshot(`${SHOTS}/phrase-bias.png`);
+    await app.clickEl(`document.querySelector('button[aria-label="记忆与规则"]')`);
+    await waitFor(ev, `!!document.querySelector('textarea[aria-label="AI 指令"]')`);
+    await typeInComposer("【AI腔】写一句");
+    await app.press("Enter");
+    await waitIdle();
+    const rb = mock.lastRequest().messages[0].content;
+    check("词语偏置进 system【用词要求】", rb.includes("【用词要求】") && rb.includes("嘴角勾起一抹弧度") && rb.includes("核验通用词"));
+    await waitFor(ev, `!!${lastReply}.querySelector('[data-cliches]')`, 3000);
+    check("回答里出现禁用表达 → 提示「含 AI 腔 1 处」", (await ev(`${lastReply}.querySelector('[data-cliches]').getAttribute('data-cliches')`)) === "1");
+    await app.clickEl(`[...${lastReply}.querySelectorAll('button')].find(b => b.textContent === '去掉重写')`);
+    await waitIdle();
+    check("「去掉重写」：带上要求重新生成", mock.lastRequest().messages.at(-1).content.includes("不要用这些表达：嘴角勾起一抹弧度"));
+    // 正文里的 [待写指令] / {批注}
+    await app.clickEl(`document.querySelector('[data-chapter-row="${ids[2]}"]')`);
+    await waitFor(ev, `document.querySelector('.ProseMirror')?.textContent.includes('他走了')`);
+    check("编辑器里标出 [待写指令] 与 {批注}", (await ev(`!!document.querySelector('.ProseMirror [data-directive="todo"]') && !!document.querySelector('.ProseMirror [data-directive="note"]')`)));
+    await ev(`(() => { const el = document.querySelector('.ProseMirror [data-directive="todo"]'); const t = el.firstChild; const r = document.createRange(); r.setStart(t, 3); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); document.querySelector('.ProseMirror').focus(); return true })()`);
+    await sleep(200);
+    await app.press("Enter", { alt: true });
+    await waitFor(ev, `document.querySelector('[data-inline-ai="continue"]')?.getAttribute('data-status') === 'done'`, 8000);
+    const rd = mock.lastRequest();
+    check("Alt+Enter 在 [指令] 里：按指令写；{批注} 进 system、正文上下文里剔除", rd.messages.at(-1).content.includes("按这条指令写一段正文：写一场雨中打斗") && rd.messages[0].content.includes("- 林晚此时还不知道真相") && !rd.messages.at(-1).content.includes("{林晚"));
+    await app.screenshot(`${SHOTS}/directive.png`);
+    await app.press("Enter");
+    await waitFor(ev, `!document.querySelector('.ProseMirror').textContent.includes('[写一场雨中打斗]')`, 4000);
+    check("应用：AI 写的正文替换掉整个方括号", (await ev(`document.querySelector('.ProseMirror').textContent`)).includes("夜雨初歇"));
+
     check("全程没有原生对话框", (await ev(`(window.__nativeDialogs ?? []).length`)) === 0);
     await app.screenshot(`${SHOTS}/final.png`);
     return summary();
@@ -150,5 +229,6 @@ await withGuard("p2c", async ({ app, makeBook }) => {
     if (prevActive != null) await app.invoke("set_active_provider", { id: prevActive }).catch(() => {});
     await mock.close();
     rmSync(EXPORT, { force: true });
+    rmSync(ATTACH, { force: true });
   }
 });

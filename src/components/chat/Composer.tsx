@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AtSign, BookOpen, Clock, Flag, Blocks, ListTree, Quote, SendHorizontal, Slash, Square, Users, X } from "lucide-react";
+import { AtSign, BookOpen, Clock, Flag, Blocks, ListTree, Package, Paperclip, Quote, SendHorizontal, Slash, Square, Users, X } from "lucide-react";
+import { pickOpenPath } from "../../lib/dialogs";
+import { useCtxPresets, type CtxPreset } from "../../lib/ai/ctxPresets";
+import { promptDialog } from "../../stores/confirm";
+import { errMsg } from "../../lib/errors";
 import { buildTurnOptions, useChat, type MentionItem } from "../../stores/chat";
 import { useWorkspace } from "../../stores/workspace";
 import { api, type AssemblyLog, type MentionRef, type WritingRule } from "../../lib/tauri";
@@ -23,7 +27,7 @@ const TEMPS: Array<{ label: string; value: number | null }> = [
   { label: "放飞：1.1（脑暴/描写）", value: 1.1 },
 ];
 /** 胶囊里展示的槽位（System/写作指令不展示） */
-const PILL_SLOTS = ["文风", "常驻记忆", "写作规则", "角色卡", "伏笔提醒", "情节块", "灵感卡", "引用资料", "上一章结尾", "对话历史", "光标前文", "当前章正文", "光标后文", "选中段落", "作者注"];
+const PILL_SLOTS = ["文风", "常驻记忆", "写作规则", "用词要求", "作者批注", "角色卡", "伏笔提醒", "情节块", "灵感卡", "引用资料", "上一章结尾", "对话历史", "光标前文", "当前章正文", "光标后文", "选中段落", "附件", "作者注"];
 const KIND_LABEL: Record<MentionRef["kind"], string> = { chapter: "章节", character: "人物", foreshadow: "伏笔", plot: "情节块", outline: "大纲" };
 const KIND_ICON = { chapter: BookOpen, character: Users, foreshadow: Flag, plot: Blocks, outline: ListTree } as const;
 
@@ -62,6 +66,66 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
   const [manualRules, setManualRules] = useState<WritingRule[]>([]);
   const mentions = useChat((s) => s.mentions);
   const quote = useChat((s) => s.quote);
+  const attachments = useChat((s) => s.attachments);
+  const preset = useCtxPresets((s) => s.active);
+  // 阶段 2C：附件（txt / md / docx）
+  const attach = async () => {
+    const path = await pickOpenPath({ filters: [{ name: "文本 / Word", extensions: ["txt", "md", "docx"] }] });
+    if (!path) return;
+    try {
+      const r = await api.attachmentRead(path);
+      useChat.getState().addAttachment({ name: r.name, text: r.text });
+      if (r.truncated) toast.info(`「${r.name}」有 ${r.chars.toLocaleString()} 字，只取了前 ${r.text.length.toLocaleString()} 字`);
+    } catch (e) {
+      toast.error(`读附件失败：${errMsg(e)}`);
+    }
+  };
+  // 阶段 2C：上下文包（常驻；与本轮临时设置合并）
+  const presetMenu = (el: Element) => {
+    const ps = useCtxPresets.getState();
+    const st = useChat.getState();
+    openMenuAt(el, [
+      { type: "label", label: "上下文包（选中后每轮都带上）" },
+      ...ps.list.map((p) => ({ label: p.name, checked: ps.active?.id === p.id, onSelect: () => applyPreset(ps.active?.id === p.id ? null : p) })),
+      ...(ps.list.length === 0 ? [{ label: "还没有上下文包", disabled: true }] : []),
+      { type: "separator" },
+      {
+        label: "把当前设置存为上下文包…",
+        onSelect: async () => {
+          if (st.mentions.length === 0 && st.disabledSlots.length === 0 && st.manualRules.length === 0) {
+            toast.info("先 @ 引用一些设定、或在胶囊上关掉不要的槽位，再存成上下文包");
+            return;
+          }
+          const name = await promptDialog({ title: "存为上下文包", placeholder: "如：第三卷战斗戏", confirmLabel: "保存" });
+          if (!name) return;
+          const p: CtxPreset = {
+            id: `c${Date.now().toString(36)}`,
+            name,
+            mentions: st.mentions,
+            disabledSlots: st.disabledSlots,
+            rules: st.manualRules,
+            mode: st.mode,
+            targetChars: st.targetChars,
+            temperature: st.temperature,
+          };
+          await useCtxPresets.getState().save(p);
+          applyPreset(p);
+          toast.success(`已存为上下文包「${name}」并启用`);
+        },
+      },
+      ...(ps.list.length > 0
+        ? [{ label: "删除上下文包", submenu: ps.list.map((p) => ({ label: p.name, danger: true, onSelect: () => void useCtxPresets.getState().remove(p.id) })) }]
+        : []),
+    ]);
+  };
+  const applyPreset = (p: CtxPreset | null) => {
+    useCtxPresets.getState().setActive(p);
+    if (!p) return;
+    const st = useChat.getState();
+    if (p.mode) st.setMode(p.mode);
+    st.setTargetChars(p.targetChars);
+    st.setTemperature(p.temperature);
+  };
   const compose = useChat((s) => s.compose);
   const { send, stop, toggleSlot, addMention, removeMention, setQuote, setTargetChars, setTemperature, newSession } = useChat.getState();
 
@@ -401,8 +465,27 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
       )}
       <div className="rounded-[10px] border border-[color:var(--hairline)] bg-[var(--fill-element)] transition-colors duration-[var(--dur-md)] focus-within:border-[color:color-mix(in_srgb,var(--accent)_60%,transparent)]">
         {/* 上下文胶囊行 */}
-        {(pills.length > 0 || quote || mentions.length > 0) && (
+        {(pills.length > 0 || quote || mentions.length > 0 || attachments.length > 0 || preset) && (
           <div className="flex flex-wrap items-center gap-1 px-2 pt-2" aria-label="本轮上下文">
+            {preset && (
+              <span data-ctx-preset={preset.name} className="flex max-w-40 items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--success)_14%,transparent)] py-0.5 pl-2 pr-1 text-2xs text-[color:var(--success)]" data-tip="常驻上下文包：每轮都带上">
+                <Package size={10} className="shrink-0" />
+                <span className="truncate">{preset.name}</span>
+                <button aria-label="取消上下文包" onClick={() => useCtxPresets.getState().setActive(null)} className="rounded-full p-0.5 hover:bg-[var(--fill-hover)]">
+                  <X size={10} />
+                </button>
+              </span>
+            )}
+            {attachments.map((a) => (
+              <span key={a.name} data-attachment={a.name} className="flex max-w-48 items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] py-0.5 pl-2 pr-1 text-2xs text-[color:var(--accent)]">
+                <Paperclip size={10} className="shrink-0" />
+                <span className="truncate">{a.name}</span>
+                <span className="shrink-0 opacity-70">{a.text.length.toLocaleString()} 字</span>
+                <button aria-label={`移除附件 ${a.name}`} onClick={() => useChat.getState().removeAttachment(a.name)} className="rounded-full p-0.5 hover:bg-[var(--fill-hover)]">
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
             {quote && (
               <span className="flex max-w-56 items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] py-0.5 pl-2 pr-1 text-2xs text-[color:var(--accent)]" data-tip={quote.text.slice(0, 200)}>
                 <Quote size={10} className="shrink-0" />
@@ -516,6 +599,24 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
             className="rounded-[4px] p-1 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)] disabled:opacity-40"
           >
             <Quote size={13} />
+          </button>
+          <button
+            aria-label="附件"
+            data-tip="附件：参考稿 / 仿写样本（.txt .md .docx，只用于这一轮）"
+            disabled={disabled}
+            onClick={() => void attach()}
+            className="rounded-[4px] p-1 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)] disabled:opacity-40"
+          >
+            <Paperclip size={13} />
+          </button>
+          <button
+            aria-label="上下文包"
+            data-tip="上下文包：存一组常用的引用 / 槽位开关，选中后每轮都带上"
+            disabled={disabled}
+            onClick={(e) => presetMenu(e.currentTarget)}
+            className={`rounded-[4px] p-1 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)] disabled:opacity-40 ${preset ? "text-[color:var(--success)]" : ""}`}
+          >
+            <Package size={13} />
           </button>
           <span aria-hidden className="mx-1 h-3 w-px bg-[var(--hairline)]" />
           <button

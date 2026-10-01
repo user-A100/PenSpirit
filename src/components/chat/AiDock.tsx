@@ -22,6 +22,8 @@ import { MemoryRules } from "./MemoryRules";
 import { SessionSearch } from "./SessionSearch";
 import { PromptLibrary } from "./PromptLibrary";
 import { usePrompts } from "../../lib/ai/prompts";
+import { usePhraseBias } from "../../lib/ai/phraseBias";
+import { useCtxPresets } from "../../lib/ai/ctxPresets";
 import { MessageList } from "./MessageList";
 import { Composer } from "./Composer";
 
@@ -104,6 +106,12 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
       ui.setAiMaximized(false);
     }
   }, [view]);
+  // 阶段 2C：本书的词语偏置（回答查 AI 腔）与上下文包，换书重读
+  const currentBookId = useWorkspace((s) => s.currentBookId);
+  useEffect(() => {
+    void usePhraseBias.getState().load(currentBookId);
+    void useCtxPresets.getState().load(currentBookId);
+  }, [currentBookId]);
   // 命令库（全书通用）：dock 挂载时读一次——斜杠菜单与正文气泡都用
   useEffect(() => {
     if (!usePrompts.getState().loaded) void usePrompts.getState().load();

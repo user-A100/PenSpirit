@@ -39,6 +39,10 @@ pub(crate) struct ContextBundle {
     author_note: String,
     prev_title: Option<String>,
     budget_tokens: i64,
+    /// 阶段 2C：光标后文（已剔除正文指令）、词语偏置、正文里的 {作者批注}
+    cursor_after: Option<String>,
+    phrase_bias: String,
+    notes: Vec<String>,
 }
 
 pub(crate) fn assemble_with(bundle: &ContextBundle, instruction: &str, opts: &AiTurnOptions) -> Assembled {
@@ -51,7 +55,7 @@ pub(crate) fn assemble_with(bundle: &ContextBundle, instruction: &str, opts: &Ai
         injections: bundle.injections.clone(),
         mode: Mode::parse(opts.mode.as_deref()),
         cursor_aware: bundle.cursor_aware,
-        cursor_after: opts.cursor_after.as_deref(),
+        cursor_after: bundle.cursor_after.as_deref(),
         selection: opts.selection.as_deref(),
         history: bundle.history.clone(),
         disabled: opts.disabled_slots.clone(),
@@ -63,7 +67,97 @@ pub(crate) fn assemble_with(bundle: &ContextBundle, instruction: &str, opts: &Ai
         prev_title: bundle.prev_title.as_deref(),
         budget_tokens: Some(bundle.budget_tokens),
         retry_hint: opts.retry_hint.as_deref(),
+        phrase_bias: Some(bundle.phrase_bias.as_str()),
+        notes: bundle.notes.clone(),
+        attachments: opts.attachments.iter().filter(|a| !a.text.trim().is_empty()).map(|a| (a.name.clone(), a.text.clone())).collect(),
     })
+}
+
+/// 阶段 2C：词语偏置渲染成一段要求（没有就空串）
+fn render_phrase_bias(list: &[crate::models::PhraseBias]) -> String {
+    let pick = |k: &str| list.iter().filter(|p| p.kind == k).map(|p| p.phrase.as_str()).collect::<Vec<_>>();
+    let (ban, prefer) = (pick("ban"), pick("prefer"));
+    let mut out = Vec::new();
+    if !ban.is_empty() {
+        out.push(format!("不要使用这些表达（AI 腔）：{}", ban.join("、")));
+    }
+    if !prefer.is_empty() {
+        out.push(format!("合适时可以多用：{}", prefer.join("、")));
+    }
+    out.join("\n")
+}
+
+// ---------- 阶段 2C：附件 / 词语偏置 ----------
+
+/// 附件文本上限（字符数）：读出来就截，免得一份长稿撑爆上下文
+pub const ATTACHMENT_READ_MAX_CHARS: usize = 50_000;
+
+/// 读附件：.txt / .md（自动识别编码）与 .docx（取正文文字）
+pub fn attachment_read_inner(path: &std::path::Path) -> AppResult<crate::models::AttachmentRead> {
+    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+    let bytes = std::fs::read(path)?;
+    let text = match ext.as_str() {
+        "txt" | "md" | "markdown" => crate::porting::import::detect_and_decode(&bytes),
+        "docx" => crate::porting::import::docx_to_text(&bytes)?,
+        _ => return Err(AppError::Invalid("附件只支持 .txt / .md / .docx".into())),
+    };
+    let chars = text.chars().count();
+    let truncated = chars > ATTACHMENT_READ_MAX_CHARS;
+    let text = if truncated { text.chars().take(ATTACHMENT_READ_MAX_CHARS).collect() } else { text };
+    Ok(crate::models::AttachmentRead { name, text, chars: chars as i64, truncated })
+}
+
+pub fn phrase_bias_list_inner(s: &AppState, book_id: Option<i64>) -> AppResult<Vec<crate::models::PhraseBias>> {
+    repo::phrase_bias::list(&*lock(s)?, book_id)
+}
+
+pub fn phrase_bias_add_inner(s: &AppState, book_id: Option<i64>, phrase: &str, kind: &str) -> AppResult<bool> {
+    let phrase = phrase.trim();
+    if phrase.is_empty() || phrase.chars().count() > 50 {
+        return Err(AppError::Invalid("词语不能为空，最长 50 字".into()));
+    }
+    if kind != "ban" && kind != "prefer" {
+        return Err(AppError::Invalid(format!("未知类别：{kind}")));
+    }
+    repo::phrase_bias::add(&*lock(s)?, book_id, phrase, kind)
+}
+
+pub fn phrase_bias_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    repo::phrase_bias::delete(&*lock(s)?, id)
+}
+
+/// 一键导入常见 AI 腔（已有的跳过）；返回新增条数
+pub fn phrase_bias_import_defaults_inner(s: &AppState, book_id: Option<i64>) -> AppResult<i64> {
+    let conn = lock(s)?;
+    let mut n = 0;
+    for p in repo::phrase_bias::DEFAULT_BANS {
+        if repo::phrase_bias::add(&conn, book_id, p, "ban")? {
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
+#[tauri::command]
+pub fn attachment_read(path: String) -> AppResult<crate::models::AttachmentRead> {
+    attachment_read_inner(std::path::Path::new(&path))
+}
+#[tauri::command]
+pub fn phrase_bias_list(s: State<AppState>, book_id: Option<i64>) -> AppResult<Vec<crate::models::PhraseBias>> {
+    phrase_bias_list_inner(&s, book_id)
+}
+#[tauri::command]
+pub fn phrase_bias_add(s: State<AppState>, book_id: Option<i64>, phrase: String, kind: String) -> AppResult<bool> {
+    phrase_bias_add_inner(&s, book_id, &phrase, &kind)
+}
+#[tauri::command]
+pub fn phrase_bias_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    phrase_bias_delete_inner(&s, id)
+}
+#[tauri::command]
+pub fn phrase_bias_import_defaults(s: State<AppState>, book_id: Option<i64>) -> AppResult<i64> {
+    phrase_bias_import_defaults_inner(&s, book_id)
 }
 
 // ---------- 阶段 2B：常驻记忆 / 作者注 / 写作规则 ----------
@@ -232,17 +326,25 @@ pub(crate) fn gather_context(
     };
     // 光标感知：前端给了光标前文就以它为准（编辑器里的内容比磁盘新，且续写位置正确）
     let cursor_aware = opts.cursor_before.is_some();
-    let chapter_text = opts.cursor_before.clone().unwrap_or(disk_text);
-    // 前一章整章读入内存，尾部窗口由 assembler::assemble 截取
+    // 阶段 2C：正文里的 {批注} / [待写指令] 不是正文——从上下文剔除，批注单列（前后文的都算本章批注）
+    let before = crate::context::directives::split(&opts.cursor_before.clone().unwrap_or(disk_text));
+    let after = opts.cursor_after.as_deref().map(crate::context::directives::split);
+    let chapter_text = before.clean;
+    let mut notes = before.notes;
+    if let Some(a) = &after {
+        notes.extend(a.notes.iter().cloned());
+    }
+    let cursor_after = after.map(|a| a.clean);
+    // 前一章整章读入内存，尾部窗口由 assembler::assemble 截取（同样剔除指令）
     let prev_tail = match prev_rel {
-        Some(rel) => Some(fs_service::read_chapter(&s.root, &rel)?),
+        Some(rel) => Some(crate::context::directives::split(&fs_service::read_chapter(&s.root, &rel)?).clean),
         None => None,
     };
     // 注入原子（角色卡关键词命中看整段上下文：光标前后 + 选区）+ @ 引用资料
     let (injections, history) = {
         let conn = lock(s)?;
         let mut scan = chapter_text.clone();
-        if let Some(a) = &opts.cursor_after {
+        if let Some(a) = &cursor_after {
             scan.push_str(a);
         }
         let mut injections = inject_ctx::collect(&conn, book_id, Some(chapter_id), &scan)?;
@@ -277,7 +379,14 @@ pub(crate) fn gather_context(
         });
         (rules, inject_ctx::load_config(&conn, book_id)?.budget_tokens)
     };
+    let phrase_bias = {
+        let conn = lock(s)?;
+        render_phrase_bias(&repo::phrase_bias::list(&conn, Some(book_id))?)
+    };
     Ok(ContextBundle {
+        cursor_after,
+        phrase_bias,
+        notes,
         book_title,
         style_prompt,
         chapter_text,
@@ -308,6 +417,9 @@ fn turn_meta(opts: &AiTurnOptions, extra: Option<(&str, &str)>) -> String {
     }
     if let Some(h) = opts.retry_hint.as_deref().filter(|h| !h.trim().is_empty()) {
         v["retry"] = serde_json::Value::String(h.to_string());
+    }
+    if !opts.attachments.is_empty() {
+        v["attachments"] = serde_json::json!(opts.attachments.iter().map(|a| a.name.clone()).collect::<Vec<_>>());
     }
     if let Some((k, val)) = extra {
         v[k] = serde_json::Value::String(val.to_string());

@@ -5,6 +5,7 @@ import { useWorkspace } from "../../stores/workspace";
 import { openMenuAt } from "../../stores/menu";
 import { toast } from "../../stores/toast";
 import { errMsg } from "../../lib/errors";
+import { usePhraseBias } from "../../lib/ai/phraseBias";
 
 // 记忆与规则（阶段 2B，NovelAI Memory / Author's Note + Cursor rules 移植）：
 // - 常驻记忆：本书（全书基调、世界观要点）+ 本卷（章在卷里时），每轮放进 system
@@ -127,6 +128,109 @@ function RuleRow({ rule, onChanged }: { rule: WritingRule; onChanged: () => void
   );
 }
 
+// 词语偏置（阶段 2C）：AI 腔禁用 / 偏好用词。生成时告诉 AI；回答里出现禁用表达会提醒并可「去掉重写」。
+function PhraseBiasSection({ bookId, onChanged }: { bookId: number; onChanged: () => void }) {
+  const list = usePhraseBias((s) => s.list);
+  const [text, setText] = useState("");
+  const [kind, setKind] = useState<"ban" | "prefer">("ban");
+  const [global, setGlobal] = useState(false);
+  const reload = async () => {
+    await usePhraseBias.getState().load(bookId);
+    onChanged();
+  };
+  const add = async () => {
+    const words = text.split(/[、,，;；\n]/).map((t) => t.trim()).filter(Boolean);
+    if (words.length === 0) return;
+    try {
+      for (const w of words) await api.phraseBiasAdd(global ? null : bookId, w, kind);
+      setText("");
+      await reload();
+    } catch (e) {
+      toast.error(errMsg(e));
+    }
+  };
+  const chips = (k: "ban" | "prefer") =>
+    list
+      .filter((p) => p.kind === k)
+      .map((p) => (
+        <span key={p.id} data-phrase={p.phrase} className="flex items-center gap-1 rounded-full bg-[var(--fill-element)] py-0.5 pl-2 pr-1 text-2xs text-[color:var(--text-secondary)]">
+          {p.book_id == null && <span className="text-[color:var(--text-faint)]">通用</span>}
+          {p.phrase}
+          <button
+            aria-label={`删除「${p.phrase}」`}
+            onClick={async () => {
+              await api.phraseBiasDelete(p.id);
+              await reload();
+            }}
+            className="rounded-full p-0.5 text-[color:var(--text-faint)] hover:text-[color:var(--danger)]"
+          >
+            <Trash2 size={10} />
+          </button>
+        </span>
+      ));
+  const bans = chips("ban");
+  const prefers = chips("prefer");
+  return (
+    <div data-testid="phrase-bias">
+      <div className="mb-1 flex items-center text-xs">
+        <span className="text-[color:var(--text-primary)]">词语偏置</span>
+        <span className="ml-2 text-2xs text-[color:var(--text-faint)]">AI 腔禁用 / 偏好用词，生成时告诉 AI</span>
+        <span className="flex-1" />
+        <button
+          onClick={async () => {
+            try {
+              const n = await api.phraseBiasImportDefaults(null);
+              toast.success(n > 0 ? `已导入 ${n} 条常见 AI 腔（所有书通用，可逐条删）` : "常见 AI 腔都已在表里");
+              await reload();
+            } catch (e) {
+              toast.error(errMsg(e));
+            }
+          }}
+          className="rounded px-1.5 py-0.5 text-2xs text-[color:var(--accent)] hover:bg-[var(--fill-hover)]"
+        >
+          导入常见 AI 腔
+        </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <input
+          value={text}
+          aria-label="添加词语"
+          placeholder="如：嘴角勾起一抹弧度（多个用、分隔）"
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              void add();
+            }
+          }}
+          className="min-w-0 flex-1 rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[color:var(--text-primary)] outline-none focus:border-[color:var(--accent)]"
+        />
+        <select aria-label="词语类别" value={kind} onChange={(e) => setKind(e.target.value as "ban" | "prefer")} className="rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-1 py-1 text-2xs">
+          <option value="ban">禁用</option>
+          <option value="prefer">偏好</option>
+        </select>
+        <label className="flex items-center gap-1 text-2xs text-[color:var(--text-secondary)]">
+          <input type="checkbox" checked={global} onChange={(e) => setGlobal(e.target.checked)} />
+          所有书通用
+        </label>
+        <button onClick={() => void add()} className="rounded px-1.5 py-0.5 text-2xs text-[color:var(--accent)] hover:bg-[var(--fill-hover)]">
+          添加
+        </button>
+      </div>
+      <div className="mt-1.5 space-y-1 text-2xs">
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-[color:var(--text-faint)]">禁用</span>
+          {bans.length > 0 ? bans : <span className="text-[color:var(--text-faint)]">（空）</span>}
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-[color:var(--text-faint)]">偏好</span>
+          {prefers.length > 0 ? prefers : <span className="text-[color:var(--text-faint)]">（空）</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MemoryRules({ onChanged }: { onChanged?: () => void }) {
   const bookId = useWorkspace((s) => s.currentBookId);
   const chapterId = useWorkspace((s) => s.currentChapterId);
@@ -194,6 +298,7 @@ export function MemoryRules({ onChanged }: { onChanged?: () => void }) {
           ))}
         </div>
       </div>
+      <PhraseBiasSection bookId={bookId} onChanged={() => onChanged?.()} />
     </div>
   );
 }
