@@ -536,6 +536,7 @@ pub fn write_chapter_inner(s: &AppState, id: i64, content: &str) -> AppResult<Ch
     let conn = lock(s)?;
     let ctx = history_ctx_in(&conn, id)?;
     fs_service::write_chapter(&s.root, &ctx.rel, content)?;
+    s.note_app_write(&ctx.rel, content);
     let wc = count_words(content);
     // M2-T7 快照钩子：落盘成功后记录本版本（空内容/无实质改动/同一时段内则内部跳过）。
     // snapshot 吞掉 IO 错误并返回 bool——历史写入失败绝不阻断正文保存。

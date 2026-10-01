@@ -21,7 +21,8 @@ import {
 } from "lucide-react";
 import { api, type ChatMessage } from "../../lib/tauri";
 import { useWorkspace } from "../../stores/workspace";
-import { isTruncated, messageCandidates, messageCommand, messageMode, messageRetry, useChat, type QuoteRef } from "../../stores/chat";
+import { isTruncated, messageAgent, messageCandidates, messageCommand, messageMode, messageRetry, useChat, type QuoteRef } from "../../stores/chat";
+import { AgentChanges, AgentTools } from "./AgentTools";
 import { adoptReply, type AdoptHow } from "../../lib/ai/adopt";
 import { findCommand } from "../../lib/ai/slashCommands";
 import { plainText } from "../../lib/ai/cleanText";
@@ -105,6 +106,7 @@ const RETRY_OPTIONS: Array<{ label: string; hint: string }> = [
 
 function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
   const streaming = useChat((s) => s.streaming);
+  const streamTools = useChat((s) => s.streamTools);
   const streamText = useChat((s) => s.streamText);
   const streamReplyTo = useChat((s) => s.streamReplyTo);
   const quote: QuoteRef | null = useChat((s) => (turn.user ? s.quoteByMessage[turn.user.id] ?? null : null));
@@ -202,6 +204,7 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
   };
 
   const later = useChat.getState().messages.filter((m) => turn.user && m.id > turn.user.id).length;
+  const agent = shown ? messageAgent(shown) : null;
 
   return (
     <div className="flex flex-col gap-2">
@@ -351,10 +354,14 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
       {(shown || streamingHere) && !(candidateMode && streamingHere) && (
         <div className="group/ai flex flex-col gap-1.5" data-reply={shown?.id}>
           {streamingHere ? (
-            <ReplyBody text={streamText} mode={mode} streaming />
+            <>
+              <AgentTools tools={streamTools} live />
+              <ReplyBody text={streamText} mode={mode} streaming />
+            </>
           ) : (
             shown && (
               <>
+                {agent && <AgentTools tools={agent.tools} />}
                 {(isTruncated(shown) || shown.adopted) && (
                   <div className="flex items-center gap-2 text-2xs">
                     {isTruncated(shown) && (
@@ -403,6 +410,7 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                     <ReplyBody text={shown.content} mode={mode} />
                   </div>
                 )}
+                {agent && <AgentChanges changes={agent.changes} undone={agent.undone} canUndo={agent.canUndo} onToggle={() => useChat.getState().undoAgentTurn(shown.id)} />}
                 <div
                   className={`flex flex-wrap items-center gap-0.5 transition-opacity duration-[var(--dur-md)] ${
                     isLast ? "opacity-100" : "opacity-0 group-hover/ai:opacity-100 focus-within:opacity-100"

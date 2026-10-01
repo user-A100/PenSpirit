@@ -43,6 +43,8 @@ export interface EditorBridge {
   setTint?(snippets: string[]): void;
   /** 阶段 2B：程序化替换全文——进撤销栈、置 dirty 交自动保存（恢复采纳检查点） */
   restoreContent?(md: string): void;
+  /** 阶段 2B：编辑器里有尚未落盘的改动 */
+  isDirty?(): boolean;
 }
 
 const bridges = new Map<PaneId, EditorBridge>();

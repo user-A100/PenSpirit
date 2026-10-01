@@ -5,6 +5,7 @@
 //! （system + user）合并为单条 prompt 文本——文风卡/前文滑窗/指令全部保留。
 
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use agent_client_protocol::schema::v1::{
@@ -20,9 +21,10 @@ use tauri::{Emitter, Manager};
 use crate::agents::coalesce::StreamCoalescer;
 use crate::agents::discover;
 use crate::agents::interaction;
+use crate::agents::{changes, tools};
 use crate::commands_ai::{assemble_with, gather_context};
 use crate::error::{AppError, AppResult};
-use crate::models::{AcpStreamEvent, AcpTurnEvent, AgentDescriptor, AiTurnOptions, ChatMessage};
+use crate::models::{AcpStreamEvent, AcpToolEvent, AcpTurnEvent, AgentDescriptor, AgentToolEntry, AiTurnOptions, ChatMessage};
 use crate::repo;
 use crate::state::AppState;
 
@@ -117,32 +119,48 @@ pub async fn run_turn(
     mut cancel_rx: tokio::sync::watch::Receiver<bool>,
 ) {
     let s = app.state::<AppState>();
-    let outcome =
-        run_turn_inner(&app, s.inner(), chat_session_id, &desc, &prompt_text, &mut cancel_rx)
-            .await;
+    // 阶段 2B：回合前把书目录的文本文件读一遍，回合后比对出 agent 的改动（可一键撤销）
+    let files = changes::book_of_session(s.inner(), chat_session_id).ok();
+    let before = files.as_ref().map(|(_, slug)| changes::snapshot(&s.root.join(slug)));
+    let tool_log: Arc<Mutex<Vec<AgentToolEntry>>> = Arc::new(Mutex::new(Vec::new()));
+    let outcome = run_turn_inner(&app, s.inner(), chat_session_id, &desc, &prompt_text, &mut cancel_rx, tool_log.clone()).await;
+    let tool_list = tool_log.lock().map(|t| t.clone()).unwrap_or_default();
+    let (file_changes, undo) = match (&files, &before) {
+        (Some((book_id, slug)), Some(b)) => changes::finish_turn(s.inner(), *book_id, slug, b),
+        _ => (Vec::new(), None),
+    };
 
-    // 落库 assistant（有内容才落）
-    if !outcome.content.is_empty() {
+    // 落库 assistant：有文字、或有工具调用 / 文件改动（没文字也留一条，才能看到做了什么、才能撤销）
+    let has_record = !outcome.content.is_empty() || !tool_list.is_empty() || !file_changes.is_empty();
+    let content = if outcome.content.is_empty() && has_record { "（agent 未输出文字）".to_string() } else { outcome.content.clone() };
+    if has_record {
+        let mut meta = serde_json::json!({ "backend": "agent" });
+        if !outcome.ok {
+            meta["truncated"] = serde_json::json!(true);
+        }
+        if !tool_list.is_empty() {
+            meta["tools"] = serde_json::to_value(&tool_list).unwrap_or_default();
+        }
+        if !file_changes.is_empty() {
+            meta["changes"] = serde_json::to_value(&file_changes).unwrap_or_default();
+        }
+        if let Some(u) = &undo {
+            meta["undo"] = serde_json::json!(u);
+        }
         let saved = s
             .db
             .lock()
             .map_err(|_| AppError::LockPoisoned)
-            .and_then(|conn| {
-                let meta = if outcome.ok {
-                    "{\"backend\":\"agent\"}".to_string()
-                } else {
-                    "{\"backend\":\"agent\",\"truncated\":true}".to_string()
-                };
-                repo::sessions::append_reply(&conn, chat_session_id, reply_to, &outcome.content, &meta)
-            });
+            .and_then(|conn| repo::sessions::append_reply(&conn, chat_session_id, reply_to, &content, &meta.to_string()));
         if let Err(e) = saved {
             let _ = app.emit(
                 "agent://turn",
                 AcpTurnEvent {
                     session_id: chat_session_id,
                     ok: false,
-                    content: Some(outcome.content.clone()),
+                    content: Some(content.clone()),
                     error: Some(format!("结果落库失败: {e}")),
+                    changes: file_changes,
                 },
             );
             cleanup(s.inner(), chat_session_id);
@@ -154,8 +172,9 @@ pub async fn run_turn(
         AcpTurnEvent {
             session_id: chat_session_id,
             ok: outcome.ok,
-            content: if outcome.content.is_empty() { None } else { Some(outcome.content) },
+            content: if content.is_empty() { None } else { Some(content) },
             error: outcome.error,
+            changes: file_changes,
         },
     );
     cleanup(s.inner(), chat_session_id);
@@ -175,6 +194,7 @@ async fn run_turn_inner(
     desc: &AgentDescriptor,
     prompt_text: &str,
     cancel_rx: &mut tokio::sync::watch::Receiver<bool>,
+    tool_log: Arc<Mutex<Vec<AgentToolEntry>>>,
 ) -> TurnOutcome {
     // 命令发现（GUI 进程 PATH 与终端不同）
     let Some(command) = discover::resolve_command(&desc.command) else {
@@ -234,7 +254,7 @@ async fn run_turn_inner(
             agent_client_protocol::on_receive_request!(),
         )
         .connect_with(agent, move |connection: ConnectionTo<Agent>| async move {
-            Ok(run_session(connection, app_run, sid, cwd_run, prompt, cancel_rx_owned).await)
+            Ok(run_session(connection, app_run, sid, cwd_run, prompt, cancel_rx_owned, tool_log).await)
         });
 
     // 全局超时兜底（超时 drop connect future → SDK ChildGuard kill 进程树）
@@ -261,6 +281,7 @@ async fn run_session(
     cwd: PathBuf,
     prompt_text: String,
     mut cancel_rx: tokio::sync::watch::Receiver<bool>,
+    tool_log: Arc<Mutex<Vec<AgentToolEntry>>>,
 ) -> TurnOutcome {
     let fail = |msg: String| TurnOutcome { ok: false, content: String::new(), error: Some(msg) };
 
@@ -295,11 +316,21 @@ async fn run_session(
                     Ok(SessionMessage::StopReason(_)) => break,
                     Ok(SessionMessage::SessionMessage(dispatch)) => {                        let handled = MatchDispatch::new(dispatch)
                             .if_notification(async |notif: SessionNotification| {
-                                if let SessionUpdate::AgentMessageChunk(chunk) = notif.update {
-                                    if let ContentBlock::Text(t) = chunk.content {
-                                        full.push_str(&t.text);
-                                        coalescer.push(&t.text);
+                                // 阶段 2B：工具调用也接住（折叠展示 + 落进回答 meta）
+                                let tool = match notif.update {
+                                    SessionUpdate::AgentMessageChunk(chunk) => {
+                                        if let ContentBlock::Text(t) = chunk.content {
+                                            full.push_str(&t.text);
+                                            coalescer.push(&t.text);
+                                        }
+                                        None
                                     }
+                                    SessionUpdate::ToolCall(tc) => tool_log.lock().ok().map(|mut l| tools::on_tool_call(&mut l, &tc, &cwd)),
+                                    SessionUpdate::ToolCallUpdate(u) => tool_log.lock().ok().map(|mut l| tools::on_tool_update(&mut l, &u, &cwd)),
+                                    _ => None,
+                                };
+                                if let Some(tool) = tool {
+                                    let _ = app.emit("agent://tool", AcpToolEvent { session_id: chat_session_id, tool });
                                 }
                                 Ok(())
                             })

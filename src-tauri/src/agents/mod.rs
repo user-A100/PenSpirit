@@ -3,19 +3,21 @@
 //! 会话主流程（session）。命令层沿用 inner 可测 + `#[tauri::command]`
 //! 薄包装模式；`agents_probe` / `send_message_acp` 为 async command。
 
+pub mod changes;
 pub mod coalesce;
 pub mod discover;
 pub mod interaction;
 pub mod probe;
 pub mod registry;
 pub mod session;
+pub mod tools;
 
 use std::path::PathBuf;
 
 use tauri::{AppHandle, State};
 
 use crate::error::{AppError, AppResult};
-use crate::models::{AgentDescriptor, AiTurnOptions, ChatMessage, ProbeResult};
+use crate::models::{AgentDescriptor, AgentUndoResult, AiTurnOptions, ChatMessage, ProbeResult};
 use crate::state::AppState;
 
 // ---------- inner（可测） ----------
@@ -164,6 +166,12 @@ pub fn cancel_generation_acp(state: State<AppState>, session_id: i64) -> AppResu
         let _ = tx.send(true);
     }
     Ok(())
+}
+
+/// 阶段 2B：撤销某个 agent 回合对书文件的全部改动；已撤销的再调一次 = 恢复
+#[tauri::command]
+pub fn agent_undo_turn(s: State<AppState>, message_id: i64) -> AppResult<AgentUndoResult> {
+    changes::toggle_undo(&s, message_id)
 }
 
 /// 前端权限应答：把所选 option_id 送回等待中的后台应答任务。

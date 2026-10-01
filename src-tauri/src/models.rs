@@ -403,6 +403,8 @@ pub struct AcpPermissionEvent {
     pub request_id: String,
     pub title: String,
     pub options: Vec<PermOption>,
+    /// 阶段 2B：工具类别（read / edit / delete / execute …），前端「本会话一直允许此类操作」按它记
+    pub tool_kind: String,
 }
 
 /// `agent://turn`：一回合结束（done 或 error）。content 非空时已落库。
@@ -412,6 +414,49 @@ pub struct AcpTurnEvent {
     pub ok: bool,
     pub content: Option<String>,
     pub error: Option<String>,
+    /// 阶段 2B：本回合 agent 改动的书内文件（前端据此刷新目录与打开的章）
+    pub changes: Vec<FileChange>,
+}
+
+/// 阶段 2B：agent 工具调用的精简视图（对话里折叠展示；回合结束随回答落进 meta.tools）
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct AgentToolEntry {
+    pub id: String,
+    pub title: String,
+    /// read / edit / delete / move / search / execute / think / fetch / switch_mode / other
+    pub kind: String,
+    /// pending / in_progress / completed / failed
+    pub status: String,
+    /// 涉及的文件（书目录内给相对路径）
+    #[serde(default)]
+    pub paths: Vec<String>,
+    /// 改动行数（来自工具调用里的 diff）
+    #[serde(default)]
+    pub added: i64,
+    #[serde(default)]
+    pub removed: i64,
+}
+
+/// `agent://tool`：某个工具调用新出现或有更新
+#[derive(Debug, Clone, Serialize)]
+pub struct AcpToolEvent {
+    pub session_id: i64,
+    pub tool: AgentToolEntry,
+}
+
+/// 阶段 2B：书内文件改动（path 相对书目录；kind = added / modified / deleted）
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FileChange {
+    pub path: String,
+    pub kind: String,
+}
+
+/// 撤销 / 恢复 agent 回合改动的结果
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentUndoResult {
+    /// 现在是否处于「已撤销」
+    pub undone: bool,
+    pub changes: Vec<FileChange>,
 }
 
 /// 碰碰车词库条目（M2-T10）

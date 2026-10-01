@@ -274,6 +274,12 @@ pub fn set_adopted(conn: &Connection, id: i64, adopted: bool) -> AppResult<ChatM
     get_message(conn, id)
 }
 
+/// 阶段 2B：改写消息 meta（agent 回合的撤销状态等）
+pub fn set_meta(conn: &Connection, id: i64, meta: &str) -> AppResult<()> {
+    conn.execute("UPDATE messages SET meta = ?2 WHERE id = ?1", params![id, meta])?;
+    Ok(())
+}
+
 pub fn update_message(conn: &Connection, id: i64, content: &str) -> AppResult<()> {
     conn.execute(
         "UPDATE messages SET content = ?2 WHERE id = ?1",

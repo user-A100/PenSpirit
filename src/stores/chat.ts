@@ -4,7 +4,10 @@ import {
   api,
   type AcpPermissionEvent,
   type AcpStreamEvent,
+  type AcpToolEvent,
   type AcpTurnEvent,
+  type AgentToolEntry,
+  type FileChange,
   type AiTurnOptions,
   type ChatMessage,
   type ChatSession,
@@ -12,6 +15,7 @@ import {
 } from "../lib/tauri";
 import { errCode, errMsg } from "../lib/errors";
 import { toast } from "./toast";
+import { syncAfterAgentChanges } from "../lib/ai/agentFiles";
 import { getActiveEditor } from "../lib/editorBridge";
 import { useAgents } from "./agents";
 
@@ -143,6 +147,15 @@ interface ChatState {
   lastFailure: LastFailure | null;
   // ACP 权限请求（一次一张；agent 请求工具授权时置入，应答后清除）
   permission: AcpPermissionEvent | null;
+  /** 阶段 2B：排在当前这张之后的权限请求（agent 可能一口气请求好几项） */
+  permissionQueue: AcpPermissionEvent[];
+  /** 阶段 2B：本会话一直允许的工具类别（sessionId → kinds；只在内存里，关掉应用即失效） */
+  autoAllow: Record<number, string[]>;
+  clearAutoAllow: () => void;
+  /** 阶段 2B：进行中的 agent 回合的工具调用（实时） */
+  streamTools: AgentToolEntry[];
+  /** 阶段 2B：撤销 / 恢复某个 agent 回合对书文件的全部改动 */
+  undoAgentTurn: (messageId: number) => Promise<void>;
   // —— 本轮上下文 ——
   mode: ChatMode;
   targetChars: number | null;
@@ -188,7 +201,8 @@ interface ChatState {
   retry: () => Promise<void>;
   deleteMessage: (id: number) => Promise<void>;
   markAdopted: (id: number, adopted: boolean) => Promise<void>;
-  respondPermission: (optionId: string) => Promise<void>;
+  /** always = 本会话内同类操作以后都自动允许 */
+  respondPermission: (optionId: string, opts?: { always?: boolean }) => Promise<void>;
   setMode: (mode: ChatMode) => void;
   setTargetChars: (n: number | null) => void;
   setTemperature: (t: number | null) => void;
@@ -236,6 +250,30 @@ export function isTruncated(m: ChatMessage): boolean {
   return parseMeta(m).truncated === true;
 }
 
+/** 阶段 2B：agent 回答的工具调用与文件改动（非 agent 回答返回 null） */
+export interface AgentRecord {
+  tools: AgentToolEntry[];
+  changes: FileChange[];
+  undone: boolean;
+  canUndo: boolean;
+}
+export function messageAgent(m: ChatMessage): AgentRecord | null {
+  const meta = parseMeta(m);
+  if (meta.backend !== "agent") return null;
+  const undone = meta.undone === true;
+  return {
+    tools: Array.isArray(meta.tools) ? (meta.tools as AgentToolEntry[]) : [],
+    changes: Array.isArray(meta.changes) ? (meta.changes as FileChange[]) : [],
+    undone,
+    canUndo: typeof (undone ? meta.redo : meta.undo) === "string",
+  };
+}
+
+/** 权限请求里「允许」的那个选项（优先「仅这次」） */
+function allowOption(p: AcpPermissionEvent) {
+  return p.options.find((o) => o.kind === "allow_once") ?? p.options.find((o) => o.kind.startsWith("allow"));
+}
+
 /** 刷新消息列表（以服务端为准）；期间切了会话或又开始生成则放弃 */
 async function refresh(sessionId: number) {
   try {
@@ -259,7 +297,7 @@ async function refreshSessions(chapterId: number) {
 /** 回合落定（provider done / agent turn 共用）：本地定稿 + 刷新收尾 */
 function finalizeTurn(sessionId: number, content: string | null) {
   useChat.setState((st) => {
-    const base = { streaming: false as const, streamText: "", permission: null };
+    const base = { streaming: false as const, streamText: "", permission: null, permissionQueue: [], streamTools: [] };
     if (!content) return base;
     const replyTo = st.streamReplyTo;
     const messages = st.messages.map((m) => (replyTo != null && m.reply_to === replyTo ? { ...m, active: false } : m));
@@ -289,6 +327,8 @@ function failTurn(sessionId: number, message: string, kind: string | null, parti
     streaming: false,
     streamText: "",
     permission: null,
+    permissionQueue: [],
+    streamTools: [],
     error: friendlyError(kind, message),
     errorKind: kind,
     errorCode: null,
@@ -319,15 +359,32 @@ function handleAcpStream(ev: { payload: AcpStreamEvent }) {
   if (s.streaming) useChat.setState({ streamText: s.streamText + p.text });
 }
 
+function handleAcpTool(ev: { payload: AcpToolEvent }) {
+  const p = ev.payload;
+  const s = useChat.getState();
+  if (p.session_id !== s.sessionId || !s.streaming) return;
+  const has = s.streamTools.some((t) => t.id === p.tool.id);
+  useChat.setState({ streamTools: has ? s.streamTools.map((t) => (t.id === p.tool.id ? p.tool : t)) : [...s.streamTools, p.tool] });
+}
+
 function handleAcpPermission(ev: { payload: AcpPermissionEvent }) {
   const p = ev.payload;
-  if (p.session_id !== useChat.getState().sessionId) return;
-  useChat.setState({ permission: p });
+  const s = useChat.getState();
+  if (p.session_id !== s.sessionId) return;
+  // 本会话已设「一直允许」的类别：直接应答，不弹卡
+  const opt = allowOption(p);
+  if (opt && (s.autoAllow[p.session_id] ?? []).includes(p.tool_kind ?? "other")) {
+    toast.info(`已按本会话设置自动允许：${p.title}`);
+    void api.agentsRespondPermission(p.session_id, p.request_id, opt.option_id).catch((e) => useChat.setState({ error: errMsg(e) }));
+    return;
+  }
+  useChat.setState((st) => (st.permission ? { permissionQueue: [...st.permissionQueue, p] } : { permission: p }));
 }
 
 function handleAcpTurn(ev: { payload: AcpTurnEvent }) {
   const p = ev.payload;
   if (p.session_id !== useChat.getState().sessionId) return;
+  if (p.changes?.length) void syncAfterAgentChanges(p.changes);
   if (!p.ok) {
     failTurn(p.session_id, p.error ?? "agent 回合失败", null, p.content);
     return;
@@ -341,6 +398,7 @@ async function attach(sessionId: number): Promise<Array<() => void>> {
     listen<AcpStreamEvent>("agent://stream", handleAcpStream),
     listen<AcpPermissionEvent>("agent://permission", handleAcpPermission),
     listen<AcpTurnEvent>("agent://turn", handleAcpTurn),
+    listen<AcpToolEvent>("agent://tool", handleAcpTool),
   ]);
 }
 
@@ -401,6 +459,24 @@ export const useChat = create<ChatState>((set, get) => ({
   },
   pendingCandidates: null,
   openAfterInit: null,
+  permissionQueue: [],
+  autoAllow: {},
+  streamTools: [],
+  clearAutoAllow: () => {
+    const sid = get().sessionId;
+    if (sid != null) set((st) => ({ autoAllow: { ...st.autoAllow, [sid]: [] } }));
+  },
+  undoAgentTurn: async (messageId) => {
+    try {
+      const r = await api.agentUndoTurn(messageId);
+      const sid = get().sessionId;
+      if (sid != null) await refresh(sid);
+      await syncAfterAgentChanges(r.changes);
+      toast.success(r.undone ? `已撤销 AI 对 ${r.changes.length} 个文件的改动` : "已恢复 AI 的改动");
+    } catch (e) {
+      toast.error(`撤销失败：${errMsg(e)}`);
+    }
+  },
   forkSession: async (uptoMessageId) => {
     const sid = get().sessionId;
     if (sid == null || uptoMessageId < 0) return;
@@ -461,7 +537,7 @@ export const useChat = create<ChatState>((set, get) => ({
     detachListening();
     set({
       chapterId, sessions: [], sessionId: null, messages: [], streaming: false, streamText: "", streamReplyTo: null,
-      error: null, errorCode: null, errorKind: null, lastFailure: null, permission: null,
+      error: null, errorCode: null, errorKind: null, lastFailure: null, permission: null, permissionQueue: [], streamTools: [],
       disabledSlots: [], manualRules: [], mentions: [], quote: null,
     });
     try {
@@ -552,7 +628,7 @@ export const useChat = create<ChatState>((set, get) => ({
     // 多候选只用于产出正文 / 讨论回答；本地与「继续写」类命令不并排
     const n = extra.candidates ?? (extra.command === "continue-reply" || extra.command === "compact" || extra.command === "directions" ? 1 : get().candidates);
     const options = buildTurnOptions({ ...extra, quote, candidates: n });
-    set({ streaming: true, streamText: "", streamReplyTo: null, error: null, errorCode: null, errorKind: null, lastFailure: null });
+    set({ streaming: true, streamText: "", streamTools: [], streamReplyTo: null, error: null, errorCode: null, errorKind: null, lastFailure: null });
     const tempId = --tempIdSeq;
     set((st) => ({
       messages: [...st.messages, { id: tempId, session_id: sessionId, role: "user", content: text, created_at: "", meta: "{}" }],
@@ -597,7 +673,7 @@ export const useChat = create<ChatState>((set, get) => ({
     const mode = prior ? messageMode(prior) : get().mode;
     const command = get().commandByMessage[userMessageId] ?? (prior ? messageCommand(prior) : null);
     const options = buildTurnOptions({ mode, command, quote: get().quoteByMessage[userMessageId] ?? null, retryHint: extra.retryHint ?? null, candidates: extra.candidates });
-    set({ streaming: true, streamText: "", streamReplyTo: userMessageId, error: null, errorKind: null, lastFailure: null });
+    set({ streaming: true, streamText: "", streamTools: [], streamReplyTo: userMessageId, error: null, errorKind: null, lastFailure: null });
     try {
       if (isAcpBackend()) await api.chatRegenerateAcp(userMessageId, options);
       else await api.chatRegenerate(userMessageId, options);
@@ -679,12 +755,21 @@ export const useChat = create<ChatState>((set, get) => ({
     }
   },
 
-  respondPermission: async (optionId) => {
+  respondPermission: async (optionId, opts) => {
     const { sessionId, permission } = get();
     if (sessionId == null || !permission) return;
-    set({ permission: null }); // 先收卡（超时兜底在 Rust 侧），应答失败也只是日志级
+    // 「本会话一直允许」：记下类别，队列里同类的请求一并放行
+    let auto: AcpPermissionEvent[] = [];
+    if (opts?.always) {
+      const kind = permission.tool_kind ?? "other";
+      auto = get().permissionQueue.filter((q) => (q.tool_kind ?? "other") === kind && allowOption(q));
+      set((st) => ({ autoAllow: { ...st.autoAllow, [sessionId]: [...new Set([...(st.autoAllow[sessionId] ?? []), kind])] } }));
+    }
+    const rest = get().permissionQueue.filter((q) => !auto.includes(q));
+    set({ permission: rest[0] ?? null, permissionQueue: rest.slice(1) }); // 先收卡（超时兜底在 Rust 侧），应答失败也只是日志级
     try {
       await api.agentsRespondPermission(sessionId, permission.request_id, optionId);
+      for (const q of auto) await api.agentsRespondPermission(sessionId, q.request_id, allowOption(q)!.option_id);
     } catch (e) {
       set({ error: errMsg(e) });
     }

@@ -318,6 +318,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
           editor.commands.setContent(md);
           return true;
         }),
+      isDirty: () => dirty.current != null && dirty.current !== savedRef.current,
       splitAtCursor: () => splitMarkdownAt(editor, editor.state.selection.from),
       markdown: () => editorMarkdown(editor),
       resetContent: (md) => {

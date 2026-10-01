@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Archive, ArchiveRestore, BookMarked, ChevronDown, ChevronUp, Eye, Maximize2, MessageSquarePlus, Minimize2, Pencil, Pin, PinOff, RefreshCw, Search, Sparkles, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, BookMarked, ChevronDown, ChevronUp, Eye, Maximize2, MessageSquarePlus, Minimize2, Pencil, Pin, PinOff, RefreshCw, Search, ShieldOff, Sparkles, Trash2, X } from "lucide-react";
+import { TOOL_KIND_LABEL } from "./AgentTools";
 import { useUiNav } from "../../lib/nav/uiStore";
 import { useWorkspace } from "../../stores/workspace";
 import { buildTurnOptions, useChat } from "../../stores/chat";
@@ -16,6 +17,9 @@ import { MemoryRules } from "./MemoryRules";
 import { SessionSearch } from "./SessionSearch";
 import { MessageList } from "./MessageList";
 import { Composer } from "./Composer";
+
+/** 选择器的稳定空值（每次返回新 [] 会让 zustand 反复重渲） */
+const NO_KINDS: string[] = [];
 
 // AI 对话卡（阶段 2A 重建）：顶栏（会话切换 / 写正文·讨论 / 后端模型 / 上下文预览）+
 // 消息流 + 输入区。折叠态是一条输入提示条（Ctrl+J 展开）。
@@ -81,6 +85,7 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
   };
 
   const current = sessions.find((s) => s.id === sessionId);
+  const autoKinds = useChat((s) => (s.sessionId != null ? s.autoAllow[s.sessionId] ?? NO_KINDS : NO_KINDS));
   const sessionMenu = (): MenuEntry[] => [
     { type: "label", label: "本章对话" },
     ...sessions
@@ -110,6 +115,9 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
       disabled: current == null,
       onSelect: () => current && void setSessionArchived(current.id, !current.archived),
     },
+    ...(autoKinds.length > 0
+      ? [{ label: `清除自动允许（${autoKinds.map((k) => TOOL_KIND_LABEL[k] ?? k).join("、")}）`, icon: ShieldOff, onSelect: () => useChat.getState().clearAutoAllow() }]
+      : []),
     {
       label: "重命名本对话…",
       icon: Pencil,

@@ -243,6 +243,7 @@ pub fn run() {
             agents::chat_regenerate_acp,
             agents::cancel_generation_acp,
             agents::agents_respond_permission,
+            agents::agent_undo_turn,
         ])
         .run(tauri::generate_context!())
         .expect("error while running bixian application");

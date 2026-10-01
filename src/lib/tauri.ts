@@ -104,8 +104,14 @@ export interface AgentDescriptor {
 // agent:// 事件 payload（src-tauri/src/models.rs Acp*Event）
 export interface AcpStreamEvent { session_id: number; text: string }
 export interface AcpPermissionOption { option_id: string; name: string; kind: string } // kind: allow_* | reject_*
-export interface AcpPermissionEvent { session_id: number; request_id: string; title: string; options: AcpPermissionOption[] }
-export interface AcpTurnEvent { session_id: number; ok: boolean; content: string | null; error: string | null }
+export interface AcpPermissionEvent { session_id: number; request_id: string; title: string; options: AcpPermissionOption[]; tool_kind?: string }
+export interface AcpTurnEvent { session_id: number; ok: boolean; content: string | null; error: string | null; changes?: FileChange[] }
+/** 阶段 2B：agent 工具调用的精简视图（折叠展示；kind = read/edit/delete/move/search/execute/think/fetch/other） */
+export interface AgentToolEntry { id: string; title: string; kind: string; status: "pending" | "in_progress" | "completed" | "failed" | string; paths: string[]; added: number; removed: number }
+export interface AcpToolEvent { session_id: number; tool: AgentToolEntry }
+/** 书内文件改动（path 相对书目录） */
+export interface FileChange { path: string; kind: "added" | "modified" | "deleted" }
+export interface AgentUndoResult { undone: boolean; changes: FileChange[] }
 
 // ---- M2-T7：章节快照版本历史 ----
 export interface SnapshotInfo { file: string; ts: string; words: number; title: string }
@@ -387,6 +393,8 @@ export const api = {
   cancelGenerationAcp: (sessionId: number) => invoke<void>("cancel_generation_acp", { sessionId }),
   agentsRespondPermission: (sessionId: number, requestId: string, optionId: string) =>
     invoke<void>("agents_respond_permission", { sessionId, requestId, optionId }),
+  /** 阶段 2B：撤销 agent 回合对书文件的全部改动；已撤销的再调一次 = 恢复 */
+  agentUndoTurn: (messageId: number) => invoke<AgentUndoResult>("agent_undo_turn", { messageId }),
   // ---- M2-T7：章节快照版本历史 ----
   listHistory: (chapterId: number) => invoke<SnapshotInfo[]>("list_history", { chapterId }),
   readHistory: (chapterId: number, file: string) => invoke<string>("read_history", { chapterId, file }),

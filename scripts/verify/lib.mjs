@@ -199,6 +199,13 @@ async function restoreFrom(app, p) {
     if (!p.providers.ids.includes(pr.id)) await app.invoke("delete_provider", { id: pr.id }).catch(() => {});
   }
   if (p.providers.active != null) await app.invoke("set_active_provider", { id: p.providers.active }).catch(() => {});
+  // agent 登记（agents.json，阶段 2B 起）：删掉核验加的，还原默认 agent
+  if (p.agents) {
+    for (const a of await app.invoke("agents_list").catch(() => [])) {
+      if (!p.agents.ids.includes(a.id)) await app.invoke("agents_remove", { id: a.id }).catch(() => {});
+    }
+    if (p.agents.defaultId) await app.invoke("agents_set_default", { id: p.agents.defaultId }).catch(() => {});
+  }
   await app.evaluate(
     `(() => { const snap = ${JSON.stringify(p.localStorage)}; localStorage.clear(); for (const [k, v] of Object.entries(snap)) localStorage.setItem(k, v); return true; })()`,
   );
@@ -241,8 +248,21 @@ export async function withGuard(name, body) {
   const providerState = async () => JSON.stringify({ active: await app.invoke("get_active_provider"), ids: (await app.invoke("list_providers")).map((p) => p.id) });
   const providersBefore = await providerState();
   const materialsMaxId = Math.max(0, ...(await app.invoke("materials_list", { query: null })).map((m) => m.id));
+  const agentState = async () => {
+    const list = await app.invoke("agents_list");
+    return { ids: list.map((a) => a.id), defaultId: list.find((a) => a.is_default)?.id ?? null, json: JSON.stringify(list) };
+  };
+  const agentsBefore = await agentState();
   // 快照先落盘：进程崩溃 / 被杀也能在下次补做还原
-  const pending = { name, at: new Date().toISOString(), localStorage: JSON.parse(before), providers: JSON.parse(providersBefore), materialsMaxId, books: [] };
+  const pending = {
+    name,
+    at: new Date().toISOString(),
+    localStorage: JSON.parse(before),
+    providers: JSON.parse(providersBefore),
+    materialsMaxId,
+    agents: { ids: agentsBefore.ids, defaultId: agentsBefore.defaultId },
+    books: [],
+  };
   const savePending = () => {
     mkdirSync(dirname(PENDING), { recursive: true });
     writeFileSync(PENDING, JSON.stringify(pending));
@@ -295,9 +315,11 @@ export async function withGuard(name, body) {
     console.log(providersOk ? "✔ 状态还原：服务商列表与「使用中」与运行前一致" : `✘ 服务商状态未还原：${providersBefore} → ${providersAfter}`);
     const matsLeft = (await app.invoke("materials_list", { query: null })).filter((m) => m.id > materialsMaxId);
     if (matsLeft.length) console.log(`✘ 核验新增的素材未清理：${matsLeft.map((m) => m.title).join(", ")}`);
+    const agentsOk = (await agentState()).json === agentsBefore.json;
+    console.log(agentsOk ? "✔ 状态还原：agent 登记与默认 agent 与运行前一致" : "✘ agent 登记未还原");
     app.close();
     process.off("uncaughtException", onUncaught);
-    if (diff.length || leaked.length || !providersOk || matsLeft.length) ok = false;
+    if (diff.length || leaked.length || !providersOk || matsLeft.length || !agentsOk) ok = false;
     else unlinkSync(PENDING);
   }
   if (error) ok = false;

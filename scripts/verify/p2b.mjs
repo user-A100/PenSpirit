@@ -3,7 +3,9 @@
 // 组 2 生成：多候选 / 带要求重试 / 走向 / 压缩 / token 计数
 // 组 3 会话：收藏进素材库 / 分叉 / 置顶归档 / 全书搜索跳转 / 抽取情节块 / 存为梗概 / 最大化
 // 组 4 采纳：逐段取舍 / AI 着色 / 恢复到采纳之前 / 只采纳选中部分 / Alt+K 就地改写 / Alt+Enter 续写浮条
+// 组 5 agent：工具调用折叠 / 权限卡排队与「本会话一直允许」/ 回合文件改动全部撤销与恢复（本地假 ACP agent）
 // 用法（应用已带调试端口启动）：node scripts/verify/p2b.mjs
+import { fileURLToPath } from "node:url";
 import { checker, sleep, waitFor, withGuard } from "./lib.mjs";
 import { startMockLlm } from "./mock-llm.mjs";
 
@@ -33,7 +35,7 @@ await withGuard("p2b", async ({ app, makeBook }) => {
     void shen;
     await ev(`localStorage.setItem('bixian.lastBookId', '${book.id}'); localStorage.setItem('bixian.chat.backend', 'provider'); localStorage.setItem('bixian.nav.view', 'write'); true`);
     await app.reload();
-    // 重载会冲掉 withGuard 装的原生对话框探针：补装
+    // 重载会冲掉 withGuard 装的原生对话框探针：补装（组 5 重载后同样补装）
     await ev(`(() => { window.__nativeDialogs = []; for (const k of ['alert','confirm','prompt']) { window[k] = (...a) => { window.__nativeDialogs.push(k + ':' + a[0]); return k === 'confirm' ? false : undefined; }; } return true })()`);
     await waitFor(ev, `!!document.querySelector('[data-chapter-row="${ids[1]}"]')`, 8000);
     await app.clickEl(`document.querySelector('[data-chapter-row="${ids[1]}"]')`);
@@ -312,6 +314,71 @@ await withGuard("p2b", async ({ app, makeBook }) => {
     const disk = (await app.invoke("read_chapter", { id: ids[1] })).content;
     check("就地改写与续写已自动保存到磁盘", disk.includes("逐段核验丙：改稿") && disk.includes("渡口的灯笼次第亮起"));
     check("全程没有原生对话框", (await ev(`window.__nativeDialogs.length`)) === 0);
+
+    // ================= 组 5 agent 工具调用（假 ACP agent；agent 登记由 withGuard 还原） =================
+    const AGENT = { id: "mock-acp", name: "核验假 Agent", command: process.execPath, args: [fileURLToPath(new URL("./mock-acp.mjs", import.meta.url))], enabled: true, is_default: false, last_probe: null };
+    await app.invoke("agents_upsert", { desc: AGENT });
+    await app.invoke("agents_set_default", { id: AGENT.id });
+    await ev(`localStorage.setItem('bixian.chat.backend', 'agent:${AGENT.id}'); true`);
+    await app.reload();
+    await ev(`(() => { window.__nativeDialogs = []; for (const k of ['alert','confirm','prompt']) { window[k] = (...a) => { window.__nativeDialogs.push(k + ':' + a[0]); return k === 'confirm' ? false : undefined; }; } return true })()`);
+    await waitFor(ev, `!!document.querySelector('[data-chapter-row="${ids[0]}"]')`, 8000);
+    await app.clickEl(`document.querySelector('[data-chapter-row="${ids[0]}"]')`);
+    await waitFor(ev, `document.querySelector('.ProseMirror')?.textContent.includes('沈砚站在船头')`);
+    await waitFor(ev, `!!document.querySelector('textarea[aria-label="AI 指令"]')`);
+    const agentIdle = async () => {
+      await sleep(300);
+      await waitFor(ev, `!document.querySelector('button[aria-label="停止生成"]')`, 20000);
+      await sleep(400);
+    };
+    await typeInComposer("【改文件】给第一章补一段");
+    await app.press("Enter");
+    await waitFor(ev, `!!document.querySelector('[data-permission-card]')`, 20000);
+    check("agent 请求权限：弹卡并标出类别「编辑」", (await ev(`document.querySelector('[data-permission-card]').innerText`)).includes("编辑"));
+    await app.screenshot(`${SHOTS}/agent-permission.png`);
+    await app.clickEl(`[...document.querySelectorAll('[data-permission-card] button')].find(b => b.textContent === '允许')`);
+    await agentIdle();
+    await waitFor(ev, `!!${lastReply}.querySelector('[data-agent-changes]')`, 10000);
+    check("工具调用默认折叠成一行「调用了 2 个工具」", (await ev(`${lastReply}.querySelector('[data-agent-tools]').getAttribute('data-agent-tools')`)) === "2");
+    check("回合文件改动：3 个（改第一章、新章、设定笔记）", (await ev(`${lastReply}.querySelector('[data-agent-changes]').getAttribute('data-agent-changes')`)) === "3");
+    await waitFor(ev, `document.querySelector('.ProseMirror').textContent.includes('AI 补写的一段')`, 5000);
+    check("打开着的章自动刷新为 agent 改后的正文", true);
+    const titles = async () => (await app.invoke("list_chapters", { bookId: book.id })).map((c) => c.title);
+    check("agent 新建的章文件进了目录", (await titles()).some((t) => t.includes("AI新章")));
+    await app.clickEl(`${lastReply}.querySelector('button[aria-label="展开工具调用"]')`);
+    await sleep(200);
+    check("展开：每一步的类别、状态与增删行数", await ev(`(() => { const t = ${lastReply}.querySelector('[data-agent-tools]').innerText; return t.includes('改写 第一章') && t.includes('读取') && t.includes('+') })()`));
+    await app.screenshot(`${SHOTS}/agent-tools.png`);
+    // 全部撤销 → 恢复
+    await app.clickEl(`[...${lastReply}.querySelectorAll('[data-agent-changes] button')].find(b => b.textContent.includes('撤销全部改动'))`);
+    await waitFor(ev, `${lastReply}.querySelector('[data-agent-changes]')?.getAttribute('data-undone') === '1'`, 8000);
+    await waitFor(ev, `!document.querySelector('.ProseMirror').textContent.includes('AI 补写的一段')`, 5000);
+    check("撤销全部改动：正文回到 agent 改之前，新建的章移进回收站", !(await titles()).some((t) => t.includes("AI新章")) && !(await app.invoke("read_chapter", { id: ids[0] })).content.includes("AI 补写"));
+    await app.clickEl(`[...${lastReply}.querySelectorAll('[data-agent-changes] button')].find(b => b.textContent.includes('恢复 AI 改动'))`);
+    await waitFor(ev, `${lastReply}.querySelector('[data-agent-changes]')?.getAttribute('data-undone') === '0'`, 8000);
+    await waitFor(ev, `document.querySelector('.ProseMirror').textContent.includes('AI 补写的一段')`, 5000);
+    check("恢复 AI 改动：正文与新章都回来（新章从回收站还原）", (await titles()).some((t) => t.includes("AI新章")));
+    // 本会话一直允许
+    await typeInComposer("【再改】");
+    await app.press("Enter");
+    await waitFor(ev, `!!document.querySelector('[data-permission-card]')`, 20000);
+    await app.clickEl(`[...document.querySelectorAll('[data-permission-card] button')].find(b => b.textContent.includes('本会话一直允许'))`);
+    await agentIdle();
+    await typeInComposer("【再改】");
+    await app.press("Enter");
+    let cardSeen = false;
+    for (let i = 0; i < 40 && (await ev(`!!document.querySelector('button[aria-label="停止生成"]')`)); i++) {
+      if (await ev(`!!document.querySelector('[data-permission-card]')`)) cardSeen = true;
+      await sleep(150);
+    }
+    await agentIdle();
+    const again = await count("AI 又补了一句");
+    check("「本会话一直允许」后同类请求不再弹卡、直接执行", !cardSeen && again === 2, `弹卡=${cardSeen} 补句=${again}`);
+    await app.clickEl(`document.querySelector('button[aria-label="切换对话"]')`);
+    await sleep(200);
+    check("会话菜单可清除自动允许", await ev(`[...document.querySelectorAll('[role="menuitem"]')].some(b => b.textContent.includes('清除自动允许（编辑）'))`));
+    await menuItem("清除自动允许");
+    check("全程没有原生对话框（agent 段）", (await ev(`(window.__nativeDialogs ?? []).length`)) === 0);
     await app.screenshot(`${SHOTS}/final.png`);
     return summary();
   } finally {
