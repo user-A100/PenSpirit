@@ -94,6 +94,7 @@ pub fn run() {
             commands_ai::export_text_file,
             commands_ai::attachment_read,
             commands_ai::ai_token_alternatives,
+            commands_ai::related_search,
             commands_ai::phrase_bias_list,
             commands_ai::phrase_bias_add,
             commands_ai::phrase_bias_delete,

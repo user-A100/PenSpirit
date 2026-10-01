@@ -464,7 +464,7 @@ export function buildTurnOptions(extra: SendExtra & { quote?: QuoteRef | null })
     cursor_after: ctx ? ctx.after : null,
     selection: quote?.text ?? null,
     disabled_slots: disabled,
-    mentions: mentions.map(({ kind, id }) => ({ kind, id })),
+    mentions: mentions.map(({ kind, id, passage }) => (passage ? { kind, id, passage } : { kind, id })),
     target_chars: extra.targetChars !== undefined ? extra.targetChars : st.targetChars,
     temperature: extra.temperature ?? st.temperature,
     provider_id: extra.providerId ?? null,

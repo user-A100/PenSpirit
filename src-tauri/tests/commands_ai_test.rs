@@ -327,7 +327,7 @@ fn cursor_options_and_mentions_and_overrides() {
         mode: Some("discuss".into()),
         cursor_before: Some("编辑器里的光标前文".into()),
         cursor_after: Some("光标后的内容".into()),
-        mentions: vec![Mention { kind: "character".into(), id: character.id }, Mention { kind: "chapter".into(), id: ch1 }],
+        mentions: vec![Mention { kind: "character".into(), id: character.id, passage: None }, Mention { kind: "chapter".into(), id: ch1, passage: None }],
         disabled_slots: vec!["上一章结尾".into()],
         temperature: Some(1.1),
         ..Default::default()

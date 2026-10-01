@@ -31,7 +31,9 @@ export interface ChatSession { id: number; book_id: number; chapter_id: number; 
 export interface SessionHit { session: ChatSession; chapter_title: string; message_id: number | null; snippet: string }
 /** 阶段 2B：一次性生成（不落进对话历史） */
 export interface TransientTask {
-  kind: "extract" | "inline_edit" | "continue" | "synonyms";
+  kind: "extract" | "inline_edit" | "continue" | "synonyms" | "discuss";
+  /** 阶段 2C：侧聊自己的历史 */
+  history?: { role: "user" | "assistant"; content: string }[];
   chapter_id?: number | null; text?: string; extract_kind?: "character" | "foreshadow" | "plot";
   before?: string; after?: string; selection?: string; instruction?: string; target_chars?: number | null; temperature?: number | null;
 }
@@ -55,7 +57,14 @@ export interface SlotLog { name: string; source: string; chars: number; est_toke
 /** budget_tokens：本次预算（0 = 不限） */
 export interface AssemblyLog { slots: SlotLog[]; total_est_tokens: number; budget_tokens?: number }
 /** 阶段 2A：@ 引用 */
-export interface MentionRef { kind: "chapter" | "character" | "foreshadow" | "plot" | "outline"; id: number }
+export interface MentionRef {
+  kind: "chapter" | "character" | "foreshadow" | "plot" | "outline" | "material";
+  id: number;
+  /** 阶段 2C：相关检索选中的段落（有则注入这段，而不是章尾） */
+  passage?: string;
+}
+/** 阶段 2C：相关章节 / 素材检索命中 */
+export interface RelatedHit { kind: "chapter" | "material"; id: number; title: string; score: number; snippet: string; passage: string }
 /** 阶段 2A：单轮 AI 请求可选参数（字段 snake_case 与 Rust AiTurnOptions 对齐） */
 export interface AiTurnOptions {
   mode?: "write" | "discuss";
@@ -365,6 +374,9 @@ export const api = {
   messageStar: (id: number, starred: boolean) => invoke<number | null>("message_star", { id, starred }),
   /** 一次性生成：增量走 transient://{requestId}，结束返回全文；取消用 cancelGeneration(requestId) */
   aiTransient: (requestId: number, task: TransientTask) => invoke<string>("ai_transient", { requestId, task }),
+  /** 阶段 2C：与这段文字相关的章节（本书，排除当前章）与素材 */
+  relatedSearch: (bookId: number, chapterId: number | null, text: string, limit?: number) =>
+    invoke<RelatedHit[]>("related_search", { bookId, chapterId, text, limit: limit ?? null }),
   /** 阶段 2C：此处下一个词的备选与概率（服务商不回概率时 supported = false） */
   aiTokenAlternatives: (chapterId: number, before: string) => invoke<TokenAlternatives>("ai_token_alternatives", { chapterId, before }),
   messageSetActive: (id: number) => invoke<ChatMessage>("message_set_active", { id }),

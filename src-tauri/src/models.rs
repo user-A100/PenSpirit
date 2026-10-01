@@ -217,6 +217,8 @@ pub struct TransientTask {
     pub instruction: String,
     pub target_chars: Option<i64>,
     pub temperature: Option<f64>,
+    /// 阶段 2C：侧聊（kind = discuss）自己的历史
+    pub history: Vec<ChatTurn>,
 }
 
 fn default_session_source() -> String {
@@ -368,9 +370,19 @@ pub struct AiMemory {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Mention {
-    /// chapter | character | foreshadow | plot | outline
+    /// chapter | character | foreshadow | plot | outline | material（阶段 2C）
     pub kind: String,
     pub id: i64,
+    /// 阶段 2C：相关检索选中的段落（有则注入这段，而不是章尾）
+    #[serde(default)]
+    pub passage: Option<String>,
+}
+
+/// 阶段 2C：侧聊的一条历史（role = user / assistant）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ChatTurn {
+    pub role: String,
+    pub content: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, BookMarked, ChevronDown, ChevronUp, Eye, FileDown, Maximize2, MessageSquarePlus, Minimize2, Pencil, Pin, PinOff, RefreshCw, Search, ShieldOff, Sparkles, TextSearch, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, BookMarked, ChevronDown, ChevronUp, Eye, FileDown, Maximize2, MessageSquarePlus, MessagesSquare, Minimize2, Pencil, Pin, PinOff, RefreshCw, Search, ShieldOff, Sparkles, TextSearch, Trash2, X } from "lucide-react";
 import { pickSavePath } from "../../lib/dialogs";
 import { ChatFind, useChatFind } from "./ChatFind";
+import { SideChat } from "./SideChat";
 import { chatToMarkdown } from "../../lib/ai/exportChat";
 import { findCommand } from "../../lib/ai/slashCommands";
 import { toast } from "../../stores/toast";
@@ -118,6 +119,8 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
   }, []);
 
   const current = sessions.find((s) => s.id === sessionId);
+  // 阶段 2C：侧聊（AI 卡里并排的第二个对话，不落库）
+  const [side, setSide] = useState(false);
   // 阶段 2C：导出对话为 Markdown（只导出各问题当前选用的回答）
   const exportChat = async () => {
     if (!current) return;
@@ -309,8 +312,19 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
         >
           <Eye size={14} />
         </button>
+        <button
+          onClick={() => setSide(!side)}
+          aria-label={side ? "关闭侧聊" : "打开侧聊"}
+          aria-pressed={side}
+          data-tip="侧聊：并排问一句，不进正式对话"
+          className={`rounded-[var(--r-control)] p-1 transition-colors hover:bg-[var(--fill-hover)] ${side ? "text-[color:var(--accent)]" : "text-[color:var(--text-faint)] hover:text-[color:var(--text-primary)]"}`}
+        >
+          <MessagesSquare size={14} />
+        </button>
       </div>
 
+      <div className="flex min-h-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col">
       {/* 错误条：分类说明 + 重试 / 去设置 */}
       {error != null && (
         <div role="alert" className="mx-3 mb-1 flex items-start gap-1.5 rounded-[var(--r-control)] bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] px-2.5 py-1.5">
@@ -430,6 +444,9 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
       )}
 
       {view !== "help" && view !== "prompts" && <Composer onLocal={showLocal} />}
+      </div>
+      {side && <SideChat onClose={() => setSide(false)} />}
+      </div>
     </div>
   );
 }

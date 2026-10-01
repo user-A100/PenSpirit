@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AtSign, BookOpen, Clock, Flag, Blocks, ListTree, Package, Paperclip, Quote, SendHorizontal, Slash, Square, Users, X } from "lucide-react";
+import { AtSign, BookOpen, Clock, Flag, Blocks, Library, ListTree, Package, Paperclip, Quote, SendHorizontal, Slash, Sparkles, Square, Users, X } from "lucide-react";
 import { pickOpenPath } from "../../lib/dialogs";
+import { getActiveEditor } from "../../lib/editorBridge";
 import { useCtxPresets, type CtxPreset } from "../../lib/ai/ctxPresets";
 import { promptDialog } from "../../stores/confirm";
 import { errMsg } from "../../lib/errors";
@@ -28,8 +29,10 @@ const TEMPS: Array<{ label: string; value: number | null }> = [
 ];
 /** 胶囊里展示的槽位（System/写作指令不展示） */
 const PILL_SLOTS = ["文风", "常驻记忆", "写作规则", "用词要求", "作者批注", "角色卡", "伏笔提醒", "情节块", "灵感卡", "引用资料", "上一章结尾", "对话历史", "光标前文", "当前章正文", "光标后文", "选中段落", "附件", "作者注"];
-const KIND_LABEL: Record<MentionRef["kind"], string> = { chapter: "章节", character: "人物", foreshadow: "伏笔", plot: "情节块", outline: "大纲" };
-const KIND_ICON = { chapter: BookOpen, character: Users, foreshadow: Flag, plot: Blocks, outline: ListTree } as const;
+const KIND_LABEL: Record<MentionRef["kind"], string> = { chapter: "章节", character: "人物", foreshadow: "伏笔", plot: "情节块", outline: "大纲", material: "素材" };
+const KIND_ICON = { chapter: BookOpen, character: Users, foreshadow: Flag, plot: Blocks, outline: ListTree, material: Library } as const;
+/** 阶段 2C：@ 菜单里的「相关」条目（带相关度与摘录） */
+type RelatedItem = MentionItem & { score: number; snippet: string };
 
 function saveDraft(chapterId: number, text: string) {
   try {
@@ -217,17 +220,19 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
     if (bookId == null || poolBook.current === bookId) return;
     poolBook.current = bookId;
     try {
-      const [chars, fs, plots, outlines] = await Promise.all([
+      const [chars, fs, plots, outlines, mats] = await Promise.all([
         api.charactersList(bookId),
         api.foreshadowsList(bookId),
         api.plotBlocksList(bookId),
         api.outlinesList(bookId),
+        api.materialsList().catch(() => []),
       ]);
       setPool([
         ...chars.map((c) => ({ kind: "character" as const, id: c.id, label: c.name })),
         ...fs.map((f) => ({ kind: "foreshadow" as const, id: f.id, label: f.title })),
         ...plots.map((p) => ({ kind: "plot" as const, id: p.id, label: p.content.slice(0, 24) })),
         ...outlines.map((o) => ({ kind: "outline" as const, id: o.id, label: o.title || "（未命名大纲）" })),
+        ...mats.map((m) => ({ kind: "material" as const, id: m.id, label: m.title })),
       ]);
     } catch {
       poolBook.current = null;
@@ -235,15 +240,43 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
   };
 
   const slashItems = useMemo(() => (menu?.kind === "slash" ? matchCommands(menu.query) : []), [menu]);
-  const mentionItems = useMemo(() => {
+  // 阶段 2C：@ 菜单打开（还没输入）时按光标附近内容检索相关章节 / 素材，排在最前
+  const [related, setRelated] = useState<RelatedItem[]>([]);
+  const relatedKey = useRef<string>("");
+  const loadRelated = async () => {
+    if (bookId == null || chapterId == null) return;
+    const ed = getActiveEditor();
+    const ctx = ed && ed.chapterId === chapterId ? ed.getContext() : null;
+    const query = `${(ctx?.before ?? "").slice(-1500)}\n${text}`;
+    const key = `${chapterId}:${query.length}:${query.slice(-80)}`;
+    if (relatedKey.current === key) return;
+    relatedKey.current = key;
+    try {
+      const hits = await api.relatedSearch(bookId, chapterId, query, 5);
+      setRelated(
+        hits.map((h) => ({
+          kind: h.kind,
+          id: h.id,
+          label: h.kind === "chapter" ? `${h.title}（相关段落）` : h.title,
+          passage: h.passage,
+          score: h.score,
+          snippet: h.snippet,
+        })),
+      );
+    } catch {
+      setRelated([]);
+    }
+  };
+  const mentionItems = useMemo((): (MentionItem | RelatedItem)[] => {
     if (menu?.kind !== "mention") return [];
     const all: MentionItem[] = [...chapters.map((c) => ({ kind: "chapter" as const, id: c.id, label: c.title })), ...pool];
     const scored = all
       .map((m) => ({ m, s: fuzzyMatch(menu.query, m.label)?.score ?? -1 }))
       .filter((x) => x.s >= 0)
       .sort((a, b) => b.s - a.s);
-    return scored.slice(0, 12).map((x) => x.m);
-  }, [menu, chapters, pool]);
+    const base = scored.slice(0, 12).map((x) => x.m);
+    return menu.query === "" ? [...related, ...base] : base;
+  }, [menu, chapters, pool, related]);
 
   const updateMenu = (value: string, caret: number) => {
     if (!command && /^\/\S*$/.test(value)) {
@@ -253,6 +286,7 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
     const at = /@([^\s@]{0,20})$/.exec(value.slice(0, caret));
     if (at) {
       void loadPool();
+      if (at[1] === "") void loadRelated();
       setMenu((m) => ({ kind: "mention", query: at[1], index: m?.kind === "mention" ? m.index : 0 }));
       return;
     }
@@ -417,14 +451,16 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
                 </div>
               ))
             : mentionItems.length === 0
-              ? <div className="px-2 py-2 text-xs text-[color:var(--text-faint)]">没有匹配的章节、人物、伏笔、情节块或大纲</div>
+              ? <div className="px-2 py-2 text-xs text-[color:var(--text-faint)]">没有匹配的章节、人物、伏笔、情节块、大纲或素材</div>
               : mentionItems.map((m, i) => {
                   const Icon = KIND_ICON[m.kind];
+                  const rel = "score" in m ? m : null;
                   return (
                     <div
-                      key={`${m.kind}-${m.id}`}
+                      key={`${rel ? "rel-" : ""}${m.kind}-${m.id}`}
                       role="option"
                       aria-selected={i === menu.index}
+                      data-related={rel ? "" : undefined}
                       onMouseDown={(e) => {
                         e.preventDefault();
                         pickMention(m);
@@ -432,9 +468,14 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
                       onMouseMove={() => setMenu({ ...menu, index: i })}
                       className={`flex cursor-default items-center gap-2 rounded-[4px] px-2 py-1.5 text-ui ${i === menu.index ? "bg-[var(--fill-hover)]" : ""}`}
                     >
-                      <Icon size={13} className="shrink-0 text-[color:var(--text-faint)]" />
-                      <span className="min-w-0 flex-1 truncate text-[color:var(--text-primary)]">{m.label}</span>
-                      <span className="shrink-0 text-2xs text-[color:var(--text-faint)]">{KIND_LABEL[m.kind]}</span>
+                      {rel ? <Sparkles size={13} className="shrink-0 text-[color:var(--accent)]" /> : <Icon size={13} className="shrink-0 text-[color:var(--text-faint)]" />}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[color:var(--text-primary)]">{m.label}</span>
+                        {rel && rel.snippet && <span className="block truncate text-2xs text-[color:var(--text-faint)]">{rel.snippet}</span>}
+                      </span>
+                      <span className="shrink-0 text-2xs text-[color:var(--text-faint)]">
+                        {rel ? `相关 ${Math.round(rel.score * 100)}%` : KIND_LABEL[m.kind]}
+                      </span>
                     </div>
                   );
                 })}

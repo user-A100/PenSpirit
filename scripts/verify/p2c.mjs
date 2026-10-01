@@ -2,6 +2,7 @@
 // 组 C1 对话：时间戳 / 会话内查找 / 👍👎 评分（按命令统计）/ 导出 Markdown / 另存为新章节与素材片段 / 生成中排队与插话
 // 组 C2 输入与上下文：附件 / 上下文包（常驻）/ 词语偏置与「去掉重写」/ 正文 [待写指令] 与 {批注}
 // 组 C3 编辑器内 AI：幽灵补全（默认关）/ 换个说法（近义词 + token 概率）/ 朗读（核验时不出声）
+// 组 C4 检索与侧聊：@ 菜单里的相关章节 / 素材（本地字二元组 TF-IDF）/ 侧聊（不进正式对话）
 // 用法（应用已带调试端口启动）：node scripts/verify/p2c.mjs
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -270,6 +271,39 @@ await withGuard("p2c", async ({ app, makeBook }) => {
     await app.clickEl(`document.querySelector('button[aria-label="停止朗读"]')`);
     await sleep(150);
     check("停止朗读：朗读条消失", !(await ev(`!!document.querySelector('[data-testid="speech-chip"]')`)));
+
+    // ================= C4 检索与侧聊 =================
+    await app.clickEl(`document.querySelector('[data-chapter-row="${ids[1]}"]')`);
+    await waitFor(ev, `document.querySelector('.ProseMirror')?.textContent.includes('她没有回头')`);
+    await caretEnd();
+    await sleep(150);
+    await typeInComposer("@");
+    await waitFor(ev, `!!document.querySelector('[role="listbox"][aria-label="引用"] [data-related]')`, 5000);
+    const relText = await ev(`[...document.querySelectorAll('[role="listbox"][aria-label="引用"] [data-related]')].map(e => e.innerText.replace(/\\n/g, ' ')).join(' | ')`);
+    check("@ 菜单先列出相关章节 / 素材（相关度 + 摘录）", /相关 \d+%/.test(relText), relText.slice(0, 80));
+    await app.screenshot(`${SHOTS}/related.png`);
+    await app.press("Enter");
+    await sleep(200);
+    await app.typeText("参考这段写");
+    await app.press("Enter");
+    await waitIdle();
+    const relSys = mock.lastRequest().messages[0].content;
+    check("选中的相关项按相关段落 / 素材注入【引用资料】", relSys.includes("【引用资料】") && (relSys.includes("相关段落：") || relSys.includes("◆ 素材")));
+    // 侧聊
+    const sid = (await app.invoke("list_sessions", { chapterId: ids[1] }))[0].id;
+    const mainBefore = (await app.invoke("list_messages", { sessionId: sid })).length;
+    await app.clickEl(`document.querySelector('button[aria-label="打开侧聊"]')`);
+    await waitFor(ev, `!!document.querySelector('[data-testid="side-chat"]')`, 3000);
+    await app.clickEl(`document.querySelector('textarea[aria-label="侧聊输入"]')`);
+    await app.typeText("这个反派的动机站得住吗？");
+    await app.press("Enter");
+    await waitFor(ev, `!!document.querySelector('[data-side-turn="assistant"]')`, 8000);
+    const sideReq = mock.lastRequest();
+    check("侧聊：讨论模式、带本章上下文、不带正式对话历史", sideReq.messages[0].content.includes("写作顾问") && sideReq.messages.length === 2 && sideReq.messages.at(-1).content.includes("这个反派的动机站得住吗？"), `messages=${sideReq.messages.length}`);
+    check("侧聊回答显示在侧栏、正式对话不多一条", (await ev(`document.querySelector('[data-testid="side-chat"]').innerText`)).includes("节奏可以再快") && (await app.invoke("list_messages", { sessionId: sid })).length === mainBefore);
+    await app.screenshot(`${SHOTS}/side-chat.png`);
+    await app.clickEl(`document.querySelector('[data-testid="side-chat"] button[aria-label="关闭侧聊"]')`);
+    await sleep(150);
 
     check("全程没有原生对话框", (await ev(`(window.__nativeDialogs ?? []).length`)) === 0);
     await app.screenshot(`${SHOTS}/final.png`);

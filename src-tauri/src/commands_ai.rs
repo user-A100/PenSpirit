@@ -87,6 +87,32 @@ fn render_phrase_bias(list: &[crate::models::PhraseBias]) -> String {
     out.join("\n")
 }
 
+// ---------- 阶段 2C：相关章节 / 素材检索 ----------
+
+/// 与这段文字相关的章节（本书，排除当前章）与素材（全局素材库）
+pub fn related_search_inner(s: &AppState, book_id: i64, chapter_id: Option<i64>, text: &str, limit: usize) -> AppResult<Vec<crate::context::related::RelatedHit>> {
+    use crate::context::related::{rank, Doc};
+    let (chapters, materials) = {
+        let conn = lock(s)?;
+        (repo::chapters::list_by_book(&conn, book_id)?, repo::materials::list(&conn)?)
+    };
+    let mut docs = Vec::new();
+    for c in chapters.into_iter().filter(|c| Some(c.id) != chapter_id) {
+        let body = fs_service::read_chapter(&s.root, &c.file_path).unwrap_or_default();
+        docs.push(Doc { kind: "chapter".into(), id: c.id, title: c.title, text: crate::context::directives::split(&body).clean });
+    }
+    for m in materials {
+        docs.push(Doc { kind: "material".into(), id: m.id, title: m.title, text: m.content });
+    }
+    let query = crate::context::directives::split(text).clean;
+    Ok(rank(&query, &docs, limit.clamp(1, 20)))
+}
+
+#[tauri::command]
+pub fn related_search(s: State<AppState>, book_id: i64, chapter_id: Option<i64>, text: String, limit: Option<usize>) -> AppResult<Vec<crate::context::related::RelatedHit>> {
+    related_search_inner(&s, book_id, chapter_id, &text, limit.unwrap_or(6))
+}
+
 // ---------- 阶段 2C：备选词 / token 概率 ----------
 
 /// 此处下一个词的备选（概率）；supported = false 表示服务商不回概率
@@ -537,6 +563,27 @@ fn extract_prompt(kind: &str) -> AppResult<&'static str> {
 /// 但不带对话历史、不落库。
 pub fn transient_request(s: &AppState, task: &TransientTask) -> AppResult<StreamReq> {
     match task.kind.as_str() {
+        // 阶段 2C：侧聊——讨论模式、带当前章上下文与设定，但不带正式对话的历史（只带侧聊自己的几轮），不落库
+        "discuss" => {
+            let chapter_id = task.chapter_id.ok_or_else(|| AppError::Invalid("缺少章节".into()))?;
+            if task.instruction.trim().is_empty() {
+                return Err(AppError::Invalid("问题不能为空".into()));
+            }
+            let session = get_or_create_session_inner(s, chapter_id)?;
+            let opts = AiTurnOptions {
+                mode: Some("discuss".into()),
+                cursor_before: Some(task.before.clone()).filter(|b| !b.trim().is_empty()),
+                cursor_after: Some(task.after.clone()).filter(|a| !a.trim().is_empty()),
+                disabled_slots: vec!["对话历史".into()],
+                temperature: task.temperature,
+                ..Default::default()
+            };
+            let bundle = gather_context(s, session.id, &opts, Some(0))?;
+            let mut assembled = assemble_with(&bundle, &task.instruction, &opts);
+            let side: Vec<(String, String)> = task.history.iter().map(|t| (t.role.clone(), t.content.clone())).collect();
+            assembled.history = crate::context::trim_history(&side, Mode::Discuss);
+            build_req(s, assembled, &opts)
+        }
         // 阶段 2C：近义词 / 成语替换——给出这句话里可替换的说法（只出 JSON 字符串数组）
         "synonyms" => {
             let p = {

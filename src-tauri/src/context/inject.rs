@@ -32,22 +32,43 @@ pub fn render_mentions(
                 if ch.book_id != book_id || ch.deleted_at.is_some() {
                     continue;
                 }
-                let text = crate::fs_service::read_chapter(root, &ch.file_path).unwrap_or_default();
-                let total = text.chars().count();
-                let tail: String = if total > MENTION_CHAPTER_CHARS {
-                    text.chars().skip(total - MENTION_CHAPTER_CHARS).collect()
-                } else {
-                    text
-                };
                 labels.push(format!("《{}》", ch.title));
                 let mut s = format!("◆ 章节《{}》", ch.title);
                 if !ch.synopsis.is_empty() {
                     s.push_str(&format!("\n梗概：{}", ch.synopsis));
                 }
-                if !tail.trim().is_empty() {
-                    s.push_str(&format!("\n章尾摘录：\n{tail}"));
+                // 阶段 2C：相关检索带来的段落优先（比章尾更对题）
+                if let Some(p) = m.passage.as_deref().filter(|p| !p.trim().is_empty()) {
+                    let p: String = p.chars().take(crate::context::related::PASSAGE_MAX_CHARS).collect();
+                    s.push_str(&format!("\n相关段落：\n{p}"));
+                } else {
+                    let text = crate::fs_service::read_chapter(root, &ch.file_path).unwrap_or_default();
+                    let total = text.chars().count();
+                    let tail: String = if total > MENTION_CHAPTER_CHARS {
+                        text.chars().skip(total - MENTION_CHAPTER_CHARS).collect()
+                    } else {
+                        text
+                    };
+                    if !tail.trim().is_empty() {
+                        s.push_str(&format!("\n章尾摘录：\n{tail}"));
+                    }
                 }
                 parts.push(s);
+            }
+            // 阶段 2C：素材（全局素材库）
+            "material" => {
+                let Some(mat) = repo::materials::list(conn)?.into_iter().find(|x| x.id == m.id) else { continue };
+                labels.push(format!("素材「{}」", mat.title));
+                let body: String = m
+                    .passage
+                    .clone()
+                    .filter(|p| !p.trim().is_empty())
+                    .unwrap_or(mat.content)
+                    .chars()
+                    .take(crate::context::related::PASSAGE_MAX_CHARS)
+                    .collect();
+                let cat = if mat.category.is_empty() { String::new() } else { format!("（{}）", mat.category) };
+                parts.push(format!("◆ 素材「{}」{cat}\n{body}", mat.title));
             }
             "character" => {
                 let Some(c) = repo::characters::list_by_book(conn, book_id)?.into_iter().find(|c| c.id == m.id) else { continue };
