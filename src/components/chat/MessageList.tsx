@@ -20,6 +20,7 @@ import {
   History,
   ThumbsUp,
   ThumbsDown,
+  Volume2,
   FilePlus2,
   ClipboardPaste,
 } from "lucide-react";
@@ -35,6 +36,7 @@ import { estimateTokens } from "../../lib/ai/tokens";
 import { cleanAiText } from "../../lib/ai/cleanText";
 import { fmtFull, fmtMsgTime } from "../../lib/time";
 import { banHits, usePhraseBias } from "../../lib/ai/phraseBias";
+import { speak, stopSpeaking, useSpeech } from "../../lib/speech";
 import { EXTRACT_LABEL, runExtraction, type ExtractItem, type ExtractKind } from "../../lib/ai/extract";
 import { errMsg } from "../../lib/errors";
 import { ExtractDialog } from "./ExtractDialog";
@@ -543,6 +545,17 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                       继续写
                     </button>
                   )}
+                  <button
+                    aria-label="朗读回答"
+                    data-tip="朗读（听稿查语感）"
+                    onClick={() => {
+                      if (useSpeech.getState().speaking) return stopSpeaking();
+                      if (!speak(plainText(shown.content), "朗读回答")) toast.info("本机没有可用的语音合成");
+                    }}
+                    className={ACT}
+                  >
+                    <Volume2 size={12} />
+                  </button>
                   <button
                     aria-label="有用"
                     aria-pressed={shown.rating === 1}

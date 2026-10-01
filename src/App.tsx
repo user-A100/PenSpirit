@@ -9,6 +9,7 @@ import { TooltipHost } from "./components/ui/TooltipHost";
 import { CommandPalette } from "./components/ui/CommandPalette";
 import { DiffReview } from "./components/chat/DiffReview";
 import { VarsDialog } from "./components/chat/VarsDialog";
+import { SpeechChip } from "./components/ui/SpeechChip";
 import { WriteView } from "./views/WriteView";
 import { FocusEdge } from "./components/layout/FocusEdge";
 import { getView, getViews } from "./lib/nav/registry";
@@ -99,6 +100,7 @@ export default function App() {
       <CommandPalette />
       <DiffReview />
       <VarsDialog />
+      <SpeechChip />
     </ThemeProvider>
   );
 }

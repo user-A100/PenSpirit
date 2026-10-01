@@ -1,6 +1,7 @@
 // 阶段 2C 实机核验：AI P2（本地假服务，不需要真 Key）。
 // 组 C1 对话：时间戳 / 会话内查找 / 👍👎 评分（按命令统计）/ 导出 Markdown / 另存为新章节与素材片段 / 生成中排队与插话
 // 组 C2 输入与上下文：附件 / 上下文包（常驻）/ 词语偏置与「去掉重写」/ 正文 [待写指令] 与 {批注}
+// 组 C3 编辑器内 AI：幽灵补全（默认关）/ 换个说法（近义词 + token 概率）/ 朗读（核验时不出声）
 // 用法（应用已带调试端口启动）：node scripts/verify/p2c.mjs
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -220,6 +221,55 @@ await withGuard("p2c", async ({ app, makeBook }) => {
     await app.press("Enter");
     await waitFor(ev, `!document.querySelector('.ProseMirror').textContent.includes('[写一场雨中打斗]')`, 4000);
     check("应用：AI 写的正文替换掉整个方括号", (await ev(`document.querySelector('.ProseMirror').textContent`)).includes("夜雨初歇"));
+
+    // ================= C3 编辑器内 AI =================
+    await app.clickEl(`document.querySelector('[data-chapter-row="${ids[0]}"]')`);
+    await waitFor(ev, `document.querySelector('.ProseMirror')?.textContent.includes('沈砚站在船头')`);
+    check("幽灵补全默认关", (await ev(`localStorage.getItem('bixian.ghost')`)) !== "1");
+    const editorMore = `document.querySelector('.ProseMirror').closest('.relative').querySelector('button[aria-label="更多"]')`;
+    await app.clickEl(editorMore);
+    await menuItem("幽灵补全");
+    const caretEnd = () => ev(`(() => { const ed = document.querySelector('.ProseMirror'); const p = [...ed.querySelectorAll('p')].at(-1); ed.focus(); const r = document.createRange(); r.selectNodeContents(p); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return true })()`);
+    await caretEnd();
+    await sleep(150);
+    await app.typeText("夜深了");
+    await waitFor(ev, `!!document.querySelector('.ProseMirror [data-ghost]')`, 6000);
+    const ghostText = await ev(`document.querySelector('.ProseMirror [data-ghost]').textContent`);
+    check("停顿后光标处出现灰字建议（不进文档）", ghostText.includes("夜雨初歇") && !(await ev(`document.querySelector('.ProseMirror').textContent`)).includes("渡口的灯笼次第亮起。夜") , ghostText);
+    await app.screenshot(`${SHOTS}/ghost.png`);
+    await app.press("Tab");
+    await sleep(200);
+    check("Tab 接受：灰字写进正文", (await ev(`document.querySelector('.ProseMirror').textContent`)).includes("夜深了夜雨初歇"));
+    await app.typeText("。");
+    await waitFor(ev, `!!document.querySelector('.ProseMirror [data-ghost]')`, 6000);
+    await app.press("Escape");
+    await sleep(150);
+    check("Esc：灰字消失、正文不变", !(await ev(`!!document.querySelector('.ProseMirror [data-ghost]')`)) && (await ev(`document.querySelector('.ProseMirror').textContent`)).endsWith("。"));
+    await app.clickEl(editorMore);
+    await menuItem("幽灵补全");
+    // 换个说法
+    await ev(`(() => { const ed = document.querySelector('.ProseMirror'); const p = [...ed.querySelectorAll('p')].find(x => x.textContent.includes('灯笼')); const t = [...p.childNodes].find(n => n.nodeType === 3 && n.data.includes('灯笼')); const i = t.data.indexOf('灯笼'); const r = document.createRange(); r.setStart(t, i); r.setEnd(t, i + 2); const s = getSelection(); s.removeAllRanges(); s.addRange(r); ed.focus(); return true })()`);
+    await sleep(400);
+    await waitFor(ev, `!!document.querySelector('[data-bubble-menu]')`, 4000);
+    await app.clickEl(`[...document.querySelectorAll('[data-bubble-menu] button')].find(b => b.textContent === '换个说法')`);
+    await waitFor(ev, `!!document.querySelector('[data-testid="word-swap"] [data-synonyms]') && !!document.querySelector('[data-testid="word-swap"] [data-alternatives]')`, 8000);
+    const swapText = await ev(`document.querySelector('[data-testid="word-swap"]').innerText`);
+    check("换个说法：近义词 / 成语 + 此处最可能的字与概率", swapText.includes("凛冽") && swapText.includes("寒") && /\d+%/.test(swapText), swapText.replace(/\n/g, " ").slice(0, 60));
+    await app.screenshot(`${SHOTS}/word-swap.png`);
+    await app.clickEl(`[...document.querySelectorAll('[data-testid="word-swap"] button')].find(b => b.textContent === '凛冽')`);
+    await sleep(300);
+    check("点一个即替换选中的词", (await ev(`document.querySelector('.ProseMirror').textContent`)).includes("渡口的凛冽次第亮起"));
+    // 朗读（核验时把系统语音换成静音桩，只验接线）：本章对话里先有一条回答
+    await typeInComposer("写一句");
+    await app.press("Enter");
+    await waitIdle();
+    await ev(`(() => { window.__spoken = []; speechSynthesis.speak = (u) => { window.__spoken.push(u.text); }; return true })()`);
+    await app.clickEl(`${lastReply}.querySelector('button[aria-label="朗读回答"]')`);
+    await waitFor(ev, `!!document.querySelector('[data-testid="speech-chip"]')`, 3000);
+    check("朗读回答：逐段交给系统语音、出现朗读条", (await ev(`window.__spoken.length`)) >= 1);
+    await app.clickEl(`document.querySelector('button[aria-label="停止朗读"]')`);
+    await sleep(150);
+    check("停止朗读：朗读条消失", !(await ev(`!!document.querySelector('[data-testid="speech-chip"]')`)));
 
     check("全程没有原生对话框", (await ev(`(window.__nativeDialogs ?? []).length`)) === 0);
     await app.screenshot(`${SHOTS}/final.png`);

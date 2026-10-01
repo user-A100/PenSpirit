@@ -562,6 +562,14 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
   font-style: italic;
 }
 
+/* ---------- 幽灵文本补全（阶段 2C）：灰字建议，Tab 接受 ---------- */
+.ai-ghost {
+  color: var(--text-faint);
+  opacity: 0.75;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* ---------- 会话内查找（阶段 2C）：CSS 自定义高亮，不改消息 DOM ---------- */
 ::highlight(chat-find) {
   background-color: color-mix(in srgb, var(--warning) 30%, transparent);

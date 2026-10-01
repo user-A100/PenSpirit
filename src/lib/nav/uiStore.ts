@@ -8,6 +8,8 @@ export const DOCK_PCT_KEY = "bixian.nav.dockPct";
 export const TYPEWRITER_KEY = "bixian.typewriter";
 /** 阶段 2B：AI 写入着色开关（默认开；"0" = 关） */
 export const AI_TINT_KEY = "bixian.aiTint";
+/** 阶段 2C：幽灵文本补全开关（默认关；"1" = 开） */
+export const GHOST_KEY = "bixian.ghost";
 /** 右侧 dock 每个一级视图记住的面板（viewId → panelId） */
 export const DOCK_PANEL_KEY = "bixian.nav.dockPanel";
 
@@ -37,6 +39,9 @@ interface UiNavState {
   /** 阶段 2B：正文里淡淡标出 AI 写入、尚未改过的段落（持久化） */
   aiTint: boolean;
   toggleAiTint: () => void;
+  /** 阶段 2C：幽灵文本补全（默认关，持久化） */
+  ghost: boolean;
+  toggleGhost: () => void;
   /** 专注模式（Zen 紧凑模式）：隐去全部 chrome 只留稿纸；左缘悬停唤出目录（会话内状态） */
   focusMode: boolean;
   toggleFocusMode: () => void;
@@ -106,6 +111,23 @@ export const useUiNav = create<UiNavState>((set) => ({
         // 持久化失败不影响会话内切换
       }
       return { aiTint };
+    }),
+  ghost: (() => {
+    try {
+      return localStorage.getItem(GHOST_KEY) === "1";
+    } catch {
+      return false;
+    }
+  })(),
+  toggleGhost: () =>
+    set((s) => {
+      const ghost = !s.ghost;
+      try {
+        localStorage.setItem(GHOST_KEY, ghost ? "1" : "0");
+      } catch {
+        // 同上
+      }
+      return { ghost };
     }),
   focusMode: false,
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode, activeView: s.focusMode ? s.activeView : "write" })),

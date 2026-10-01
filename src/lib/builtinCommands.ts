@@ -113,6 +113,7 @@ export function builtinCommands(): Command[] {
       run: () => useInlineAi.getState().open("continue"),
     },
     { id: "ai.tint", title: "标出 AI 写入的文字", category: "AI", run: () => useUiNav.getState().toggleAiTint() },
+    { id: "ai.ghost", title: "幽灵补全（停顿后灰字提示，Tab 接受）", category: "AI", run: () => useUiNav.getState().toggleGhost() },
     {
       id: "ai.find",
       title: "在 AI 对话中查找",

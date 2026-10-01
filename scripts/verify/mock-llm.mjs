@@ -46,12 +46,40 @@ export function startMockLlm(port = 0) {
           object: "chat.completion.chunk",
           created: 0,
           model: json.model ?? "mock",
-          choices: [{ index: 0, delta: first ? { role: "assistant", content: text } : { content: text }, finish_reason: null }],
+          choices: [
+            {
+              index: 0,
+              delta: first ? { role: "assistant", content: text } : { content: text },
+              finish_reason: null,
+              // 阶段 2C：请求带 logprobs 时，第一个分片带上「此处最可能的字」
+              ...(first && json.logprobs
+                ? {
+                    logprobs: {
+                      content: [
+                        {
+                          token: "寒",
+                          logprob: -0.4,
+                          bytes: null,
+                          top_logprobs: [
+                            { token: "寒", logprob: -0.4, bytes: null },
+                            { token: "冷", logprob: -1.5, bytes: null },
+                            { token: "凉", logprob: -2.3, bytes: null },
+                          ],
+                        },
+                      ],
+                      refusal: null,
+                    },
+                  }
+                : {}),
+            },
+          ],
         })}\n\n`;
       const sys = msgs[0]?.content ?? "";
       // 阶段 2B 抽取：系统提示要求「只输出 JSON 数组」→ 按类型回一份固定的 JSON
       if (sys.includes("只输出 JSON 数组")) {
-        const data = sys.includes("人物")
+        const data = sys.includes("词语顾问")
+          ? ["刺骨", "凛冽", "寒彻"]
+          : sys.includes("人物")
           ? [{ name: "沈砚", role: "主角", aliases: "砚哥", description: "冷面剑客，守着渡口" }, { name: "林晚", role: "女主", aliases: "", description: "递来半张地图的姑娘" }]
           : sys.includes("伏笔")
             ? [{ title: "半张地图", note: "另一半在反派手里，终局揭晓" }]

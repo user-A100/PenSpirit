@@ -31,7 +31,7 @@ export interface ChatSession { id: number; book_id: number; chapter_id: number; 
 export interface SessionHit { session: ChatSession; chapter_title: string; message_id: number | null; snippet: string }
 /** 阶段 2B：一次性生成（不落进对话历史） */
 export interface TransientTask {
-  kind: "extract" | "inline_edit" | "continue";
+  kind: "extract" | "inline_edit" | "continue" | "synonyms";
   chapter_id?: number | null; text?: string; extract_kind?: "character" | "foreshadow" | "plot";
   before?: string; after?: string; selection?: string; instruction?: string; target_chars?: number | null; temperature?: number | null;
 }
@@ -78,6 +78,8 @@ export interface AiTurnOptions {
   /** 阶段 2C：本轮附件 */
   attachments?: Attachment[];
 }
+/** 阶段 2C：备选词（token 概率） */
+export interface TokenAlternatives { supported: boolean; tokens: { token: string; prob: number }[] }
 /** 阶段 2C：附件 / 词语偏置 */
 export interface Attachment { name: string; text: string }
 export interface AttachmentRead { name: string; text: string; chars: number; truncated: boolean }
@@ -363,6 +365,8 @@ export const api = {
   messageStar: (id: number, starred: boolean) => invoke<number | null>("message_star", { id, starred }),
   /** 一次性生成：增量走 transient://{requestId}，结束返回全文；取消用 cancelGeneration(requestId) */
   aiTransient: (requestId: number, task: TransientTask) => invoke<string>("ai_transient", { requestId, task }),
+  /** 阶段 2C：此处下一个词的备选与概率（服务商不回概率时 supported = false） */
+  aiTokenAlternatives: (chapterId: number, before: string) => invoke<TokenAlternatives>("ai_token_alternatives", { chapterId, before }),
   messageSetActive: (id: number) => invoke<ChatMessage>("message_set_active", { id }),
   messageSetAdopted: (id: number, adopted: boolean) => invoke<ChatMessage>("message_set_adopted", { id, adopted }),
   cancelGeneration: (sessionId: number) => invoke<void>("cancel_generation", { sessionId }),

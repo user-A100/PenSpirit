@@ -12,7 +12,7 @@ use crate::context::InjectionInput;
 use crate::error::{AppError, AppResult};
 use crate::fs_service;
 use crate::llm::provider;
-use crate::llm::stream::{chat_stream, classify_error, StreamEvent, StreamReq};
+use crate::llm::stream::{chat_stream, classify_error, next_token_alternatives, StreamEvent, StreamReq};
 use crate::models::{AiMemory, AiTurnOptions, ChatMessage, ChatSession, ContextConfig, MaterialInput, ProviderProfile, SessionHit, StyleCard, TransientTask, WritingRule, WritingRuleInput};
 use crate::repo;
 use crate::state::AppState;
@@ -85,6 +85,56 @@ fn render_phrase_bias(list: &[crate::models::PhraseBias]) -> String {
         out.push(format!("合适时可以多用：{}", prefer.join("、")));
     }
     out.join("\n")
+}
+
+// ---------- 阶段 2C：备选词 / token 概率 ----------
+
+/// 此处下一个词的备选（概率）；supported = false 表示服务商不回概率
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TokenAlternatives {
+    pub supported: bool,
+    pub tokens: Vec<TokenAlt>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TokenAlt {
+    pub token: String,
+    pub prob: f64,
+}
+
+/// 组装「只写几个字」的请求：书名提示 + 光标前文尾部（剔除正文指令）
+pub fn token_alternatives_request(s: &AppState, chapter_id: i64, before: &str) -> AppResult<StreamReq> {
+    let (p, title) = {
+        let conn = lock(s)?;
+        let ch = repo::chapters::get(&conn, chapter_id)?;
+        (provider::resolve(&conn)?, repo::books::get(&conn, ch.book_id)?.title)
+    };
+    let clean = crate::context::directives::split(before).clean;
+    let total = clean.chars().count();
+    let tail: String = clean.chars().skip(total.saturating_sub(1500)).collect();
+    Ok(StreamReq {
+        base_url: p.base_url,
+        api_key: p.api_key,
+        model: p.model,
+        system: crate::context::assembler::write_prompt(&title),
+        history: Vec::new(),
+        user: format!("【光标前文】\n{tail}\n\n直接接着上面的最后一个字往下写，只写几个字，不换行、不解释。"),
+        max_tokens: 4,
+        temperature: 1.0,
+    })
+}
+
+pub async fn ai_token_alternatives_run(s: &AppState, chapter_id: i64, before: &str) -> AppResult<TokenAlternatives> {
+    let req = token_alternatives_request(s, chapter_id, before)?;
+    Ok(match next_token_alternatives(req, 8).await? {
+        Some(list) => TokenAlternatives { supported: true, tokens: list.into_iter().map(|(token, p)| TokenAlt { token, prob: p as f64 }).collect() },
+        None => TokenAlternatives { supported: false, tokens: Vec::new() },
+    })
+}
+
+#[tauri::command]
+pub async fn ai_token_alternatives(state: State<'_, AppState>, chapter_id: i64, before: String) -> AppResult<TokenAlternatives> {
+    ai_token_alternatives_run(&state, chapter_id, &before).await
 }
 
 // ---------- 阶段 2C：附件 / 词语偏置 ----------
@@ -487,6 +537,30 @@ fn extract_prompt(kind: &str) -> AppResult<&'static str> {
 /// 但不带对话历史、不落库。
 pub fn transient_request(s: &AppState, task: &TransientTask) -> AppResult<StreamReq> {
     match task.kind.as_str() {
+        // 阶段 2C：近义词 / 成语替换——给出这句话里可替换的说法（只出 JSON 字符串数组）
+        "synonyms" => {
+            let p = {
+                let conn = lock(s)?;
+                provider::resolve(&conn)?
+            };
+            if task.selection.trim().is_empty() {
+                return Err(AppError::Invalid("先选中要换的词".into()));
+            }
+            Ok(StreamReq {
+                base_url: p.base_url,
+                api_key: p.api_key,
+                model: p.model,
+                system: "你是中文小说写作的词语顾问。只输出 JSON 数组。".into(),
+                history: Vec::new(),
+                user: format!(
+                    "句子：{}\n要替换的词：「{}」\n给出 8 个在这句话里语义贴切、语气一致的替换说法（近义词、成语或更有画面感的表达），不要重复原词。只输出 JSON 字符串数组。",
+                    task.text.trim(),
+                    task.selection.trim()
+                ),
+                max_tokens: p.max_tokens.min(400),
+                temperature: task.temperature.unwrap_or(0.8),
+            })
+        }
         "extract" => {
             let p = {
                 let conn = lock(s)?;

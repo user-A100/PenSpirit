@@ -20,9 +20,19 @@ import {
   Scissors,
   Highlighter,
   Sparkles,
+  Ghost as GhostIcon,
+  Volume2,
 } from "lucide-react";
 import { AiTint, aiTintKey } from "./aiTint";
 import { Directives } from "./directives";
+import { Ghost, ghostKey } from "./ghost";
+import { WordSwap } from "./WordSwap";
+import { useWordSwap } from "../../stores/wordSwap";
+import { runTransient, type TransientRun } from "../../lib/ai/transient";
+import { cleanAiText } from "../../lib/ai/cleanText";
+import { addTint } from "../../lib/ai/aiTint";
+import { speak } from "../../lib/speech";
+import { toast } from "../../stores/toast";
 import { InlineAi } from "./InlineAi";
 import { useInlineAi } from "../../stores/inlineAi";
 import { loadTint, pruneTint } from "../../lib/ai/aiTint";
@@ -50,6 +60,8 @@ import { WikiSuggest } from "./WikiSuggest";
 
 // 单次字数跳变超过它就丢弃：切章/恢复快照/清空这类程序化改动的特征
 const MAX_WORD_DELTA = 500;
+/** 幽灵补全：停顿多久后请求建议（毫秒） */
+const GHOST_IDLE_MS = 1200;
 
 /** 在文档里找首个包含 needle 的文本区间（不跨文本节点，作为「跳到此行」的近似定位足够） */
 function findTextPos(doc: PMNode, needle: string): { from: number; to: number } | null {
@@ -83,6 +95,14 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   const toggleTypewriter = useUiNav((s) => s.toggleTypewriter);
   const focusMode = useUiNav((s) => s.focusMode);
   const aiTintOn = useUiNav((s) => s.aiTint);
+  const ghostOn = useUiNav((s) => s.ghost);
+  // 阶段 2C：幽灵补全——停顿 GHOST_IDLE_MS 后、光标在非空段末尾时请求一小段灰字建议
+  const ghostOnRef = useRef(false);
+  ghostOnRef.current = ghostOn;
+  const ghostTimer = useRef<number | null>(null);
+  const ghostRun = useRef<TransientRun | null>(null);
+  const chapterIdRef = useRef<number | null>(null);
+  const scheduleGhost = useRef<() => void>(() => {});
   // 命令库里标了「进气泡」的自定义命令（list 引用稳定，过滤放在渲染里）
   const prompts = usePrompts((s) => s.list);
   const bubblePrompts = prompts.filter((p) => p.inBubble && p.name.trim() && p.template.trim());
@@ -109,7 +129,20 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   const [placeholderOpen, setPlaceholderOpen] = useState(false);
 
   const editor = useEditor({
-    extensions: [StarterKit, Markdown, WikiLinks, AiTint, Directives],
+    extensions: [
+      StarterKit,
+      Markdown,
+      WikiLinks,
+      AiTint,
+      Directives,
+      Ghost.configure({
+        // 接受的灰字也算 AI 写入：记进着色
+        onAccept: (text) => {
+          const id = chapterIdRef.current;
+          if (id != null) void addTint(id, text);
+        },
+      }),
+    ],
     content: "",
     immediatelyRender: false,
     // wiki 链接点击跳转（M7 批次3）：[[章题]] 是纯文本装饰，同书章题精确匹配选中
@@ -148,6 +181,9 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
         });
       }
       if (!tr.docChanged || suppressStats.current) return;
+      // 幽灵补全接受的灰字是 AI 写的，不算手写
+      if (tr.getMeta("aiInsert")) return;
+      scheduleGhost.current();
       // 粘贴整段不算"写"（ProseMirror 的粘贴处理器会打上 paste meta）
       if (tr.getMeta("paste") || tr.getMeta("uiEvent") === "paste") return;
       const bookId = bookIdRef.current;
@@ -181,6 +217,47 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
     savedRef.current = null;
     loadedIdRef.current = chapterId;
   }, [chapterId, content, editor]);
+
+  chapterIdRef.current = chapterId;
+  scheduleGhost.current = () => {
+    if (ghostTimer.current != null) window.clearTimeout(ghostTimer.current);
+    ghostRun.current?.cancel();
+    ghostRun.current = null;
+    if (!ghostOnRef.current || !editor || chapterId == null) return;
+    ghostTimer.current = window.setTimeout(() => {
+      if (editor.isDestroyed || !editor.isFocused) return;
+      const { state } = editor;
+      const sel = state.selection;
+      const $h = sel.$head;
+      if (!sel.empty || !$h.parent.isTextblock || $h.parent.content.size === 0 || $h.parentOffset !== $h.parent.content.size) return;
+      const pos = sel.head;
+      const doc = state.doc;
+      const run = runTransient({
+        kind: "continue",
+        chapter_id: chapterId,
+        before: doc.textBetween(0, pos, "\n", " ").slice(-2000),
+        after: doc.textBetween(pos, doc.content.size, "\n", " ").slice(0, 500),
+        instruction: "接着光标处往下写半句到一句（不超过 30 字），只输出这些字，不换行、不解释。",
+        target_chars: 30,
+      });
+      ghostRun.current = run;
+      run.done
+        .then((full) => {
+          if (ghostRun.current !== run || editor.isDestroyed || editor.state.doc !== doc || editor.state.selection.head !== pos) return;
+          const text = cleanAiText(full, { prose: true }).split("\n")[0].trim().slice(0, 60);
+          if (text) editor.view.dispatch(editor.state.tr.setMeta(ghostKey, { text, pos }));
+        })
+        .catch(() => {});
+    }, GHOST_IDLE_MS);
+  };
+  // 关掉幽灵补全：取消计时与请求、收掉灰字
+  useEffect(() => {
+    if (ghostOn || !editor) return;
+    if (ghostTimer.current != null) window.clearTimeout(ghostTimer.current);
+    ghostRun.current?.cancel();
+    ghostRun.current = null;
+    if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(ghostKey, { text: null, pos: 0 }));
+  }, [ghostOn, editor]);
 
   // AI 写入着色（阶段 2B）：换章先清空，再读该章片段表；正文里已不存在的片段顺手剪掉
   useEffect(() => {
@@ -414,6 +491,17 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
     },
     { label: "打字机滚动", icon: Type, checked: typewriter, onSelect: toggleTypewriter },
     { label: "标出 AI 写入的文字", icon: Highlighter, checked: aiTintOn, onSelect: () => useUiNav.getState().toggleAiTint() },
+    { label: "幽灵补全（停顿后灰字提示，Tab 接受）", icon: GhostIcon, checked: ghostOn, onSelect: () => useUiNav.getState().toggleGhost() },
+    {
+      label: "从光标处朗读本章",
+      icon: Volume2,
+      onSelect: () => {
+        if (!editor) return;
+        const { head } = editor.state.selection;
+        const text = editor.state.doc.textBetween(head, editor.state.doc.content.size, "\n", " ");
+        if (!speak(text, "朗读本章")) toast.info("本机没有可用的语音合成");
+      },
+    },
     { label: "悬浮大纲", icon: ListTree, checked: outlineOpen, shortcut: commandShortcut("editor.toggleOutline"), onSelect: () => useOutline.getState().toggle() },
     { label: focusMode ? "退出专注模式" : "专注模式", icon: Maximize2, shortcut: commandShortcut("view.focusMode"), onSelect: () => useUiNav.getState().toggleFocusMode() },
     { type: "separator" },
@@ -544,6 +632,27 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
               <span aria-hidden className="mx-0.5 h-4 w-px bg-[var(--hairline)]" />
               <button
                 onMouseDown={(e) => e.preventDefault()}
+                onClick={() => useWordSwap.getState().open(pane)}
+                data-tip="近义词 / 成语，与此处最可能的字（选中一个词）"
+                className="rounded-[4px] px-2 py-1 text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-fast)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
+              >
+                换个说法
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                aria-label="朗读选中文字"
+                data-tip="朗读选中文字"
+                onClick={() => {
+                  if (!editor) return;
+                  const { from, to } = editor.state.selection;
+                  if (!speak(editor.state.doc.textBetween(from, to, "\n", " "), "朗读选段")) toast.info("本机没有可用的语音合成");
+                }}
+                className="rounded-[4px] p-1 text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-fast)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
+              >
+                <Volume2 size={13} />
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => useInlineAi.getState().open("edit", pane)}
                 data-tip="就地改写，不进对话"
                 data-tip-key={commandShortcut("ai.inlineEdit")}
@@ -563,6 +672,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
           </BubbleMenu>
         )}
         {editor && <InlineAi editor={editor} chapterId={chapterId} pane={pane} />}
+        {editor && <WordSwap editor={editor} chapterId={chapterId} pane={pane} />}
       </div>
 
       {historyOpen && (
