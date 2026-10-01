@@ -24,6 +24,7 @@ pub fn init(conn: &mut Connection) -> Result<(), Box<dyn std::error::Error>> {
         M::up(include_str!("../migrations/0016_m7_collections.sql")),
         M::up(include_str!("../migrations/0017_m7_batch7.sql")),
         M::up(include_str!("../migrations/0018_ordered_collections.sql")),
+        M::up(include_str!("../migrations/0019_chat_v2.sql")),
     ])
     .to_latest(conn)?;
     conn.pragma_update(None, "foreign_keys", "ON")?;

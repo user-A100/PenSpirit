@@ -15,7 +15,30 @@ use crate::error::{AppError, AppResult};
 pub enum StreamEvent {
     Delta { text: String },
     Done { session_id: i64, content: String },
-    Error { message: String },
+    /// kind：auth / rate_limit / quota / context_length / network / server / unknown；
+    /// partial：出错前已收到的内容（命令层会把它作为截断回答落库）
+    Error { message: String, kind: String, partial: String },
+}
+
+/// 错误分类（阶段 2A）：按服务商回显的错误文本归类，前端据此给出处理建议与重试。
+pub fn classify_error(message: &str) -> &'static str {
+    let m = message.to_lowercase();
+    let has = |needles: &[&str]| needles.iter().any(|n| m.contains(n));
+    if has(&["401", "403", "unauthorized", "invalid api key", "incorrect api key", "authentication", "api key", "forbidden"]) {
+        "auth"
+    } else if has(&["insufficient", "balance", "余额", "quota", "billing", "payment"]) {
+        "quota"
+    } else if has(&["429", "rate limit", "rate_limit", "too many requests", "限流"]) {
+        "rate_limit"
+    } else if has(&["context length", "context_length", "maximum context", "too long", "max_tokens", "token limit", "超出"]) {
+        "context_length"
+    } else if has(&["timed out", "timeout", "error sending request", "connection", "dns", "network", "connect", "eof", "transport", "decoding response", "closed"]) {
+        "network"
+    } else if has(&["500", "502", "503", "504", "overloaded", "internal server error", "bad gateway", "service unavailable"]) {
+        "server"
+    } else {
+        "unknown"
+    }
 }
 
 /// 一次流式续写的请求参数（从 ProviderProfile + 组装结果构造）。
@@ -103,7 +126,8 @@ pub async fn chat_stream(
         Ok(s) => s,
         Err(e) => {
             let message = sanitize(&e.to_string(), &req.api_key);
-            let _ = tx.send(StreamEvent::Error { message }).await;
+            let kind = classify_error(&message).to_string();
+            let _ = tx.send(StreamEvent::Error { message, kind, partial: String::new() }).await;
             return Ok(rx);
         }
     };
@@ -149,7 +173,8 @@ pub async fn chat_stream(
                 }
                 Some(Err(e)) => {
                     let message = sanitize(&e.to_string(), &api_key);
-                    let _ = tx.send(StreamEvent::Error { message }).await;
+                    let kind = classify_error(&message).to_string();
+                    let _ = tx.send(StreamEvent::Error { message, kind, partial: full }).await;
                     return;
                 }
                 None => break, // 正常流结束

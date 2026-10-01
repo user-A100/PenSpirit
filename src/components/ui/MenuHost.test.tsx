@@ -64,10 +64,36 @@ describe("MenuHost", () => {
     expect(document.activeElement).toBe(root);
   });
 
-  it("点击菜单外部关闭", () => {
-    render(<MenuHost />);
+  it("点击菜单外部关闭，且不把焦点抢回触发按钮", () => {
+    render(
+      <>
+        <button>触发</button>
+        <input aria-label="别处" />
+        <MenuHost />
+      </>,
+    );
+    screen.getByText("触发").focus();
     openAt([{ label: "甲" }]);
-    fireEvent.mouseDown(document.body);
+    const input = screen.getByLabelText("别处");
+    fireEvent.mouseDown(input);
+    input.focus();
     expect(useMenu.getState().req).toBeNull();
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("Esc 关闭后焦点还给触发按钮；焦点不在面板上时 Esc 也能关", () => {
+    render(
+      <>
+        <button>触发</button>
+        <MenuHost />
+      </>,
+    );
+    const btn = screen.getByText("触发");
+    btn.focus();
+    openAt([{ label: "甲" }]);
+    btn.focus(); // 模拟面板没拿到焦点
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(useMenu.getState().req).toBeNull();
+    expect(document.activeElement).toBe(btn);
   });
 });

@@ -7,6 +7,7 @@ import { ConfirmHost } from "./components/ui/ConfirmHost";
 import { MenuHost } from "./components/ui/MenuHost";
 import { TooltipHost } from "./components/ui/TooltipHost";
 import { CommandPalette } from "./components/ui/CommandPalette";
+import { DiffReview } from "./components/chat/DiffReview";
 import { WriteView } from "./views/WriteView";
 import { FocusEdge } from "./components/layout/FocusEdge";
 import { getView, getViews } from "./lib/nav/registry";
@@ -95,6 +96,7 @@ export default function App() {
       <Toaster />
       <TooltipHost />
       <CommandPalette />
+      <DiffReview />
     </ThemeProvider>
   );
 }

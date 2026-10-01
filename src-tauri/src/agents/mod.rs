@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, State};
 
 use crate::error::{AppError, AppResult};
-use crate::models::{AgentDescriptor, ChatMessage, ProbeResult};
+use crate::models::{AgentDescriptor, AiTurnOptions, ChatMessage, ProbeResult};
 use crate::state::AppState;
 
 // ---------- inner（可测） ----------
@@ -57,8 +57,32 @@ pub fn send_message_acp_start(
     s: &AppState,
     session_id: i64,
     instruction: &str,
+    opts: &AiTurnOptions,
 ) -> AppResult<ChatMessage> {
-    let (user_msg, desc, prompt_text) = session::send_message_acp_inner(s, session_id, instruction)?;
+    let (user_msg, desc, prompt_text) = session::send_message_acp_inner(s, session_id, instruction, opts)?;
+    start_turn(app, s, session_id, user_msg, desc, prompt_text)
+}
+
+/// 阶段 2A：ACP 重新生成。
+pub fn regenerate_acp_start(
+    app: &AppHandle,
+    s: &AppState,
+    user_message_id: i64,
+    opts: &AiTurnOptions,
+) -> AppResult<ChatMessage> {
+    let (user_msg, desc, prompt_text) = session::regenerate_acp_inner(s, user_message_id, opts)?;
+    let session_id = user_msg.session_id;
+    start_turn(app, s, session_id, user_msg, desc, prompt_text)
+}
+
+fn start_turn(
+    app: &AppHandle,
+    s: &AppState,
+    session_id: i64,
+    user_msg: ChatMessage,
+    desc: AgentDescriptor,
+    prompt_text: String,
+) -> AppResult<ChatMessage> {
     // 会话来源标记
     {
         let conn = s.db.lock().map_err(|_| AppError::LockPoisoned)?;
@@ -72,8 +96,9 @@ pub fn send_message_acp_start(
         .insert(session_id, tx);
     let app = app.clone();
     let sid = session_id;
+    let reply_to = user_msg.id;
     tauri::async_runtime::spawn(async move {
-        session::run_turn(app, sid, desc, prompt_text, rx).await;
+        session::run_turn(app, sid, reply_to, desc, prompt_text, rx).await;
     });
     Ok(user_msg)
 }
@@ -112,8 +137,20 @@ pub async fn send_message_acp(
     state: State<'_, AppState>,
     session_id: i64,
     instruction: String,
+    options: Option<AiTurnOptions>,
 ) -> AppResult<ChatMessage> {
-    send_message_acp_start(&app, &state, session_id, &instruction)
+    send_message_acp_start(&app, &state, session_id, &instruction, &options.unwrap_or_default())
+}
+
+/// ACP 后端重新生成（阶段 2A）。
+#[tauri::command]
+pub async fn chat_regenerate_acp(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    user_message_id: i64,
+    options: Option<AiTurnOptions>,
+) -> AppResult<ChatMessage> {
+    regenerate_acp_start(&app, &state, user_message_id, &options.unwrap_or_default())
 }
 
 /// 取消当前 ACP 回合（复用 M1 的取消通道；对未知/已结束会话幂等 Ok）。

@@ -153,7 +153,9 @@ function MenuPanel({ items, x, y, anchor, alignEnd, minWidth, depth, autoFocus, 
           left: pos?.left ?? x,
           top: pos?.top ?? y,
           minWidth: minWidth ?? 176,
-          visibility: pos ? "visible" : "hidden",
+          // 定位前用透明而非 visibility:hidden——隐藏元素无法获得焦点，键盘导航会失效
+          opacity: pos ? undefined : 0,
+          pointerEvents: pos ? undefined : "none",
         }}
         className="menu-pop fixed z-[260] max-h-[70vh] max-w-[20rem] overflow-y-auto rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] p-1 text-ui outline-none [box-shadow:var(--shadow-overlay,0_10px_30px_rgba(0,0,0,0.3))]"
       >
@@ -254,17 +256,26 @@ export function MenuHost() {
     const prevFocus = document.activeElement as HTMLElement | null;
     const onDown = (e: MouseEvent) => {
       const t = e.target as Element | null;
-      if (!t?.closest?.("[data-menu-panel]")) close();
+      if (!t?.closest?.("[data-menu-panel]")) close(false);
     };
-    const onDismiss = () => close();
+    const onDismiss = () => close(false);
+    // 兜底：焦点不在菜单里时 Esc 也能关（面板自己的 Esc 处理会先拦截）
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
+    };
     window.addEventListener("mousedown", onDown, true);
     window.addEventListener("blur", onDismiss);
     window.addEventListener("resize", onDismiss);
+    window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("mousedown", onDown, true);
       window.removeEventListener("blur", onDismiss);
       window.removeEventListener("resize", onDismiss);
-      if (prevFocus && document.contains(prevFocus)) prevFocus.focus({ preventScroll: true });
+      window.removeEventListener("keydown", onKey);
+      if (useMenu.getState().restoreFocus && prevFocus && document.contains(prevFocus)) prevFocus.focus({ preventScroll: true });
     };
   }, [req, close]);
 
@@ -280,7 +291,7 @@ export function MenuHost() {
       minWidth={req.minWidth}
       depth={0}
       autoFocus
-      onClose={close}
+      onClose={() => close()}
     />
   );
 }

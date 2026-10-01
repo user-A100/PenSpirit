@@ -1,14 +1,29 @@
 // 拼音首字母与模糊匹配（命令面板跳章、阶段 2 斜杠命令共用）。
 // 不引依赖：借 ICU 的中文拼音排序（Intl.Collator zh-u-co-pinyin），用各声母区间的
-// 「最小字」做边界二分定位首字母。WebView2（Chromium 全量 ICU）与 Node（full-icu）均可用。
+// 「最小字」做边界定位首字母。WebView2（Chromium 全量 ICU）与 Node（full-icu）均可用。
+// 同音字在 ICU 里的先后与常见边界表（GB2312 时代）不一致——每个声母给一组候选字，
+// 运行时取排序最小者为边界，比写死单字稳。
 
-const BOUNDARIES = ["阿", "八", "嚓", "哒", "妸", "发", "旮", "哈", "讥", "咔", "垃", "痳", "拏", "噢", "妑", "七", "呥", "扨", "它", "穵", "夕", "丫", "帀"];
 const LETTERS = "abcdefghjklmnopqrstwxyz";
+const CANDIDATES = [
+  "阿啊吖锕腌嗄", "八巴吧叭扒芭疤捌", "嚓擦礤", "哒搭耷嗒答", "妸婀屙鹅额", "发伐乏", "旮嘎夹伽", "哈铪", "讥几叽击鸡",
+  "咔咖喀卡", "垃拉啦喇", "妈嘛嬷痳", "拏那南", "噢哦喔", "妑趴啪葩", "七期欺漆", "呥然蚺髯", "仨撒洒萨", "他它她塌趿",
+  "穵挖哇蛙娃", "夕西吸希昔", "丫压呀鸭押", "帀杂匝咂扎",
+];
 
 let collator: Intl.Collator | null = null;
 function getCollator(): Intl.Collator {
   if (!collator) collator = new Intl.Collator("zh-Hans-CN-u-co-pinyin", { sensitivity: "base" });
   return collator;
+}
+
+let boundaries: string[] | null = null;
+function getBoundaries(): string[] {
+  if (!boundaries) {
+    const c = getCollator();
+    boundaries = CANDIDATES.map((set) => [...set].sort(c.compare)[0]);
+  }
+  return boundaries;
 }
 
 const cache = new Map<string, string>();
@@ -19,9 +34,10 @@ export function initialOf(ch: string): string {
   const hit = cache.get(ch);
   if (hit !== undefined) return hit;
   const c = getCollator();
+  const bounds = getBoundaries();
   let letter = "";
-  for (let i = BOUNDARIES.length - 1; i >= 0; i--) {
-    if (c.compare(ch, BOUNDARIES[i]) >= 0) {
+  for (let i = bounds.length - 1; i >= 0; i--) {
+    if (c.compare(ch, bounds[i]) >= 0) {
       letter = LETTERS[i];
       break;
     }

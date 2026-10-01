@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { ChapterEditor } from "./ChapterEditor";
 import { AiDock } from "../chat/AiDock";
@@ -30,6 +30,16 @@ export function EditorPane() {
   const [collapsed, setCollapsed] = useState(false);
   const splitAxis = useWorkspace((s) => s.splitAxis);
   const focusMode = useUiNav((s) => s.focusMode);
+  const aiCollapsed = useUiNav((s) => s.aiCollapsed);
+
+  // store → 面板：命令（Ctrl+J / 气泡菜单）改变折叠态时驱动面板；面板 → store 见 onResize
+  useEffect(() => {
+    if (aiCollapsed === collapsed) return;
+    if (aiCollapsed) panelRef.current?.collapse();
+    else panelRef.current?.expand();
+    // collapsed 由 onResize 回写，不作依赖（避免拖拽中来回触发）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiCollapsed]);
 
   const editorArea =
     splitAxis === "none" ? (
@@ -82,14 +92,13 @@ export function EditorPane() {
         onResize={(size, _id, prev) => {
           if (prev === undefined) return; // 首帧：保持初值 false
           if (useUiNav.getState().focusMode) return; // 专注模式 CSS 摘除不算折叠
-          setCollapsed(size.inPixels <= COLLAPSED_PX + 4);
+          const c = size.inPixels <= COLLAPSED_PX + 4;
+          setCollapsed(c);
+          if (useUiNav.getState().aiCollapsed !== c) useUiNav.setState({ aiCollapsed: c });
         }}
       >
         <div className="zen-card h-full">
-          <AiDock
-            collapsed={collapsed}
-            onToggle={() => (collapsed ? panelRef.current?.expand() : panelRef.current?.collapse())}
-          />
+          <AiDock collapsed={collapsed} onToggle={() => useUiNav.getState().setAiCollapsed(!collapsed)} />
         </div>
       </Panel>
     </Group>

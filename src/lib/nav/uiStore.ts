@@ -26,6 +26,9 @@ interface UiNavState {
   readReturn: string | null;
   /** 打字机滚动：输入时把光标行固定在视口偏上位置（Scrivener Typewriter Scrolling） */
   typewriter: boolean;
+  /** AI 对话卡折叠态（会话内状态；EditorPane 与面板尺寸双向同步） */
+  aiCollapsed: boolean;
+  setAiCollapsed: (v: boolean) => void;
   /** 专注模式（Zen 紧凑模式）：隐去全部 chrome 只留稿纸；左缘悬停唤出目录（会话内状态） */
   focusMode: boolean;
   toggleFocusMode: () => void;
@@ -75,6 +78,8 @@ export const useUiNav = create<UiNavState>((set) => ({
   dockCollapsed: false,
   readReturn: null,
   typewriter: readStoredTypewriter(),
+  aiCollapsed: false,
+  setAiCollapsed: (v) => set({ aiCollapsed: v }),
   focusMode: false,
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode, activeView: s.focusMode ? s.activeView : "write" })),
   dockPanels: readStoredDockPanels(),

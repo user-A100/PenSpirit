@@ -32,7 +32,7 @@ fn acp_inner_默认agent与envelope组合() {
     let sess = cmd::get_or_create_session_inner(&s, ch2).unwrap();
 
     let (user_msg, desc, prompt) =
-        acp_session::send_message_acp_inner(&s, sess.id, "续写一段").unwrap();
+        acp_session::send_message_acp_inner(&s, sess.id, "续写一段", &Default::default()).unwrap();
 
     // 默认 agent 来自内置模板（claude）
     assert_eq!(desc.id, "claude");
@@ -69,7 +69,7 @@ fn acp_inner_无默认agent时invalid() {
     }
     let (_book, _ch1, ch2) = book_with_two_chapters(&s);
     let sess = cmd::get_or_create_session_inner(&s, ch2).unwrap();
-    match acp_session::send_message_acp_inner(&s, sess.id, "续写") {
+    match acp_session::send_message_acp_inner(&s, sess.id, "续写", &Default::default()) {
         Err(AppError::Invalid(msg)) => assert!(msg.contains("Agent"), "实际: {msg}"),
         other => panic!("应为 Invalid，实际: {other:?}"),
     }
@@ -153,7 +153,7 @@ fn live_turn_smoke() {
     let (_book, _ch1, ch2) = book_with_two_chapters(&s);
     let sess = cmd::get_or_create_session_inner(&s, ch2).unwrap();
     let (_user, desc, prompt) =
-        acp_session::send_message_acp_inner(&s, sess.id, "请只回复：好").unwrap();
+        acp_session::send_message_acp_inner(&s, sess.id, "请只回复：好", &Default::default()).unwrap();
     assert!(!prompt.is_empty());
 
     // 命令发现是回合启动的前置

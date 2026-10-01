@@ -1,4 +1,4 @@
-import { EditorContent, useEditor } from "@tiptap/react";
+import { BubbleMenu, EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef, useState } from "react";
@@ -21,7 +21,8 @@ import {
 import { openMenuAt, type MenuEntry } from "../../stores/menu";
 import { commandShortcut, runCommand } from "../../lib/commands";
 import { useWorkspace, type PaneId } from "../../stores/workspace";
-import { useChat } from "../../stores/chat";
+import { registerEditorBridge, toParagraphs, type EditorBridge } from "../../lib/editorBridge";
+import { askAiAboutSelection, runSelectionCommand } from "../../lib/ai/actions";
 import { useSearch } from "../../stores/search";
 import { useOutline } from "../../stores/outline";
 import { localMinute, useStats } from "../../stores/stats";
@@ -63,7 +64,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   const splitAxis = useWorkspace((s) => s.splitAxis);
   const chapterId = slot?.chapterId ?? null;
   const content = slot?.content ?? null;
-  const pendingAppend = useChat((s) => s.pendingAppend);
+
   const jumpText = useSearch((s) => s.jumpText);
   const outlineOpen = useOutline((s) => s.open);
   const outlineJump = useOutline((s) => s.jumpTarget);
@@ -189,22 +190,88 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
     useOutline.getState().consume();
   }, [editor, isActive, content, outlineJump]);
 
-  // 消费 AI 采纳：把文本以空行分隔追加到文档末尾（文档为空时不加前导空行），
-  // 只在活动窗格消费（AI 会话跟随活动窗格章节）。
-  // 显式置 dirty 交给自动保存，然后清空通道。清空本身触发重渲染，驱动 autosave effect。
+  // 编辑器桥（阶段 2A）：AI 对话读光标/选区，插入/替换/追加正文。
+  // 每次写入都是单个事务（Ctrl+Z 一步撤销）；AI 写入不计入今日手写字数；显式置 dirty 交自动保存。
   useEffect(() => {
-    if (!editor || !isActive || pendingAppend == null) return;
-    const docEmpty = editor.state.doc.textContent.trim() === "";
-    // AI 采纳不计入今日手写字数
-    suppressStats.current = true;
-    editor.commands.insertContentAt(
-      editor.state.doc.content.size,
-      docEmpty ? pendingAppend : `\n\n${pendingAppend}`,
-    );
-    suppressStats.current = false;
-    dirty.current = (editor.storage.markdown as { getMarkdown(): string }).getMarkdown();
-    useChat.getState().clearPendingAppend();
-  }, [pendingAppend, editor]);
+    if (!editor || chapterId == null) return;
+    const markDirty = () => {
+      dirty.current = (editor.storage.markdown as { getMarkdown(): string }).getMarkdown();
+    };
+    const blocks = (text: string) => toParagraphs(text).map((t) => ({ type: "paragraph", content: [{ type: "text", text: t }] }));
+    const write = (fn: () => boolean) => {
+      suppressStats.current = true;
+      try {
+        const ok = fn();
+        if (ok) markDirty();
+        return ok;
+      } finally {
+        suppressStats.current = false;
+      }
+    };
+    const docIsEmpty = () => editor.state.doc.childCount === 1 && editor.state.doc.firstChild?.content.size === 0;
+    const bridge: EditorBridge = {
+      chapterId,
+      getContext: () => {
+        const { from, to } = editor.state.selection;
+        const doc = editor.state.doc;
+        return {
+          chapterId,
+          before: doc.textBetween(0, from, "\n", " "),
+          after: doc.textBetween(to, doc.content.size, "\n", " "),
+          selection: from === to ? "" : doc.textBetween(from, to, "\n", " "),
+          from,
+          to,
+        };
+      },
+      insertAtCursor: (text) =>
+        write(() => {
+          const paras = toParagraphs(text);
+          if (paras.length === 0) return false;
+          if (docIsEmpty()) return editor.chain().focus().insertContentAt({ from: 0, to: editor.state.doc.content.size }, blocks(text)).run();
+          const $to = editor.state.selection.$to;
+          // 单段：行内插入光标处
+          if (paras.length === 1) return editor.chain().focus().insertContentAt(editor.state.selection.to, paras[0]).run();
+          // 多段：光标在段尾/空段 → 作为新段落插在本段之后（或替换空段），不留空行
+          if ($to.parent.isTextblock && $to.parentOffset === $to.parent.content.size) {
+            if ($to.parent.content.size === 0) return editor.chain().focus().insertContentAt({ from: $to.before(), to: $to.after() }, blocks(text)).run();
+            return editor.chain().focus().insertContentAt($to.after(), blocks(text)).run();
+          }
+          return editor.chain().focus().insertContentAt(editor.state.selection.to, blocks(text)).run();
+        }),
+      append: (text) =>
+        write(() => {
+          if (toParagraphs(text).length === 0) return false;
+          if (docIsEmpty()) return editor.chain().insertContentAt({ from: 0, to: editor.state.doc.content.size }, blocks(text)).run();
+          const ok = editor.chain().insertContentAt(editor.state.doc.content.size, blocks(text)).run();
+          if (ok) editor.commands.scrollIntoView();
+          return ok;
+        }),
+      replaceRange: (from, to, expected, text) =>
+        write(() => {
+          const doc = editor.state.doc;
+          if (to > doc.content.size || from > to) return false;
+          if (doc.textBetween(from, to, "\n", " ") !== expected) return false;
+          const paras = toParagraphs(text);
+          if (paras.length === 0) return false;
+          const $from = doc.resolve(from);
+          const $to = doc.resolve(to);
+          const sameBlock = $from.sameParent($to);
+          if (paras.length === 1 && sameBlock) return editor.chain().focus().insertContentAt({ from, to }, paras[0]).run();
+          // 选区覆盖整段：按块边界整体替换，避免在两端留下半截空段
+          const wholeFrom = $from.parent.isTextblock && $from.parentOffset === 0 ? $from.before() : from;
+          const wholeTo = $to.parent.isTextblock && $to.parentOffset === $to.parent.content.size ? $to.after() : to;
+          return editor.chain().focus().insertContentAt({ from: wholeFrom, to: wholeTo }, blocks(text)).run();
+        }),
+      // 撤销 AI 写入同样不计入今日字数（否则会被当成删掉了这么多字）
+      undo: () => {
+        write(() => editor.chain().focus().undo().run());
+      },
+      focus: () => {
+        editor.commands.focus();
+      },
+    };
+    return registerEditorBridge(pane, bridge);
+  }, [editor, chapterId, pane]);
 
   const { status } = useAutosave(
     () => dirty.current,
@@ -363,6 +430,40 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
           className={`prose-serif mx-auto max-w-[720px] px-8 ${focusMode ? "py-16" : "py-8"}`}
         />
         <WikiSuggest editor={editor} />
+        {/* 选区气泡菜单（阶段 2A）：选中文字 → 一键润色/扩写/缩写/改写/描写/问 AI */}
+        {editor && (
+          <BubbleMenu
+            editor={editor}
+            tippyOptions={{ duration: 120, placement: "top", maxWidth: "none" }}
+            shouldShow={({ editor: ed, from, to }) => ed.isFocused && to - from > 1 && !ed.state.selection.empty}
+          >
+            <div className="menu-pop flex items-center gap-0.5 rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)] p-0.5 text-xs [box-shadow:var(--shadow-overlay)]" data-bubble-menu="">
+              {([
+                ["polish", "润色"],
+                ["expand", "扩写"],
+                ["condense", "缩写"],
+                ["rewrite", "改写…"],
+              ] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => void runSelectionCommand(id)}
+                  className="rounded-[4px] px-2 py-1 text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-fast)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
+                >
+                  {label}
+                </button>
+              ))}
+              <span aria-hidden className="mx-0.5 h-4 w-px bg-[var(--hairline)]" />
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => askAiAboutSelection()}
+                className="rounded-[4px] px-2 py-1 font-medium text-[color:var(--accent)] transition-colors duration-[var(--dur-fast)] hover:bg-[var(--fill-hover)]"
+              >
+                问 AI
+              </button>
+            </div>
+          </BubbleMenu>
+        )}
       </div>
 
       {historyOpen && (

@@ -178,6 +178,17 @@ body {
 }
 .zen-splitter:active::after { transition-delay: 0s; }
 
+/* AI 写正文回答：与稿纸同一套衬线排版（段首缩进、行高），一眼区分「可采纳的正文」与讨论 */
+.ai-prose {
+  font-family: Georgia, "Noto Serif SC", "Source Han Serif SC", serif;
+  font-size: 0.9375rem;
+  line-height: 1.85;
+  color: var(--prose-fg);
+}
+.ai-prose p { margin: 0 0 0.45em; text-indent: 2em; }
+.ai-caret { color: var(--accent); animation: ai-caret 1s steps(2, start) infinite; margin-left: 1px; }
+@keyframes ai-caret { to { visibility: hidden; } }
+
 /* 视图切换：卡片极轻的淡入上浮（0.18s，无过冲） */
 @keyframes view-enter {
   from { opacity: 0; transform: translateY(4px); }

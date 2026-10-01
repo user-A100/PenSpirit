@@ -20,10 +20,34 @@ export interface ChapterTemplateInput { id: number | null; book_id: number; name
 // ---- M1：字段名与 Rust 结构体 snake_case 对齐 ----
 export interface ProviderProfile { id: number; name: string; base_url: string; api_key: string; model: string; max_tokens: number; temperature: number }
 export interface StyleCard { id: number; name: string; prompt_md: string; sample_md: string; tags: string; created_at: string; updated_at: string } // tags 为 JSON 数组字符串
-export interface ChatSession { id: number; book_id: number; chapter_id: number; title: string; created_at: string }
-export interface ChatMessage { id: number; session_id: number; role: string; content: string; created_at: string }
-export interface SlotLog { name: string; source: string; chars: number; est_tokens: number; preview_head: string }
+export interface ChatSession { id: number; book_id: number; chapter_id: number; title: string; created_at: string; source?: string; updated_at?: string }
+export interface ChatMessage {
+  id: number; session_id: number; role: string; content: string; created_at: string;
+  /** 阶段 2A：回答所针对的 user 消息（同组多条 = 多个版本） */
+  reply_to?: number | null;
+  /** 同组版本中当前选用的一条 */
+  active?: boolean;
+  /** 已采纳进正文 */
+  adopted?: boolean;
+  /** JSON：mode / command / truncated / error */
+  meta?: string;
+}
+export interface SlotLog { name: string; source: string; chars: number; est_tokens: number; preview_head: string; disabled?: boolean }
 export interface AssemblyLog { slots: SlotLog[]; total_est_tokens: number }
+/** 阶段 2A：@ 引用 */
+export interface MentionRef { kind: "chapter" | "character" | "foreshadow" | "plot" | "outline"; id: number }
+/** 阶段 2A：单轮 AI 请求可选参数（字段 snake_case 与 Rust AiTurnOptions 对齐） */
+export interface AiTurnOptions {
+  mode?: "write" | "discuss";
+  cursor_before?: string | null;
+  cursor_after?: string | null;
+  selection?: string | null;
+  disabled_slots?: string[];
+  mentions?: MentionRef[];
+  target_chars?: number | null;
+  temperature?: number | null;
+  command?: string | null;
+}
 
 // ---- M7 批次6：注入原子每书配置（settings context:book:{id}） ----
 export interface SlotConfig { enabled: boolean; budget: number; ids: number[] | null; all: boolean }
@@ -248,11 +272,25 @@ export const api = {
   getOrCreateSession: (chapterId: number) => invoke<ChatSession>("get_or_create_session", { chapterId }),
   listMessages: (sessionId: number) => invoke<ChatMessage[]>("list_messages", { sessionId }),
   deleteMessage: (id: number) => invoke<void>("delete_message", { id }),
-  sendMessage: (sessionId: number, instruction: string) =>
-    invoke<ChatMessage>("send_message", { sessionId, instruction }),
+  sendMessage: (sessionId: number, instruction: string, options?: AiTurnOptions) =>
+    invoke<ChatMessage>("send_message", { sessionId, instruction, options: options ?? null }),
+  chatRegenerate: (userMessageId: number, options?: AiTurnOptions) =>
+    invoke<ChatMessage>("chat_regenerate", { userMessageId, options: options ?? null }),
+  chatRegenerateAcp: (userMessageId: number, options?: AiTurnOptions) =>
+    invoke<ChatMessage>("chat_regenerate_acp", { userMessageId, options: options ?? null }),
+  chatEditResend: (userMessageId: number, content: string, options?: AiTurnOptions) =>
+    invoke<ChatMessage>("chat_edit_resend", { userMessageId, content, options: options ?? null }),
+  /** 改写问题原文并删掉其后全部对话（随后调重新生成；provider / agent 后端通用） */
+  chatEditTruncate: (userMessageId: number, content: string) =>
+    invoke<ChatMessage>("chat_edit_truncate", { userMessageId, content }),
+  sessionCreate: (chapterId: number) => invoke<ChatSession>("session_create", { chapterId }),
+  sessionRename: (id: number, title: string) => invoke<ChatSession>("session_rename", { id, title }),
+  sessionDelete: (id: number) => invoke<void>("session_delete", { id }),
+  messageSetActive: (id: number) => invoke<ChatMessage>("message_set_active", { id }),
+  messageSetAdopted: (id: number, adopted: boolean) => invoke<ChatMessage>("message_set_adopted", { id, adopted }),
   cancelGeneration: (sessionId: number) => invoke<void>("cancel_generation", { sessionId }),
-  previewContext: (sessionId: number, instruction: string) =>
-    invoke<AssemblyLog>("preview_context", { sessionId, instruction }),
+  previewContext: (sessionId: number, instruction: string, options?: AiTurnOptions) =>
+    invoke<AssemblyLog>("preview_context", { sessionId, instruction, options: options ?? null }),
   // ---- M7 批次6：注入原子每书配置 ----
   contextConfigGet: (bookId: number) => invoke<ContextConfig>("context_config_get", { bookId }),
   contextConfigSet: (bookId: number, config: ContextConfig) =>
@@ -275,8 +313,8 @@ export const api = {
   agentsUpsert: (desc: AgentDescriptor) => invoke<void>("agents_upsert", { desc }),
   agentsRemove: (id: string) => invoke<void>("agents_remove", { id }),
   agentsSetDefault: (id: string) => invoke<void>("agents_set_default", { id }),
-  sendMessageAcp: (sessionId: number, instruction: string) =>
-    invoke<ChatMessage>("send_message_acp", { sessionId, instruction }),
+  sendMessageAcp: (sessionId: number, instruction: string, options?: AiTurnOptions) =>
+    invoke<ChatMessage>("send_message_acp", { sessionId, instruction, options: options ?? null }),
   cancelGenerationAcp: (sessionId: number) => invoke<void>("cancel_generation_acp", { sessionId }),
   agentsRespondPermission: (sessionId: number, requestId: string, optionId: string) =>
     invoke<void>("agents_respond_permission", { sessionId, requestId, optionId }),

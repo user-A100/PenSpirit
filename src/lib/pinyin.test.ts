@@ -9,6 +9,10 @@ describe("拼音首字母", () => {
     expect(initials("续写")).toBe("xx");
     expect(initials("头脑风暴")).toBe("tnfb");
   });
+  it("边界附近的同音字（他/它、润/日、仨/撒）", () => {
+    const sample = "他它她塌润日如若然仨撒色三阿八擦搭鹅发嘎哈鸡卡拉妈那哦趴七挖西鸭杂左做钻";
+    expect(initials(sample)).toBe("ttttrrrrrssss" + "abcdefghjklmnopqwxy" + "zzzz");
+  });
 });
 
 describe("fuzzyMatch", () => {

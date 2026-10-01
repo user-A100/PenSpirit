@@ -7,6 +7,7 @@ import { useSearch } from "../stores/search";
 import { useSettings } from "../stores/settings";
 import { useBinder } from "../stores/binder";
 import { usePalette } from "../stores/palette";
+import { askAiAboutSelection } from "./ai/actions";
 
 /** 在当前章之后新建一章、打开它并进入行内改名（Scrivener：新建即命名） */
 export async function newChapterAfterCurrent(): Promise<void> {
@@ -58,6 +59,25 @@ export function builtinCommands(): Command[] {
       run: () => useUiNav.getState().toggleFocusMode(),
     },
     { id: "editor.typewriter", title: "打字机滚动", category: "编辑", run: () => useUiNav.getState().toggleTypewriter() },
+    {
+      id: "ai.toggle",
+      title: "显示/收起 AI 对话",
+      category: "AI",
+      keys: ["Mod+J"],
+      when: () => useUiNav.getState().activeView === "write",
+      run: () => {
+        const nav = useUiNav.getState();
+        nav.setAiCollapsed(!nav.aiCollapsed);
+      },
+    },
+    {
+      id: "ai.quote",
+      title: "把选区引用到 AI 对话",
+      category: "AI",
+      keys: ["Mod+L"],
+      when: () => useUiNav.getState().activeView === "write",
+      run: () => askAiAboutSelection(),
+    },
     { id: "chapter.new", title: "新建章节", category: "章节", keys: ["Mod+N"], when: hasBook, run: newChapterAfterCurrent },
     {
       id: "chapter.rename",

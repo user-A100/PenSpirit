@@ -5,8 +5,82 @@ use rusqlite::Connection;
 
 use crate::context::assembler::InjectionInput;
 use crate::error::{AppError, AppResult};
-use crate::models::{default_context_config, ContextConfig, Foreshadow};
+use crate::models::{default_context_config, ContextConfig, Foreshadow, Mention};
 use crate::repo;
+
+/// @ 引用资料单章摘录上限（字符数，取章尾——离当前情节最近的部分）。
+pub const MENTION_CHAPTER_CHARS: usize = 1500;
+
+/// 阶段 2A：把 @ 引用渲染成一个「引用资料」注入槽位。
+/// 章节：标题 + 梗概 + 章尾摘录（读盘）；人物 / 伏笔 / 情节块 / 大纲：结构化一行或一段。
+/// 已删除 / 跨书的条目静默跳过（引用可能在发送前被删）。
+pub fn render_mentions(
+    conn: &Connection,
+    root: &std::path::Path,
+    book_id: i64,
+    mentions: &[Mention],
+) -> AppResult<Option<InjectionInput>> {
+    if mentions.is_empty() {
+        return Ok(None);
+    }
+    let mut parts: Vec<String> = Vec::new();
+    for m in mentions {
+        match m.kind.as_str() {
+            "chapter" => {
+                let Ok(ch) = repo::chapters::get(conn, m.id) else { continue };
+                if ch.book_id != book_id || ch.deleted_at.is_some() {
+                    continue;
+                }
+                let text = crate::fs_service::read_chapter(root, &ch.file_path).unwrap_or_default();
+                let total = text.chars().count();
+                let tail: String = if total > MENTION_CHAPTER_CHARS {
+                    text.chars().skip(total - MENTION_CHAPTER_CHARS).collect()
+                } else {
+                    text
+                };
+                let mut s = format!("◆ 章节《{}》", ch.title);
+                if !ch.synopsis.is_empty() {
+                    s.push_str(&format!("\n梗概：{}", ch.synopsis));
+                }
+                if !tail.trim().is_empty() {
+                    s.push_str(&format!("\n章尾摘录：\n{tail}"));
+                }
+                parts.push(s);
+            }
+            "character" => {
+                let Some(c) = repo::characters::list_by_book(conn, book_id)?.into_iter().find(|c| c.id == m.id) else { continue };
+                parts.push(format!(
+                    "◆ 人物 {}",
+                    character_line(&c.name, &c.role, &split_aliases(&c.aliases), &c.description).trim_start_matches("- ")
+                ));
+            }
+            "foreshadow" => {
+                let Some(f) = repo::foreshadows::list_by_book(conn, book_id)?.into_iter().find(|f| f.id == m.id) else { continue };
+                let note = if f.override_note.is_empty() { &f.note } else { &f.override_note };
+                let state = if f.status == "active" { "未回收" } else { "已回收" };
+                parts.push(format!("◆ 伏笔「{}」（{state}）{}", f.title, if note.is_empty() { String::new() } else { format!("：{note}") }));
+            }
+            "plot" => {
+                let Some(b) = repo::plot_blocks::list_by_book(conn, book_id)?.into_iter().find(|b| b.id == m.id) else { continue };
+                parts.push(format!("◆ 情节块：{}", b.content));
+            }
+            "outline" => {
+                let Some(o) = repo::outlines::list_by_book(conn, book_id)?.into_iter().find(|o| o.id == m.id) else { continue };
+                parts.push(format!("◆ 大纲「{}」\n{}", o.title, o.content));
+            }
+            _ => {}
+        }
+    }
+    if parts.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(InjectionInput {
+        name: "引用资料".into(),
+        source: format!("@ 引用 {} 项", parts.len()),
+        text: parts.join("\n\n"),
+        budget: 0,
+    }))
+}
 
 const CONFIG_KEY_PREFIX: &str = "context:book:";
 

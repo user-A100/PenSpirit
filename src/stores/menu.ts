@@ -37,15 +37,18 @@ interface MenuState {
   req: MenuRequest | null;
   /** 每次打开自增，作为面板 key 让同位置重开也重置内部状态 */
   seq: number;
+  /** 关闭后是否把焦点还给打开前的元素（Esc / 选中项 = 是；点菜单外 = 否，焦点留在用户点的地方） */
+  restoreFocus: boolean;
   open: (req: MenuRequest) => void;
-  close: () => void;
+  close: (restoreFocus?: boolean) => void;
 }
 
 export const useMenu = create<MenuState>((set) => ({
   req: null,
   seq: 0,
-  open: (req) => set((s) => ({ req, seq: s.seq + 1 })),
-  close: () => set({ req: null }),
+  restoreFocus: true,
+  open: (req) => set((s) => ({ req, seq: s.seq + 1, restoreFocus: true })),
+  close: (restoreFocus = true) => set({ req: null, restoreFocus }),
 }));
 
 type PointerLike = { clientX: number; clientY: number; preventDefault(): void; stopPropagation(): void };

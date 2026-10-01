@@ -22,7 +22,7 @@ use crate::agents::discover;
 use crate::agents::interaction;
 use crate::commands_ai::{assemble_with, gather_context};
 use crate::error::{AppError, AppResult};
-use crate::models::{AcpStreamEvent, AcpTurnEvent, AgentDescriptor, ChatMessage};
+use crate::models::{AcpStreamEvent, AcpTurnEvent, AgentDescriptor, AiTurnOptions, ChatMessage};
 use crate::repo;
 use crate::state::AppState;
 
@@ -35,34 +35,67 @@ const FLUSH_TICK: Duration = Duration::from_millis(40);
 
 /// 组装 + 落库 user 消息 + 选默认 agent，产出 (user_msg, agent, prompt_text)。
 /// 不 spawn、不登记取消信号——命令薄包装负责启动 run_turn。
+/// 默认启用的 agent（未配置时给出可操作的报错）。
+fn default_agent(s: &AppState) -> AppResult<AgentDescriptor> {
+    let list = crate::agents::registry::list(&s.config_dir())?;
+    list.into_iter()
+        .find(|a| a.is_default && a.enabled)
+        .ok_or_else(|| AppError::Invalid("未配置默认 Agent，请到设置中启用".into()))
+}
+
+/// envelope：ACP 的 prompt 没有 system/history 字段——system、此前对话、本轮请求
+/// 依次编入单条 prompt（阶段 2A：多轮历史以「此前对话」段落呈现）。
+fn envelope(assembled: &crate::context::Assembled) -> String {
+    let mut prompt_text = String::new();
+    prompt_text.push_str(&assembled.system);
+    if !assembled.history.is_empty() {
+        prompt_text.push_str("\n\n【此前对话】\n");
+        for (role, content) in &assembled.history {
+            let who = if role == "assistant" { "AI" } else { "作者" };
+            prompt_text.push_str(&format!("{who}：{content}\n\n"));
+        }
+    }
+    prompt_text.push_str("\n\n");
+    prompt_text.push_str(&assembled.user);
+    prompt_text
+}
+
 pub fn send_message_acp_inner(
     s: &AppState,
     session_id: i64,
     instruction: &str,
+    opts: &AiTurnOptions,
 ) -> AppResult<(ChatMessage, AgentDescriptor, String)> {
-    let desc = {
-        let list = crate::agents::registry::list(&s.config_dir())?;
-        list.into_iter()
-            .find(|a| a.is_default && a.enabled)
-            .ok_or_else(|| AppError::Invalid("未配置默认 Agent，请到设置中启用".into()))?
-    };
-    let bundle = gather_context(s, session_id)?;
-    let assembled = assemble_with(&bundle, instruction);
-    // envelope：ACP 无 system/history 字段，三段全部编入单条 prompt
-    // （history 是「【上一章结尾】…」条目，放最前作前情提要）
-    let mut prompt_text = String::new();
-    for (_role, content) in &assembled.history {
-        prompt_text.push_str(content);
-        prompt_text.push_str("\n\n");
-    }
-    prompt_text.push_str(&assembled.system);
-    prompt_text.push_str("\n\n");
-    prompt_text.push_str(&assembled.user);
+    let desc = default_agent(s)?;
+    let bundle = gather_context(s, session_id, opts, None)?;
+    let assembled = assemble_with(&bundle, instruction, opts);
+    let prompt_text = envelope(&assembled);
     let user_msg = {
         let conn = s.db.lock().map_err(|_| AppError::LockPoisoned)?;
-        repo::sessions::append_message(&conn, session_id, "user", instruction)?
+        let m = repo::sessions::append_message(&conn, session_id, "user", instruction)?;
+        repo::sessions::touch(&conn, session_id)?;
+        m
     };
     Ok((user_msg, desc, prompt_text))
+}
+
+/// 阶段 2A：ACP 重新生成（历史取该问题之前，指令沿用原文）。
+pub fn regenerate_acp_inner(
+    s: &AppState,
+    user_message_id: i64,
+    opts: &AiTurnOptions,
+) -> AppResult<(ChatMessage, AgentDescriptor, String)> {
+    let desc = default_agent(s)?;
+    let user_msg = {
+        let conn = s.db.lock().map_err(|_| AppError::LockPoisoned)?;
+        repo::sessions::get_message(&conn, user_message_id)?
+    };
+    if user_msg.role != "user" {
+        return Err(AppError::Invalid("只能针对用户消息重新生成".into()));
+    }
+    let bundle = gather_context(s, user_msg.session_id, opts, Some(user_msg.id))?;
+    let assembled = assemble_with(&bundle, &user_msg.content, opts);
+    Ok((user_msg.clone(), desc, envelope(&assembled)))
 }
 
 /// 回合产物：闭包内部不返回 Err（错误也带上已收到的部分内容），外层只区分
@@ -78,6 +111,7 @@ struct TurnOutcome {
 pub async fn run_turn(
     app: tauri::AppHandle,
     chat_session_id: i64,
+    reply_to: i64,
     desc: AgentDescriptor,
     prompt_text: String,
     mut cancel_rx: tokio::sync::watch::Receiver<bool>,
@@ -94,7 +128,12 @@ pub async fn run_turn(
             .lock()
             .map_err(|_| AppError::LockPoisoned)
             .and_then(|conn| {
-                repo::sessions::append_message(&conn, chat_session_id, "assistant", &outcome.content)
+                let meta = if outcome.ok {
+                    "{\"backend\":\"agent\"}".to_string()
+                } else {
+                    "{\"backend\":\"agent\",\"truncated\":true}".to_string()
+                };
+                repo::sessions::append_reply(&conn, chat_session_id, reply_to, &outcome.content, &meta)
             });
         if let Err(e) = saved {
             let _ = app.emit(

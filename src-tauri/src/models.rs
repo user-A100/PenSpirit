@@ -156,6 +156,9 @@ pub struct ChatSession {
     /// 会话后端来源：'provider'（M1 HTTP 直连）或 'agent:{id}'（ACP agent）
     #[serde(default = "default_session_source")]
     pub source: String,
+    /// 最近一次使用（发消息）的时间，会话列表按它倒序
+    #[serde(default)]
+    pub updated_at: String,
 }
 
 fn default_session_source() -> String {
@@ -169,6 +172,57 @@ pub struct ChatMessage {
     pub role: String, // user|assistant|system
     pub content: String,
     pub created_at: String,
+    /// 阶段 2A：assistant 回答所针对的 user 消息 id（同组多条 = 重新生成的多个版本）
+    #[serde(default)]
+    pub reply_to: Option<i64>,
+    /// 同组版本中当前选用的一条
+    #[serde(default = "default_true")]
+    pub active: bool,
+    /// 已采纳进正文
+    #[serde(default)]
+    pub adopted: bool,
+    /// JSON 元信息（mode / command / error / truncated）
+    #[serde(default = "default_meta")]
+    pub meta: String,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_meta() -> String {
+    "{}".to_string()
+}
+
+/// 阶段 2A：单轮 AI 请求的可选参数（前端按需传；缺省 = M1 行为）。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AiTurnOptions {
+    /// "write"（写正文，默认）| "discuss"（讨论）
+    pub mode: Option<String>,
+    /// 光标前文（有则代替磁盘整章，且槽位名为「光标前文」）
+    pub cursor_before: Option<String>,
+    /// 光标后文
+    pub cursor_after: Option<String>,
+    /// 编辑器选中段落
+    pub selection: Option<String>,
+    /// 本轮关闭的槽位名
+    pub disabled_slots: Vec<String>,
+    /// @ 引用：章节 / 人物 / 伏笔 / 情节块 / 大纲
+    pub mentions: Vec<Mention>,
+    /// 期望输出字数
+    pub target_chars: Option<i64>,
+    /// 温度覆盖（不改服务商配置）
+    pub temperature: Option<f64>,
+    /// 斜杠命令 id（记入 meta，便于回看）
+    pub command: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Mention {
+    /// chapter | character | foreshadow | plot | outline
+    pub kind: String,
+    pub id: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
