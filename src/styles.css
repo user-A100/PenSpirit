@@ -539,3 +539,16 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
   from { width: 0; }
   to { width: 100%; }
 }
+
+/* Binder 拖放（阶段 3A）：拖动中全局抓手光标；定位当前章时闪一下 */
+body[data-binder-dragging],
+body[data-binder-dragging] * {
+  cursor: grabbing !important;
+}
+@keyframes binder-flash {
+  0%, 40% { box-shadow: 0 0 0 2px var(--accent); }
+  100% { box-shadow: 0 0 0 2px transparent; }
+}
+.binder-flash {
+  animation: binder-flash 0.9s ease-out;
+}

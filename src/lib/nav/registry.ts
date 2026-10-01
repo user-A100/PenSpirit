@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { BarChart3, Blocks, BookOpen, CircleDot, Dices, Flag, FolderOpen, LayoutGrid, Library, Link2, ListTree, Network, PenLine, Sparkles, Tag, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, Blocks, BookOpen, CircleDot, Dices, Flag, LayoutGrid, Library, Link2, ListTree, Network, PenLine, Sparkles, Tag, Users, type LucideIcon } from "lucide-react";
 import { BumpView } from "../../views/BumpView";
 import { WriteView } from "../../views/WriteView";
 import { ReadView } from "../../views/read/ReadView";
@@ -60,7 +60,7 @@ registerView({
     { id: "foreshadow", label: "伏笔", icon: Flag, group: "设定" },
     { id: "plot", label: "情节块", icon: Blocks, group: "设定" },
     { id: "outline", label: "大纲", icon: ListTree, group: "设定" },
-    { id: "collections", label: "集合", icon: FolderOpen, group: "工具" },
+
     { id: "names", label: "取名", icon: Dices, group: "工具" },
   ],
 });

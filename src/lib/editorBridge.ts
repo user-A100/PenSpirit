@@ -27,6 +27,8 @@ export interface EditorBridge {
   replaceRange(from: number, to: number, expected: string, text: string): boolean;
   undo(): void;
   focus(): void;
+  /** 在屏幕坐标处插入行内文本（侧栏把章拖进正文 → [[章题]]）；坐标不在正文里返回 false */
+  insertAtPoint?(x: number, y: number, text: string): boolean;
 }
 
 const bridges = new Map<PaneId, EditorBridge>();
@@ -41,6 +43,11 @@ export function registerEditorBridge(pane: PaneId, bridge: EditorBridge): () => 
 /** 活动窗格的编辑器（未打开章节时为 null） */
 export function getActiveEditor(): EditorBridge | null {
   return bridges.get(useWorkspace.getState().activePane) ?? null;
+}
+
+/** 指定窗格的编辑器（拖放落点所在窗格） */
+export function getEditorFor(pane: PaneId): EditorBridge | null {
+  return bridges.get(pane) ?? null;
 }
 
 /** 文本 → 段落列表：按换行拆分，去空行（中文网文一行即一段） */

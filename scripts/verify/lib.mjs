@@ -6,36 +6,91 @@
 //
 // 状态保护（硬性要求）：withGuard() 在开始时快照 localStorage 全量，结束（含异常）时逐键还原
 // 并断言无差异；脚本自建的隔离测试书在结束时彻底删除（移入回收站 → purge）。
-import { mkdirSync, writeFileSync } from "node:fs";
+import { execSync, spawn } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const PORT = Number(process.env.CDP_PORT ?? 9222);
+const EXE = fileURLToPath(new URL("../../src-tauri/target/debug/bixian.exe", import.meta.url));
+const REPO = fileURLToPath(new URL("../../", import.meta.url));
+
+async function findPage() {
+  const list = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
+  return list.find((t) => t.type === "page" && !t.url.includes("refwindow")) ?? null;
+}
+
+function appRunning() {
+  try {
+    return execSync('tasklist /FI "IMAGENAME eq bixian.exe" /NH', { encoding: "utf8" }).includes("bixian.exe");
+  } catch {
+    return false;
+  }
+}
+
+/** 关闭应用：先发正常关闭（WM_CLOSE，等同点窗口关闭），10 秒不退再强杀 */
+export async function stopApp() {
+  if (!appRunning()) return;
+  try {
+    execSync("taskkill /IM bixian.exe", { stdio: "ignore" });
+  } catch {
+    // 窗口可能已在关闭中
+  }
+  for (let i = 0; i < 50 && appRunning(); i++) await sleep(200);
+  if (appRunning()) execSync("taskkill /IM bixian.exe /F", { stdio: "ignore" });
+  for (let i = 0; i < 25 && appRunning(); i++) await sleep(200);
+}
+
+/** 启动调试版应用（带 CDP 端口），等主窗口页面出现。前端须由 vite dev server 提供（1420）。 */
+export async function startApp(timeout = 60000) {
+  if (!existsSync(EXE)) throw new Error(`找不到 ${EXE}（先 cargo build）`);
+  const child = spawn(EXE, [], {
+    cwd: REPO,
+    detached: true,
+    stdio: "ignore",
+    env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PORT}` },
+  });
+  child.unref();
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeout) {
+    try {
+      if (await findPage()) return;
+    } catch {
+      // 端口尚未就绪
+    }
+    await sleep(300);
+  }
+  throw new Error("应用启动超时（CDP 端口未就绪）");
+}
 
 export async function connect() {
-  const list = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
-  const page = list.find((t) => t.type === "page" && !t.url.includes("refwindow"));
-  if (!page) throw new Error("找不到笔仙主窗口（应用是否已带 --remote-debugging-port 启动？）");
-  const ws = new WebSocket(page.webSocketDebuggerUrl);
+  let ws;
   let id = 0;
   const pending = new Map();
-  ws.onmessage = (e) => {
-    const m = JSON.parse(e.data);
-    if (m.id && pending.has(m.id)) {
-      pending.get(m.id)(m);
-      pending.delete(m.id);
-    }
-  };
-  await new Promise((r, j) => {
-    ws.onopen = r;
-    ws.onerror = j;
-  });
   const send = (method, params = {}) => {
     const mid = ++id;
     ws.send(JSON.stringify({ id: mid, method, params }));
     return new Promise((r) => pending.set(mid, r));
   };
-  await send("Runtime.enable");
-  await send("Page.enable");
+  const open = async () => {
+    const page = await findPage();
+    if (!page) throw new Error("找不到笔仙主窗口（应用是否已带 --remote-debugging-port 启动？）");
+    ws = new WebSocket(page.webSocketDebuggerUrl);
+    ws.onmessage = (e) => {
+      const m = JSON.parse(e.data);
+      if (m.id && pending.has(m.id)) {
+        pending.get(m.id)(m);
+        pending.delete(m.id);
+      }
+    };
+    await new Promise((r, j) => {
+      ws.onopen = r;
+      ws.onerror = j;
+    });
+    await send("Runtime.enable");
+    await send("Page.enable");
+  };
+  await open();
 
   /** 在页面里求值（支持 await）；页面异常抛成 Node 异常 */
   const evaluate = async (expression) => {
@@ -81,7 +136,20 @@ export async function connect() {
     await click(r.x, r.y, button);
     return r;
   };
-  return { send, evaluate, invoke, screenshot, reload, press, typeText, click, clickEl, close: () => ws.close() };
+  /** 关闭并重启应用（「关闭重启后状态仍在」类核验），重连 CDP 并等主界面就绪 */
+  const restart = async () => {
+    try {
+      ws.close();
+    } catch {
+      // 忽略
+    }
+    await stopApp();
+    await startApp();
+    await open();
+    await waitFor(evaluate, "document.readyState === 'complete' && !!document.querySelector('main')", 30000);
+    await sleep(800);
+  };
+  return { send, evaluate, invoke, screenshot, reload, press, typeText, click, clickEl, restart, close: () => ws.close() };
 }
 
 const KEYCODES = {
@@ -129,6 +197,9 @@ export function checker() {
 export async function withGuard(name, body) {
   const app = await connect();
   const before = await app.evaluate("JSON.stringify(Object.fromEntries(Object.entries(localStorage)))");
+  // 后端设置里与核验相关的用户状态：服务商列表与「使用中」（阶段 3A 起纳入还原断言）
+  const providerState = async () => JSON.stringify({ active: await app.invoke("get_active_provider"), ids: (await app.invoke("list_providers")).map((p) => p.id) });
+  const providersBefore = await providerState();
   // 原生对话框探针：任何 alert/confirm 调用都记下来（阶段 0 起禁止原生对话框）
   await app.evaluate(`(() => { window.__nativeDialogs = []; for (const k of ['alert','confirm','prompt']) { const o = window[k]; window[k] = (...a) => { window.__nativeDialogs.push(k + ':' + a[0]); return k === 'confirm' ? false : undefined; }; window['__orig_' + k] = o; } return true; })()`);
   const books = [];
@@ -176,8 +247,11 @@ export async function withGuard(name, body) {
     const left = await app.invoke("list_books");
     const leaked = left.filter((bk) => books.includes(bk.id));
     if (leaked.length) console.log(`✘ 测试书未清理：${leaked.map((bk) => bk.title).join(", ")}`);
+    const providersAfter = await providerState();
+    const providersOk = providersAfter === providersBefore;
+    console.log(providersOk ? "✔ 状态还原：服务商列表与「使用中」与运行前一致" : `✘ 服务商状态未还原：${providersBefore} → ${providersAfter}`);
     app.close();
-    if (diff.length || leaked.length) ok = false;
+    if (diff.length || leaked.length || !providersOk) ok = false;
   }
   if (error) ok = false;
   console.log(ok ? `\n【${name}】通过` : `\n【${name}】未通过`);

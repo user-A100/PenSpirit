@@ -20,6 +20,25 @@ struct RawLink {
     snippet: String,
 }
 
+/// 去掉 Markdown 标点转义（`\_` → `_`、`\[` → `[`）
+fn unescape_md(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut it = s.chars().peekable();
+    while let Some(c) = it.next() {
+        if c == '\\' {
+            if let Some(&n) = it.peek() {
+                if n.is_ascii_punctuation() {
+                    out.push(n);
+                    it.next();
+                    continue;
+                }
+            }
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// 从一段文本提取所有 `[[目标]]`；摘录取匹配处前后各 20 字符（字符边界安全）。
 fn extract_links(text: &str, re: &Regex) -> Vec<RawLink> {
     re.captures_iter(text)
@@ -40,8 +59,8 @@ fn extract_links(text: &str, re: &Regex) -> Vec<RawLink> {
                 i
             };
             RawLink {
-                target: c[1].trim().to_string(),
-                snippet: text[start..end].replace('\n', " "),
+                target: unescape_md(c[1].trim()),
+                snippet: unescape_md(&text[start..end].replace('\n', " ")),
             }
         })
         .collect()
@@ -53,7 +72,8 @@ pub fn scan_book(s: &AppState, book_id: i64) -> AppResult<Vec<WikiLink>> {
     let list = chapters::list_by_book(&conn, book_id)?;
     drop(conn);
 
-    let re = Regex::new(r"\[\[([^\[\]]+?)\]\]").expect("链接正则合法");
+    // 兼容旧文件：阶段 3A 之前编辑器把 [[…]] 落盘成 \[\[…\]\]（tiptap-markdown 转义），两种写法都认
+    let re = Regex::new(r"\\?\[\\?\[([^\[\]\n]+?)\\?\]\\?\]").expect("链接正则合法");
     // 章题 → 首个同题章 id（重复章题取目录序最前）
     let mut id_by_title: HashMap<&str, i64> = HashMap::new();
     for ch in &list {

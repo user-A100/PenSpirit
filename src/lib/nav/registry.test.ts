@@ -26,7 +26,8 @@ describe("navRegistry", () => {
     expect(write.label).toBe("写作");
     expect(write.icon).toBeDefined();
     expect(write.Component).toBeDefined();
-    expect(write.dockPanels.map((p) => p.label)).toEqual(["元数据", "链接", "参考", "人物", "伏笔", "情节块", "大纲", "集合", "取名"]);
+    // 阶段 3A：集合迁入 Binder 顶部标签页，不再占 dock 面板
+    expect(write.dockPanels.map((p) => p.label)).toEqual(["元数据", "链接", "参考", "人物", "伏笔", "情节块", "大纲", "取名"]);
     expect([...new Set(write.dockPanels.map((p) => p.group))]).toEqual(["本章", "设定", "工具"]);
 
     const bump = registry.getView("bump")!;

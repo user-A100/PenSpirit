@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { ChapterEditor } from "./ChapterEditor";
 import { AiDock } from "../chat/AiDock";
-import { useWorkspace } from "../../stores/workspace";
+import { GroupView } from "../structure/GroupView";
+import { useWorkspace, type PaneId } from "../../stores/workspace";
+import { useGroupView } from "../../stores/groupView";
 import { useUiNav } from "../../lib/nav/uiStore";
 
 // 垂直 PanelGroup：编辑卡在上、AI 卡在下，中间是 --sep 透明缝（阶段 1 Zen 骨架）。用法约束同 WriteView（v4 实测）：
@@ -13,6 +15,22 @@ import { useUiNav } from "../../lib/nav/uiStore";
 // 活动窗格的卡片外描一圈淡 accent（activePane，点击窗格内任意编辑器即跟随）。
 const COLLAPSED_PX = 36;
 
+/**
+ * 窗格内容（阶段 3A）：单章正文或组视图（串烧 / 卡片墙 / 大纲列，每个窗格各记一份）。
+ * 组视图时编辑器只隐藏不卸载——撤销栈、滚动位置、未落盘的防抖内容都保留。
+ */
+function PaneBody({ pane }: { pane: PaneId }) {
+  const mode = useGroupView((s) => s.modes[pane]);
+  return (
+    <div className="relative h-full" data-pane={pane}>
+      <div className="h-full" hidden={mode !== "single"}>
+        <ChapterEditor pane={pane} />
+      </div>
+      {mode !== "single" && <GroupView pane={pane} mode={mode} />}
+    </div>
+  );
+}
+
 function PaneShell({ pane }: { pane: "a" | "b" }) {
   const active = useWorkspace((s) => s.activePane === pane);
   return (
@@ -20,7 +38,7 @@ function PaneShell({ pane }: { pane: "a" | "b" }) {
       data-pane-active={active ? "" : undefined}
       className={`zen-card h-full transition-[box-shadow] duration-[var(--dur-md)] ${active ? "zen-card-active" : ""}`}
     >
-      <ChapterEditor pane={pane} />
+      <PaneBody pane={pane} />
     </div>
   );
 }
@@ -44,7 +62,7 @@ export function EditorPane() {
   const editorArea =
     splitAxis === "none" ? (
       <div className="zen-card h-full">
-        <ChapterEditor pane="a" />
+        <PaneBody pane="a" />
       </div>
     ) : splitAxis === "vertical" ? (
       <Group orientation="horizontal" className="h-full bg-transparent" defaultLayout={{ "pane-a": 50, "pane-b": 50 }}>

@@ -96,7 +96,12 @@ pub fn restore_chapter_inner(s: &AppState, id: i64) -> AppResult<()> {
         fs::create_dir_all(p)?;
     }
     fs::rename(&from, &to)?;
-    lock(s).and_then(|conn| repo::chapters::restore(&*conn, id, &orig))
+    let restored = lock(s).and_then(|conn| repo::chapters::restore(&*conn, id, &orig))?;
+    // 恢复后的旧序号可能与期间重排过的章撞号：按目录序重编一次（尽力而为）
+    if let Err(e) = crate::commands::renumber_book(s, ch.book_id) {
+        eprintln!("恢复后重编序号失败（不影响恢复）：{e}");
+    }
+    Ok(restored)
 }
 
 /// 彻底删除章：删 .trash 文件 + 删行

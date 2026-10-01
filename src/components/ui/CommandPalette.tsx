@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, CornerDownLeft, FileText, Search, TerminalSquare } from "lucide-react";
 import { usePalette } from "../../stores/palette";
 import { useWorkspace } from "../../stores/workspace";
@@ -43,11 +43,13 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  // 打开即聚焦（布局阶段、与面板同一次提交）：此前用 rAF 延后一帧，紧跟 Ctrl+K 的输入会落进
+  // 原先的焦点（比如正文编辑器）
+  useLayoutEffect(() => {
     if (!open) return;
     setQuery(initial);
     setActive(0);
-    requestAnimationFrame(() => inputRef.current?.focus());
+    inputRef.current?.focus();
   }, [open, seq, initial]);
 
   const items = useMemo<Item[]>(() => {

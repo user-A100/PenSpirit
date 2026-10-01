@@ -7,21 +7,44 @@ import { useSearch } from "../stores/search";
 import { useSettings } from "../stores/settings";
 import { useBinder } from "../stores/binder";
 import { usePalette } from "../stores/palette";
+import { useGroupView, type LensMode } from "../stores/groupView";
 import { askAiAboutSelection } from "./ai/actions";
+import { newChapterAfter, newCollection } from "./binderActions";
 
-/** 在当前章之后新建一章、打开它并进入行内改名（Scrivener：新建即命名） */
+/** 新建一章、打开它并进入行内改名（Scrivener：新建即命名）；位置 = Binder 选中章（多选取最后一章）之后，否则当前章之后 */
 export async function newChapterAfterCurrent(): Promise<void> {
   const ws = useWorkspace.getState();
   if (ws.currentBookId == null) return;
   const nav = useUiNav.getState();
   if (nav.activeView !== "write") nav.setView("write");
   if (nav.sidebarCollapsed) nav.toggleSidebar();
-  const created = await ws.createChapter("新章节", { afterId: ws.currentChapterId, select: true });
-  if (created) useBinder.getState().startRename({ kind: "chapter", id: created.id });
+  const sel = useBinder.getState().selected;
+  await newChapterAfter(sel.length > 0 ? sel[sel.length - 1] : ws.currentChapterId);
 }
 
 const hasBook = () => useWorkspace.getState().currentBookId != null;
 const hasChapter = () => useWorkspace.getState().currentChapterId != null;
+
+/** 组视图模式（Ctrl+1/2/3）：作用于活动窗格；已在该模式再按一次回单章 */
+function groupCommand(mode: LensMode, label: string, key: string): Command {
+  return {
+    id: `view.group.${mode}`,
+    title: `组视图：${label}（再按一次回单章）`,
+    category: "视图",
+    keys: [key],
+    when: hasBook,
+    run: () => {
+      const nav = useUiNav.getState();
+      const pane = useWorkspace.getState().activePane;
+      if (nav.activeView !== "write") {
+        nav.setView("write");
+        useGroupView.getState().setMode(pane, mode);
+        return;
+      }
+      useGroupView.getState().toggle(pane, mode);
+    },
+  };
+}
 
 export function builtinCommands(): Command[] {
   const cmds: Command[] = [
@@ -101,6 +124,23 @@ export function builtinCommands(): Command[] {
         if (id != null) await useWorkspace.getState().deleteChapter(id);
       },
     },
+    groupCommand("scrivenings", "串烧", "Mod+1"),
+    groupCommand("corkboard", "卡片墙", "Mod+2"),
+    groupCommand("outliner", "大纲列", "Mod+3"),
+    {
+      id: "binder.reveal",
+      title: "在目录中定位当前章",
+      category: "导航",
+      keys: ["Mod+Shift+E"],
+      when: hasBook,
+      run: () => {
+        const nav = useUiNav.getState();
+        if (nav.activeView !== "write") nav.setView("write");
+        if (nav.sidebarCollapsed) nav.toggleSidebar();
+        useBinder.getState().reveal();
+      },
+    },
+    { id: "collection.new", title: "新建集合…", category: "章节", when: hasBook, run: () => newCollection([], true) },
     { id: "settings.open", title: "打开设置", category: "应用", keys: ["Mod+,"], allowInModal: false, run: () => useSettings.getState().open() },
   ];
   for (const v of getViews()) {

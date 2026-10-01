@@ -67,6 +67,12 @@ pub fn rename(conn: &Connection, id: i64, new_title: &str, new_file_path: &str) 
     get(conn, id)
 }
 
+/// 只改文件路径（重排重编序号时用）：不碰标题与 updated_at（排序不是内容变更）
+pub fn set_file_path(conn: &Connection, id: i64, file_path: &str) -> AppResult<()> {
+    conn.execute("UPDATE chapters SET file_path = ?2 WHERE id = ?1", params![id, file_path])?;
+    Ok(())
+}
+
 pub fn touch_content(conn: &Connection, id: i64, word_count: i64) -> AppResult<ChapterMeta> {
     conn.execute(
         "UPDATE chapters SET word_count = ?2, updated_at = datetime('now') WHERE id = ?1",

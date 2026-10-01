@@ -29,14 +29,18 @@ await withGuard("p0", async ({ app, makeBook }) => {
   const providers = await app.invoke("list_providers");
   const active = await app.invoke("get_active_provider");
   if (active == null) {
-    await ev(`(() => { const ta = document.querySelector('textarea[placeholder^="写作指令"]'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(ta, '核验：续写一句'); ta.dispatchEvent(new Event('input', { bubbles: true })); return true })()`);
-    await app.clickEl(`document.querySelector('button[title="发送"]')`);
-    const err = await waitFor(ev, `[...document.querySelectorAll('span')].find(s => s.textContent.includes('服务商'))?.textContent`);
-    check("未配服务商：报错为中文且非 [object Object]", err.includes("未配置可用的 AI 服务商") && !err.includes("object Object"), err);
-    check("报错条带「去设置服务商」入口", await ev(`[...document.querySelectorAll('button')].some(b => b.textContent.trim() === '去设置服务商')`));
-    const bubbles = await ev(`[...document.querySelectorAll('div')].filter(d => d.textContent === '核验：续写一句' && d.className.includes('rounded-lg')).length`);
-    check("发送失败撤回乐观气泡（不出现两份指令）", bubbles === 0, `气泡数 ${bubbles}`);
-    await app.clickEl(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === '去设置服务商')`);
+    // 阶段 2A 起的输入区：textarea[aria-label="AI 指令"]，Enter 发送
+    await app.clickEl(`document.querySelector('textarea[aria-label="AI 指令"]')`);
+    await app.typeText("核验：续写一句");
+    await app.press("Enter");
+    const err = await waitFor(ev, `document.querySelector('[role="alert"]')?.innerText`);
+    check("未配服务商：报错为中文且非 [object Object]", err.includes("服务商") && !err.includes("object Object"), err);
+    check("报错条带「去设置服务商」入口", await ev(`[...document.querySelectorAll('[role="alert"] button')].some(b => b.textContent.trim() === '去设置服务商')`));
+    const bubbles = await ev(`[...document.querySelectorAll('body *')].filter(d => d.tagName !== 'TEXTAREA' && d.children.length === 0 && d.textContent.trim() === '核验：续写一句').length`);
+    const restored = await ev(`document.querySelector('textarea[aria-label="AI 指令"]').value`);
+    check("发送失败撤回乐观气泡、指令还回输入框（不出现两份）", bubbles === 0 && restored === "核验：续写一句", `气泡数 ${bubbles} / 输入框「${restored}」`);
+    await ev(`(() => { const ta = document.querySelector('textarea[aria-label="AI 指令"]'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(ta, ''); ta.dispatchEvent(new Event('input', { bubbles: true })); return true })()`);
+    await app.clickEl(`[...document.querySelectorAll('[role="alert"] button')].find(b => b.textContent.trim() === '去设置服务商')`);
     const tab = await waitFor(ev, `[...document.querySelectorAll('[data-testid="settings-backdrop"] button')].find(b => b.textContent.trim() === 'AI 服务商')?.className`);
     check("「去设置服务商」直达 AI 服务商 tab", /border-|text-\[color:var\(--accent/.test(tab) || tab.includes("accent"), "");
     await app.press("Escape");

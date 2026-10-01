@@ -6,7 +6,7 @@ import { OutlineDockPanel } from "../outline/OutlineDockPanel";
 import { PlotBlocksPanel } from "../plot/PlotBlocksPanel";
 import { MetaDockPanel } from "../meta/MetaDockPanel";
 import { LinksDockPanel } from "../links/LinksDockPanel";
-import { CollectionsDockPanel } from "../collections/CollectionsDockPanel";
+
 import { RefDockPanel } from "../reference/RefDockPanel";
 import { NamesPanel } from "../names/NamesPanel";
 import { getView } from "../../lib/nav/registry";
@@ -17,7 +17,7 @@ import { useUiNav } from "../../lib/nav/uiStore";
 const PANEL_COMPONENTS: Record<string, ComponentType> = {
   meta: MetaDockPanel,
   links: LinksDockPanel,
-  collections: CollectionsDockPanel,
+
   reference: RefDockPanel,
   foreshadow: ForeshadowPanel,
   outline: OutlineDockPanel,

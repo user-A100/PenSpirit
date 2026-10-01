@@ -9,7 +9,8 @@
 //! 恢复旧版前的保险快照用 Force 模式，不受间隔限制——否则那次恢复就不可逆了。
 //!
 //! 章节 slug 取 md 文件名主干（如 `0001-chujian`）。选主干而非标题：md 是唯一真源，
-//! DB 重建后按文件名仍能对上历史；代价是重命名章节会另起一份历史（见遗留说明）。
+//! DB 重建后按文件名仍能对上历史。主干会变（改名、阶段 3A 起重排也会改序号）——
+//! 变时由调用方把快照目录一并迁移（见 `history_dir` 与 commands::apply_moves），历史不断档。
 //!
 //! `.history/` 为库内隐藏目录——rescan 只读 `{book}/manuscript/`，天然不涉及。
 //!
@@ -66,6 +67,11 @@ fn safe_component(s: &str) -> bool {
 
 fn snapshot_dir(book_dir: &Path, slug: &str) -> PathBuf {
     book_dir.join(HISTORY_DIR).join(slug)
+}
+
+/// 某章的快照目录（slug 不安全时 None）；供改名 / 重排时随文件主干迁移
+pub fn history_dir(book_dir: &Path, slug: &str) -> Option<PathBuf> {
+    safe_component(slug).then(|| snapshot_dir(book_dir, slug))
 }
 
 /// 本地时间 `YYYY-MM-DD HH:MM:SS`：借 SQLite localtime，避免为时间格式化引入 chrono

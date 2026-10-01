@@ -36,13 +36,13 @@ await withGuard("p1", async ({ app, makeBook }) => {
   check("侧栏透明贴背板、无描边", layer.sideBg === "rgba(0, 0, 0, 0)" && layer.sideBorder === 0, `${layer.sideBg} / ${layer.sideBorder}px`);
   check("内容卡有阴影与 token 圆角", layer.cardShadow && layer.cardShadow !== "none" && layer.cardRadius === "8px", `${layer.cardRadius}`);
 
-  // ② 右侧竖条：9 个面板图标，不再挤成一行；面板标题完整显示
+  // ② 右侧竖条：8 个面板图标（阶段 3A 起集合迁入 Binder），不再挤成一行；面板标题完整显示
   const rail = await ev(`(() => {
     const btns = [...document.querySelectorAll('[data-dock-panel]')];
     const title = document.querySelector('.panel-dock .zen-card span.truncate');
     return { n: btns.length, labels: btns.map(b => b.getAttribute('aria-label')), titleFits: title ? title.scrollWidth <= title.clientWidth : false, title: title?.textContent };
   })()`);
-  check("右侧竖条 9 个面板按组排列", rail.n === 9, rail.labels.join("/"));
+  check("右侧竖条 8 个面板按组排列", rail.n === 8, rail.labels.join("/"));
   check("dock 标题完整不截断", rail.titleFits, rail.title);
   await app.clickEl(`document.querySelector('[data-dock-panel="characters"]')`);
   await sleep(300);
@@ -80,13 +80,14 @@ await withGuard("p1", async ({ app, makeBook }) => {
   await waitFor(ev, `!!document.querySelector('[aria-label="命令面板"]')`);
   await app.typeText("jcdh");
   await sleep(150);
-  const top = await ev(`document.querySelector('[role="option"]')?.textContent`);
+  // 限定在命令面板内（阶段 3A 起 Binder 行也是 listbox option）
+  const top = await ev(`document.querySelector('[aria-label="命令面板"] [role="option"]')?.textContent`);
   check("命令面板拼音首字母命中章节", (top ?? "").includes("第二章 旧城灯火"), top);
   await app.press("Enter");
   await waitFor(ev, `document.querySelector('.ProseMirror')?.textContent.includes('旧城灯会')`);
   check("Enter 跳到该章", true);
   await app.press("k", { ctrl: true });
-  await waitFor(ev, `!!document.querySelector('[aria-label="命令面板"]')`);
+  await waitFor(ev, `document.activeElement?.getAttribute('aria-label') === '搜索章节、书与命令'`);
   await app.typeText(">专注");
   await sleep(150);
   await app.screenshot(`${SHOTS}/palette.png`);

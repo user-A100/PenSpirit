@@ -22,6 +22,7 @@ import { openMenuAt, type MenuEntry } from "../../stores/menu";
 import { commandShortcut, runCommand } from "../../lib/commands";
 import { useWorkspace, type PaneId } from "../../stores/workspace";
 import { registerEditorBridge, toParagraphs, type EditorBridge } from "../../lib/editorBridge";
+import { editorMarkdown } from "../../lib/markdownOut";
 import { askAiAboutSelection, runSelectionCommand } from "../../lib/ai/actions";
 import { useSearch } from "../../stores/search";
 import { useOutline } from "../../stores/outline";
@@ -116,7 +117,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
       if (ws.activePane !== pane) ws.focusPane(pane);
     },
     onUpdate: ({ editor: ed }) => {
-      dirty.current = (ed.storage.markdown as { getMarkdown(): string }).getMarkdown();
+      dirty.current = editorMarkdown(ed);
     },
     // M2-T11 差量统计：按字计（与章节字数同一口径），粘贴与程序化改动不计
     onTransaction: ({ editor: ed, transaction: tr }) => {
@@ -195,7 +196,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   useEffect(() => {
     if (!editor || chapterId == null) return;
     const markDirty = () => {
-      dirty.current = (editor.storage.markdown as { getMarkdown(): string }).getMarkdown();
+      dirty.current = editorMarkdown(editor);
     };
     const blocks = (text: string) => toParagraphs(text).map((t) => ({ type: "paragraph", content: [{ type: "text", text: t }] }));
     const write = (fn: () => boolean) => {
@@ -269,6 +270,12 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
       focus: () => {
         editor.commands.focus();
       },
+      insertAtPoint: (x, y, text) =>
+        write(() => {
+          const hit = editor.view.posAtCoords({ left: x, top: y });
+          if (!hit) return false;
+          return editor.chain().focus().insertContentAt(hit.pos, text).run();
+        }),
     };
     return registerEditorBridge(pane, bridge);
   }, [editor, chapterId, pane]);
@@ -284,7 +291,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   );
 
   const currentMarkdown = () =>
-    editor ? (editor.storage.markdown as { getMarkdown(): string }).getMarkdown() : "";
+    editor ? editorMarkdown(editor) : "";
 
   // 版本恢复：把快照文本灌进编辑器并显式置 dirty（TipTap 的 setContent 不触发 onUpdate），
   // 落盘交给上面的自动保存——与 AI 采纳路径同构。
@@ -293,7 +300,7 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
     suppressStats.current = true;
     editor.commands.setContent(content);
     suppressStats.current = false;
-    dirty.current = (editor.storage.markdown as { getMarkdown(): string }).getMarkdown();
+    dirty.current = editorMarkdown(editor);
   };
 
   const book = books.find((b) => b.id === currentBookId);

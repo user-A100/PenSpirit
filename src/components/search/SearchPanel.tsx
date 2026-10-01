@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { BookmarkPlus, CornerDownLeft, Search, X } from "lucide-react";
 import { useSearch } from "../../stores/search";
 import { useWorkspace } from "../../stores/workspace";
+import { useCollections } from "../../stores/collections";
 import { api, type SearchHit } from "../../lib/tauri";
 import { Modal } from "../ui/Modal";
 import { errMsg } from "../../lib/errors";
@@ -58,6 +59,8 @@ export function SearchPanel() {
     try {
       await api.collectionUpsert({ id: null, book_id: bookId, name: query.trim(), kind: "saved", query: query.trim() });
       setSaveState("saved");
+      // Binder 顶部的集合标签页随之出现
+      void useCollections.getState().load(bookId);
     } catch (e) {
       setSaveState(errMsg(e));
     }

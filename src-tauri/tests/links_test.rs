@@ -40,6 +40,20 @@ fn links_scan_resolves_same_book_titles_and_marks_unresolved() {
 }
 
 #[test]
+fn links_scan_accepts_markdown_escaped_brackets() {
+    // 阶段 3A 之前编辑器会把 [[章题]] 存成 \[\[章题\]\]：已在磁盘上的旧文件照样识别
+    let (_tmp, s) = setup();
+    let book = cmd::create_book_inner(&s, "测试书").unwrap();
+    let c1 = cmd::create_chapter_inner(&s, book.id, "入山").unwrap();
+    let c2 = cmd::create_chapter_inner(&s, book.id, "下_山").unwrap();
+    put(&s, &c1.file_path, "他想起\\[\\[下\\_山\\]\\]的约定，又提到[[入山]]。");
+    let links = cmd::links_scan_inner(&s, book.id).unwrap();
+    let to: Vec<_> = links.iter().map(|l| (l.target.as_str(), l.to_id)).collect();
+    assert_eq!(to, [("下_山", Some(c2.id)), ("入山", Some(c1.id))]);
+    assert!(!links[0].snippet.contains('\\'), "摘录去掉转义反斜杠");
+}
+
+#[test]
 fn links_scan_is_scoped_to_book_and_resolves_duplicate_title_to_first() {
     let (_tmp, s) = setup();
     let b1 = cmd::create_book_inner(&s, "书一").unwrap();
