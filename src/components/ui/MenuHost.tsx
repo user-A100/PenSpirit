@@ -155,7 +155,7 @@ function MenuPanel({ items, x, y, anchor, alignEnd, minWidth, depth, autoFocus, 
           minWidth: minWidth ?? 176,
           visibility: pos ? "visible" : "hidden",
         }}
-        className="menu-pop fixed z-[260] max-h-[70vh] max-w-[20rem] overflow-y-auto rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] p-1 text-[13px] outline-none [box-shadow:var(--shadow-overlay,0_10px_30px_rgba(0,0,0,0.3))]"
+        className="menu-pop fixed z-[260] max-h-[70vh] max-w-[20rem] overflow-y-auto rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] p-1 text-ui outline-none [box-shadow:var(--shadow-overlay,0_10px_30px_rgba(0,0,0,0.3))]"
       >
         {items.map((it, i) => {
           if (it.type === "separator") {
@@ -163,7 +163,7 @@ function MenuPanel({ items, x, y, anchor, alignEnd, minWidth, depth, autoFocus, 
           }
           if (it.type === "label") {
             return (
-              <div key={i} className="px-2.5 pb-0.5 pt-1.5 text-[11px] text-[color:var(--text-faint)]">
+              <div key={i} className="px-2.5 pb-0.5 pt-1.5 text-2xs text-[color:var(--text-faint)]">
                 {it.label}
               </div>
             );
@@ -211,7 +211,7 @@ function MenuPanel({ items, x, y, anchor, alignEnd, minWidth, depth, autoFocus, 
               </span>
               <span className="min-w-0 flex-1 truncate">{it.label}</span>
               {it.shortcut && (
-                <span className="shrink-0 pl-4 text-[11px] text-[color:var(--text-faint)]">{it.shortcut}</span>
+                <span className="shrink-0 pl-4 text-2xs text-[color:var(--text-faint)]">{it.shortcut}</span>
               )}
               {it.submenu && <ChevronRight size={13} className="shrink-0 text-[color:var(--text-faint)]" />}
             </div>

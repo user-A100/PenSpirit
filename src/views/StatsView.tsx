@@ -5,7 +5,7 @@ import { StatsPanel } from "../components/stats/StatsPanel";
 // 全宽后热力图/趋势条更舒展；口径注释见 StatsPanel 头。
 export function StatsView() {
   return (
-    <ViewShell title="写作统计">
+    <ViewShell title="写作统计" subtitle="只计手写实打：粘贴与 AI 采纳不计入">
       <StatsPanel />
     </ViewShell>
   );

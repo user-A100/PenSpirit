@@ -292,3 +292,19 @@ Ctrl+K 内联改写（原文删除线对比、接受/拒绝/细化）· 多候�
 - 计划外急修：**自动保存防抖窗口内切章丢字**——编辑器改为记录「正文属于哪一章」，切章前冲刷上一章、同章重载不回灌旧文。
 
 **验收**：vitest 64 文件 / 512 用例全绿；cargo test 全绿；`tsc --noEmit` 无错；`node scripts/verify/p0.mjs` 实机 16/16 通过且 localStorage 逐键还原；`String(e)` 与原生对话框计数为 0。
+
+### 阶段 1：视觉骨架 Zen 化 ✅
+
+- 1.1 Token v2：`@theme` 字号阶梯（`text-2xs/ui/md`，硬编码 `text-[Npx]` 清零）；派生层 alpha 填充（hover 7% / active 11% / element 6%）、发丝线、同心圆角（`--r-card = max(5px, R − sep/2)`）、`--shadow-chip/card/overlay`（`html[data-tone]` 分明暗两档）、`--ease-out/--ease-spring`；全局 `prefers-reduced-motion` 降级。
+- 1.2 明暗落实：主题成对（暗夜↔晨光、墨岩↔纸白、枫夜↔枫叶），`resolveThemeId` 按界面明暗解析；选卡所见即所得；原生标题栏跟随（新增权限 `core:window:allow-set-theme`）。**根因修复**：`tauri.conf.json` 写死 `"theme": "Dark"` 被 Tauri 同步给 WebView2 的 `prefers-color-scheme`，「跟随系统」跟随的其实是锁死深色的窗口——已移除，跟随系统时 `setTheme(null)`。
+- 1.3 骨架：Ribbon / 侧栏透明贴背板、去全部描边；稿纸、AI、右侧面板三张卡；卡间 `--sep` 透明缝即拖拽条（悬停 0.2s 浮出 accent 细条）；分屏活动窗格改为卡片淡 accent 外描。
+- 1.4 右侧 9 tab 栏 → `DockRail` 竖条（与 Ribbon 对称；本章 / 设定 / 工具分组；每视图记忆面板；点当前 = 折叠，折叠时点任一 = 展开）+ dock 卡标题。
+- 1.5 编辑器顶栏只留面包屑 / 保存状态点 / 字数 / 前后 / 「⋯」（分屏、打字机、悬浮大纲、专注、历史、检查、改名、删除），滚动后才显发丝线；**专注模式**（F11 / Ctrl+Shift+Enter）：只留稿纸，左缘 10px 唤出目录卡（.25s 轻弹，离开 150ms 收回），顶部「退出专注」胶囊。
+- 1.6 命令面板（Ctrl+K / Ctrl+P，Ctrl+Shift+P 只搜命令）：章节 / 书 / 命令混搜、拼音首字母（ICU 拼音排序，零依赖）、高亮、快捷键胶囊、Ctrl+Enter 另一窗格打开。
+- 1.7 `ViewShell` 统一头部（标题 / 副标题 / 动作区）；统计、文风库改容器查询多栏（宽屏 5 列指标、趋势与热力图并排、列表 + 表单双栏）；碰碰车入统一壳。
+- 1.8 动效：视图切换淡入上浮、dock 面板淡入、命令面板 urlbar-grow、Toast 弹簧、菜单/提示气泡、行与按钮按压缩放，均受减少动效控制。
+- 侧栏：顶部书切换器（切换 / 新建 / 导入 / 导出 / 改名 / 重建索引 / 删除）、章节行「一小片稿纸」选中态、行内操作 hover 才现、空库/空书引导、回收站移至底部；`promptDialog` 输入框确认；全局 `TooltipHost`（`data-tip` + 快捷键胶囊）。
+- 1.9 自定义标题栏：按决策暂不做。
+- 修复：专注模式以 CSS 摘除面板时，库回报宽度 0 被误写回「折叠」，退出后侧栏/dock 收不回来；阶段 0 新增测试的类型错误（`tsc` 覆盖测试文件）。
+
+**验收**：vitest 66 文件 / 520 用例全绿；`tsc --noEmit` 无错；`text-[Npx]` 硬编码 0 处；`node scripts/verify/p1.mjs` 实机 16/16 通过（层级透明无描边 / 卡片阴影圆角 / 竖条 9 面板不截断 / 明暗真实切换 / 减少动效 / 命令面板拼音跳章 / 专注模式进出 / 6 视图统一头部）且 localStorage 逐键还原；截图集 `.tmp-verify/p1/`。

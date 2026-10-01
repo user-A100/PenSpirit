@@ -11,7 +11,7 @@ export function IdeaCardShelf() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-12 shrink-0 items-center border-b border-[color:var(--border-subtle)] px-4">
+      <div className="flex h-11 shrink-0 items-center px-4">
         <span className="text-sm font-semibold text-[color:var(--text-primary)]">灵感卡</span>
         {ideas.length > 0 && (
           <span className="ml-1.5 text-xs text-[color:var(--text-faint)]">({ideas.length})</span>
@@ -51,12 +51,12 @@ export function IdeaCardShelf() {
                     {tags.map((t) => (
                       <span
                         key={t}
-                        className="rounded-full bg-[var(--accent-dim)] px-1.5 py-0.5 text-[11px] text-[color:var(--text-secondary)]"
+                        className="rounded-full bg-[var(--accent-dim)] px-1.5 py-0.5 text-2xs text-[color:var(--text-secondary)]"
                       >
                         {t}
                       </span>
                     ))}
-                    <span className="ml-auto text-[11px] text-[color:var(--text-faint)]">{idea.created_at}</span>
+                    <span className="ml-auto text-2xs text-[color:var(--text-faint)]">{idea.created_at}</span>
                   </div>
                 </Card>
               );

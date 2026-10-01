@@ -92,7 +92,7 @@ export function LinksDockPanel() {
                   {l.target}
                 </span>
               </span>
-              <span className="mt-0.5 block truncate text-[10px] text-[color:var(--text-faint)]">{l.snippet}</span>
+              <span className="mt-0.5 block truncate text-2xs text-[color:var(--text-faint)]">{l.snippet}</span>
             </button>
           );
         })}
@@ -112,7 +112,7 @@ export function LinksDockPanel() {
               <ArrowLeft size={11} className="shrink-0 text-[color:var(--accent)]" />
               <span className="min-w-0 flex-1 truncate text-[color:var(--text-primary)]">{b.from_title}</span>
             </span>
-            <span className="mt-0.5 block truncate text-[10px] text-[color:var(--text-faint)]">{b.snippet}</span>
+            <span className="mt-0.5 block truncate text-2xs text-[color:var(--text-faint)]">{b.snippet}</span>
           </button>
         ))}
       </Section>
@@ -128,7 +128,7 @@ export function LinksDockPanel() {
           >
             <UserRound size={11} className="shrink-0 text-[color:var(--accent)]" />
             <span className="min-w-0 flex-1 truncate text-[color:var(--text-primary)]">{row.name}</span>
-            <span className="shrink-0 text-[10px] text-[color:var(--text-faint)]">
+            <span className="shrink-0 text-2xs text-[color:var(--text-faint)]">
               {row.count} 次 · {row.chapters.length} 章
             </span>
           </div>
@@ -141,7 +141,7 @@ export function LinksDockPanel() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-3">
-      <div className="mb-1 text-[10px] uppercase tracking-wider text-[color:var(--text-faint)]">{title}</div>
+      <div className="mb-1 text-2xs uppercase tracking-wider text-[color:var(--text-faint)]">{title}</div>
       {children}
     </div>
   );

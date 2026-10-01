@@ -143,7 +143,7 @@ export function MaterialsWorkspace() {
             <section key={g.category} className="mb-4">
               <div className="mb-1.5 flex items-center gap-2">
                 <span className="text-xs font-medium text-[color:var(--text-secondary)]">{g.category}</span>
-                <span className="text-[11px] text-[color:var(--text-faint)]">{g.items.length}</span>
+                <span className="text-2xs text-[color:var(--text-faint)]">{g.items.length}</span>
                 <span className="h-px flex-1 bg-[color:var(--border-subtle)]" />
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

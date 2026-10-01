@@ -6,6 +6,7 @@ import { useOutline } from "../stores/outline";
 import { useSearch } from "../stores/search";
 import { useSettings } from "../stores/settings";
 import { useBinder } from "../stores/binder";
+import { usePalette } from "../stores/palette";
 
 /** 在当前章之后新建一章、打开它并进入行内改名（Scrivener：新建即命名） */
 export async function newChapterAfterCurrent(): Promise<void> {
@@ -23,6 +24,25 @@ const hasChapter = () => useWorkspace.getState().currentChapterId != null;
 
 export function builtinCommands(): Command[] {
   const cmds: Command[] = [
+    {
+      id: "palette.open",
+      title: "命令面板",
+      category: "导航",
+      keys: ["Mod+K", "Mod+P"],
+      allowInModal: true,
+      run: () => {
+        const p = usePalette.getState();
+        if (p.open) p.close();
+        else p.openPalette();
+      },
+    },
+    {
+      id: "palette.commands",
+      title: "命令面板（只搜命令）",
+      category: "导航",
+      keys: ["Mod+Shift+P"],
+      run: () => usePalette.getState().openPalette(">"),
+    },
     { id: "view.toggleSidebar", title: "折叠/展开侧栏", category: "视图", keys: ["Mod+B"], run: () => useUiNav.getState().toggleSidebar() },
     { id: "view.toggleDock", title: "折叠/展开右侧面板", category: "视图", keys: ["Mod+\\"], run: () => useUiNav.getState().toggleDock() },
     { id: "editor.toggleOutline", title: "悬浮大纲", category: "编辑", keys: ["Alt+O"], run: () => useOutline.getState().toggle() },
@@ -30,6 +50,14 @@ export function builtinCommands(): Command[] {
     { id: "nav.back", title: "后退（章节历史）", category: "导航", keys: ["Alt+ArrowLeft"], run: () => useWorkspace.getState().goBack() },
     { id: "nav.forward", title: "前进（章节历史）", category: "导航", keys: ["Alt+ArrowRight"], run: () => useWorkspace.getState().goForward() },
     { id: "editor.cycleSplit", title: "分屏：无 / 左右 / 上下", category: "编辑", keys: ["Alt+S"], run: () => useWorkspace.getState().cycleSplit() },
+    {
+      id: "view.focusMode",
+      title: "专注模式（只留稿纸）",
+      category: "视图",
+      keys: ["F11", "Mod+Shift+Enter"],
+      run: () => useUiNav.getState().toggleFocusMode(),
+    },
+    { id: "editor.typewriter", title: "打字机滚动", category: "编辑", run: () => useUiNav.getState().toggleTypewriter() },
     { id: "chapter.new", title: "新建章节", category: "章节", keys: ["Mod+N"], when: hasBook, run: newChapterAfterCurrent },
     {
       id: "chapter.rename",

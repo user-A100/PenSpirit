@@ -67,7 +67,7 @@ export function RefDockPanel() {
         </button>
       </div>
       {selected != null && meta && (
-        <div className="mb-1 shrink-0 text-[10px] text-[color:var(--text-faint)]">
+        <div className="mb-1 shrink-0 text-2xs text-[color:var(--text-faint)]">
           {meta.title}
           {content != null && ` · ${countWords(content).toLocaleString()} 字`}
         </div>

@@ -2,7 +2,7 @@
 // 所有改动即时生效（主题与明暗立即落盘，缩放防抖落盘）。
 import { CSSProperties } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
-import { THEMES } from "../../themes/defs";
+import { findTheme, THEMES } from "../../themes/defs";
 import { TEXTURES } from "../../themes/textures";
 import {
   AppearanceMode,
@@ -22,6 +22,7 @@ import {
   TEXTURE_SCALE_MIN,
   TEXTURE_SCALE_STEP,
   TextureBlend,
+  effectiveThemeId,
   UI_SCALE_MAX,
   UI_SCALE_MIN,
   UI_SCALE_STEP,
@@ -48,6 +49,8 @@ function SectionTitle(props: { children: React.ReactNode }) {
 export function AppearancePane() {
   const colorTheme = useAppearance((s) => s.colorTheme);
   const mode = useAppearance((s) => s.mode);
+  const systemDark = useAppearance((s) => s.systemDark);
+  const effective = effectiveThemeId(colorTheme, mode, systemDark);
   const uiScale = useAppearance((s) => s.uiScale);
   const prose = useAppearance((s) => s.prose);
   const texture = useAppearance((s) => s.texture);
@@ -64,7 +67,8 @@ export function AppearancePane() {
         <SectionTitle>配色主题</SectionTitle>
         <div className="grid grid-cols-2 gap-2.5">
           {THEMES.map((t) => {
-            const active = t.id === colorTheme;
+            const active = t.id === effective;
+            const pair = t.pair ? findTheme(t.pair) : undefined;
             return (
               <button
                 key={t.id}
@@ -81,7 +85,7 @@ export function AppearancePane() {
                   className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-2"
                 >
                   <div className="mb-0.5 text-xs font-medium text-[var(--text-primary)]">章节标题</div>
-                  <div className="text-[11px] leading-relaxed text-[var(--text-secondary)]">
+                  <div className="text-2xs leading-relaxed text-[var(--text-secondary)]">
                     山雨欲来风满楼，正是落笔时。
                   </div>
                   <div className="mt-1.5 flex items-center gap-1">
@@ -97,8 +101,9 @@ export function AppearancePane() {
                       使用中
                     </span>
                   ) : (
-                    <span className="shrink-0 text-xs text-[color:var(--text-faint)]">
+                    <span className="shrink-0 text-xs text-[color:var(--text-faint)]" title={pair ? `跟随系统时与「${pair.name}」互换` : "单一明暗，不随系统切换"}>
                       {t.dark ? "深色" : "浅色"}
+                      {pair ? ` ↔ ${pair.name}` : ""}
                     </span>
                   )}
                 </div>
@@ -132,7 +137,7 @@ export function AppearancePane() {
           })}
         </div>
         <p className="mt-1.5 text-xs text-[color:var(--text-faint)]">
-          明暗与配色主题相互独立；主题自身的明暗倾向见卡片角标。
+          暗夜↔晨光、墨岩↔纸白、枫夜↔枫叶成对：跟随系统时自动互换；其余主题只有一种明暗。
         </p>
       </section>
 

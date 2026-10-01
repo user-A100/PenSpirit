@@ -6,6 +6,8 @@ export const VIEW_STORAGE_KEY = "bixian.nav.view";
 export const SIDEBAR_PCT_KEY = "bixian.nav.sidebarPct";
 export const DOCK_PCT_KEY = "bixian.nav.dockPct";
 export const TYPEWRITER_KEY = "bixian.typewriter";
+/** 右侧 dock 每个一级视图记住的面板（viewId → panelId） */
+export const DOCK_PANEL_KEY = "bixian.nav.dockPanel";
 
 /** dock 面板宽度百分比有效域（与 WriteView 中 minSize/maxSize 对应） */
 const DOCK_PCT_MIN = 17;
@@ -24,6 +26,12 @@ interface UiNavState {
   readReturn: string | null;
   /** 打字机滚动：输入时把光标行固定在视口偏上位置（Scrivener Typewriter Scrolling） */
   typewriter: boolean;
+  /** 专注模式（Zen 紧凑模式）：隐去全部 chrome 只留稿纸；左缘悬停唤出目录（会话内状态） */
+  focusMode: boolean;
+  toggleFocusMode: () => void;
+  /** 各视图 dock 当前面板（持久化）；未记录时用该视图第一个面板 */
+  dockPanels: Record<string, string>;
+  setDockPanel: (view: string, panel: string) => void;
   setView: (id: string) => void;
   toggleSidebar: () => void;
   toggleDock: () => void;
@@ -41,6 +49,18 @@ function readStoredView(): string {
   return FALLBACK_VIEW;
 }
 
+function readStoredDockPanels(): Record<string, string> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DOCK_PANEL_KEY) ?? "{}");
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      return Object.fromEntries(Object.entries(raw).filter(([, v]) => typeof v === "string")) as Record<string, string>;
+    }
+  } catch {
+    // 损坏：回默认
+  }
+  return {};
+}
+
 function readStoredTypewriter(): boolean {
   try {
     return localStorage.getItem(TYPEWRITER_KEY) === "1";
@@ -55,6 +75,19 @@ export const useUiNav = create<UiNavState>((set) => ({
   dockCollapsed: false,
   readReturn: null,
   typewriter: readStoredTypewriter(),
+  focusMode: false,
+  toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode, activeView: s.focusMode ? s.activeView : "write" })),
+  dockPanels: readStoredDockPanels(),
+  setDockPanel: (view, panel) =>
+    set((s) => {
+      const dockPanels = { ...s.dockPanels, [view]: panel };
+      try {
+        localStorage.setItem(DOCK_PANEL_KEY, JSON.stringify(dockPanels));
+      } catch {
+        // 持久化失败不影响会话内切换
+      }
+      return { dockPanels };
+    }),
   setView: (id) => {
     try {
       localStorage.setItem(VIEW_STORAGE_KEY, id);

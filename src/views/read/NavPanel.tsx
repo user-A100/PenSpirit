@@ -64,7 +64,7 @@ export function NavPanel({ bookTitle, chapters, currentChapterId, onSelectChapte
           <li className="px-2 py-3 text-center text-xs text-[var(--text-faint)]">无匹配章节</li>
         )}
       </ul>
-      <div className="border-t border-[var(--border-subtle)] px-4 py-2 text-[11px] text-[var(--text-faint)]">
+      <div className="border-t border-[var(--border-subtle)] px-4 py-2 text-2xs text-[var(--text-faint)]">
         本书 {chapters.length} 章
       </div>
     </div>

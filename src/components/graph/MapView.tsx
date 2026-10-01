@@ -336,7 +336,7 @@ export function MapView() {
                       <MapPin size={13} />
                     </span>
                     <span
-                      className="mt-0.5 max-w-24 truncate rounded px-1 text-[11px] text-[color:var(--text-primary)]"
+                      className="mt-0.5 max-w-24 truncate rounded px-1 text-2xs text-[color:var(--text-primary)]"
                       style={{ background: "color-mix(in srgb, var(--bg-panel) 78%, transparent)" }}
                     >
                       {p.name}

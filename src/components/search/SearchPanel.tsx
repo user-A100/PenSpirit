@@ -98,7 +98,7 @@ export function SearchPanel() {
                 key={sc.value}
                 onClick={() => setScope(sc.value)}
                 title={sc.title}
-                className={`rounded px-1.5 py-0.5 text-[11px] transition-colors duration-150 hover:bg-[var(--bg-hover)] ${
+                className={`rounded px-1.5 py-0.5 text-2xs transition-colors duration-150 hover:bg-[var(--bg-hover)] ${
                   scope === sc.value
                     ? "bg-[var(--accent-dim)] text-[color:var(--text-primary)]"
                     : "text-[color:var(--text-faint)]"
@@ -111,7 +111,7 @@ export function SearchPanel() {
           <button
             onClick={() => setWholeWord(!wholeWord)}
             title="全词匹配"
-            className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] transition-colors duration-150 hover:bg-[var(--bg-hover)] ${
+            className={`shrink-0 rounded px-1.5 py-0.5 text-2xs transition-colors duration-150 hover:bg-[var(--bg-hover)] ${
               wholeWord ? "bg-[var(--accent-dim)] text-[color:var(--text-primary)]" : "text-[color:var(--text-faint)]"
             }`}
           >
@@ -126,7 +126,7 @@ export function SearchPanel() {
           </button>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 px-3 py-1.5 text-[11px] text-[color:var(--text-faint)]">
+        <div className="flex shrink-0 items-center gap-2 px-3 py-1.5 text-2xs text-[color:var(--text-faint)]">
           <span className="min-w-0 flex-1 truncate">
             {error ? (
               <span className="text-[color:var(--danger)]">{error}</span>
@@ -151,7 +151,7 @@ export function SearchPanel() {
             <button
               onClick={() => void saveAsCollection()}
               title="把当前查询存为搜索集合（写入写作区右侧「集合」面板）"
-              className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+              className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
             >
               <BookmarkPlus size={11} />
               存为集合
@@ -162,7 +162,7 @@ export function SearchPanel() {
         <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
           {groups.map((g) => (
             <div key={g.id} className="mb-1">
-              <div className="px-2 py-1 text-[11px] font-medium text-[color:var(--text-secondary)]">
+              <div className="px-2 py-1 text-2xs font-medium text-[color:var(--text-secondary)]">
                 {g.title}
                 <span className="ml-1 text-[color:var(--text-faint)]">({g.items.length})</span>
               </div>
@@ -173,7 +173,7 @@ export function SearchPanel() {
                   title="跳到此行"
                   className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
                 >
-                  <span className="w-8 shrink-0 text-right text-[11px] text-[color:var(--text-faint)]">
+                  <span className="w-8 shrink-0 text-right text-2xs text-[color:var(--text-faint)]">
                     {h.line_no}
                   </span>
                   <HitLine hit={h} />
@@ -183,7 +183,7 @@ export function SearchPanel() {
           ))}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5 border-t border-[color:var(--border-subtle)] px-3 py-1.5 text-[11px] text-[color:var(--text-faint)]">
+        <div className="flex shrink-0 items-center gap-1.5 border-t border-[color:var(--border-subtle)] px-3 py-1.5 text-2xs text-[color:var(--text-faint)]">
           <CornerDownLeft size={11} />
           点击结果跳转到该章并定位
         </div>

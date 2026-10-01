@@ -473,7 +473,7 @@ export function MetaDockPanel() {
               <div className="space-y-1">
                 {customDefs.map((d) => (
                   <div key={d.id} className="flex items-center gap-1.5">
-                    <span className="shrink-0 rounded px-1 py-0.5 text-[10px] text-[color:var(--text-secondary)]" style={{ backgroundColor: "var(--bg-panel)" }}>
+                    <span className="shrink-0 rounded px-1 py-0.5 text-2xs text-[color:var(--text-secondary)]" style={{ backgroundColor: "var(--bg-panel)" }}>
                       {FIELD_TYPE_LABEL[d.field_type]}
                     </span>
                     <input

@@ -65,7 +65,7 @@ function bestSection(query: string): string | null {
 function Section({ searchKey, title, children }: { searchKey: string; title: string; children: ReactNode }) {
   return (
     <section data-search-key={searchKey} className="rounded-lg px-1 py-3">
-      <h3 className="pb-2 text-[11px] font-medium tracking-wider text-[var(--text-faint)]">{title}</h3>
+      <h3 className="pb-2 text-2xs font-medium tracking-wider text-[var(--text-faint)]">{title}</h3>
       <div className="flex flex-col gap-2.5">{children}</div>
     </section>
   );
@@ -83,7 +83,7 @@ function SliderRow(props: {
   const { label, min, max, step, value, onChange, fmt } = props;
   return (
     <div className="flex items-center gap-2">
-      <span className="w-8 shrink-0 text-[11px] text-[var(--text-secondary)]">{label}</span>
+      <span className="w-8 shrink-0 text-2xs text-[var(--text-secondary)]">{label}</span>
       <input
         type="range"
         min={min}
@@ -94,7 +94,7 @@ function SliderRow(props: {
         onChange={(e) => onChange(Number(e.target.value))}
         className="min-w-0 flex-1 accent-[var(--accent)]"
       />
-      <span className="w-12 shrink-0 text-right text-[11px] tabular-nums text-[var(--text-secondary)]">
+      <span className="w-12 shrink-0 text-right text-2xs tabular-nums text-[var(--text-secondary)]">
         {fmt ? fmt(value) : value}
       </span>
     </div>
@@ -212,7 +212,7 @@ export function SettingPanel() {
               );
             })}
           </div>
-          <div className="flex items-center gap-4 text-[11px] text-[var(--text-secondary)]">
+          <div className="flex items-center gap-4 text-2xs text-[var(--text-secondary)]">
             <label className="flex items-center gap-1.5">
               底色
               <input
@@ -234,7 +234,7 @@ export function SettingPanel() {
               />
             </label>
           </div>
-          <p className="text-[10px] text-[var(--text-faint)]">深色底建议搭配浅色文字</p>
+          <p className="text-2xs text-[var(--text-faint)]">深色底建议搭配浅色文字</p>
         </Section>
 
         {/* 背景图 */}
@@ -247,7 +247,7 @@ export function SettingPanel() {
             导入图片（png/jpg/webp/gif，≤10MB）
           </button>
           {images.length === 0 && (
-            <p className="text-[10px] text-[var(--text-faint)]">还没有背景图，导入一张试试</p>
+            <p className="text-2xs text-[var(--text-faint)]">还没有背景图，导入一张试试</p>
           )}
           {images.length > 0 && (
             <div className="grid grid-cols-3 gap-2">
@@ -280,7 +280,7 @@ export function SettingPanel() {
             </div>
           )}
           {prefs.bgImage != null && (
-            <div className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+            <div className="flex items-center gap-2 text-2xs text-[var(--text-secondary)]">
               <span className="w-12 shrink-0">不透明度</span>
               <input
                 type="range"
@@ -344,13 +344,13 @@ export function SettingPanel() {
 
         {/* 字体与对齐 */}
         <Section searchKey="font" title="字体与对齐">
-          <label className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+          <label className="flex items-center gap-2 text-2xs text-[var(--text-secondary)]">
             <span className="w-8 shrink-0">字体</span>
             <select
               aria-label="字体"
               value={prefs.fontFamily}
               onChange={(e) => prefs.set({ fontFamily: e.target.value })}
-              className="min-w-0 flex-1 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-base)] px-1.5 py-1 text-[11px] outline-none"
+              className="min-w-0 flex-1 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-base)] px-1.5 py-1 text-2xs outline-none"
             >
               {FONT_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -359,7 +359,7 @@ export function SettingPanel() {
               ))}
             </select>
           </label>
-          <div className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+          <div className="flex items-center gap-2 text-2xs text-[var(--text-secondary)]">
             <span className="w-8 shrink-0">对齐</span>
             <div className="flex overflow-hidden rounded-md border border-[var(--border-subtle)]">
               <button aria-label="左对齐" onClick={() => prefs.set({ textAlign: "left" })} className={segBtn(prefs.textAlign === "left")}>
@@ -374,7 +374,7 @@ export function SettingPanel() {
               </button>
             </div>
           </div>
-          <label className="flex cursor-pointer items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+          <label className="flex cursor-pointer items-center gap-2 text-2xs text-[var(--text-secondary)]">
             <input
               type="checkbox"
               aria-label="首行缩进"

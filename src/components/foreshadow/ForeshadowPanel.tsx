@@ -198,13 +198,13 @@ export function ForeshadowPanel() {
             <Plus size={12} />
             登记
           </button>
-          <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[color:var(--text-faint)]">
+          <span className="ml-auto shrink-0 text-2xs tabular-nums text-[color:var(--text-faint)]">
             待收 {countOf("all")}
           </span>
         </div>
 
         {/* 筛选 segmented（默认「全部」收起已回收） */}
-        <div className="flex rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] p-0.5 text-[11px]">
+        <div className="flex rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] p-0.5 text-2xs">
           {FILTERS.map((ft) => (
             <button
               key={ft.key}
@@ -283,14 +283,14 @@ export function ForeshadowPanel() {
             <div className="flex items-center justify-end gap-1.5">
               <button
                 onClick={() => setFormOpen(false)}
-                className="rounded px-2 py-1 text-[11px] text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
+                className="rounded px-2 py-1 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
               >
                 取消
               </button>
               <button
                 onClick={() => void submit()}
                 disabled={!title.trim() || planted === ""}
-                className="rounded-md bg-[color:var(--accent)] px-2.5 py-1 text-[11px] font-medium text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-md bg-[color:var(--accent)] px-2.5 py-1 text-2xs font-medium text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 保存
               </button>
@@ -395,7 +395,7 @@ export function ForeshadowPanel() {
                 {/* 标记回收：inline 弹层选章 */}
                 {resolvingId === r.f.id && (
                   <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2 py-1.5">
-                    <span className="shrink-0 text-[11px] text-[color:var(--text-secondary)]">回收于</span>
+                    <span className="shrink-0 text-2xs text-[color:var(--text-secondary)]">回收于</span>
                     <select
                       title="回收章"
                       value={resolveCh}
@@ -409,7 +409,7 @@ export function ForeshadowPanel() {
                     <button
                       title="确认回收"
                       onClick={() => void confirmResolve(r.f.id)}
-                      className="shrink-0 rounded-md bg-[color:var(--accent)] px-2 py-1 text-[11px] font-medium text-white transition-opacity duration-150 hover:opacity-90"
+                      className="shrink-0 rounded-md bg-[color:var(--accent)] px-2 py-1 text-2xs font-medium text-white transition-opacity duration-150 hover:opacity-90"
                     >
                       确认
                     </button>
@@ -467,7 +467,7 @@ export function ForeshadowPanel() {
                         />
                       </>
                     )}
-                    <span className="absolute left-1 top-1/2 z-10 max-w-[65%] -translate-y-1/2 truncate text-[10px] leading-none text-[color:var(--text-primary)]">
+                    <span className="absolute left-1 top-1/2 z-10 max-w-[65%] -translate-y-1/2 truncate text-2xs leading-none text-[color:var(--text-primary)]">
                       {r.f.title}
                     </span>
                   </div>

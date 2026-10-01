@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ConfirmHost } from "./ConfirmHost";
-import { confirmDialog } from "../../stores/confirm";
+import { confirmDialog, promptDialog } from "../../stores/confirm";
 
 describe("ConfirmHost", () => {
   it("点确认 resolve(true)；点取消 resolve(false)", async () => {
@@ -20,6 +20,25 @@ describe("ConfirmHost", () => {
     });
     fireEvent.click(screen.getByText("取消"));
     await expect(p).resolves.toBe(false);
+  });
+
+  it("promptDialog：输入后 Enter 返回 trim 文本；取消返回 null", async () => {
+    render(<ConfirmHost />);
+    let p!: Promise<string | null>;
+    act(() => {
+      p = promptDialog({ title: "新建书", placeholder: "书名" });
+    });
+    const input = screen.getByLabelText("新建书");
+    fireEvent.change(input, { target: { value: "  长夜  " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await expect(p).resolves.toBe("长夜");
+
+    act(() => {
+      p = promptDialog({ title: "改名", initial: "旧名" });
+    });
+    expect((screen.getByLabelText("改名") as HTMLInputElement).value).toBe("旧名");
+    fireEvent.click(screen.getByText("取消"));
+    await expect(p).resolves.toBeNull();
   });
 
   it("Enter 确认、Esc 取消；多个请求排队依次展示", async () => {

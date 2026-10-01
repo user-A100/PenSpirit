@@ -51,22 +51,16 @@ export function BumpWorkspace() {
   };
 
   return (
-    <div className="flex h-full bg-transparent">
-      {/* 碰撞台 */}
+    <div className="flex h-full gap-4 bg-transparent">
+      {/* 碰撞台（标题由 ViewShell 统一给出） */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[color:var(--border-subtle)] px-4">
-          <Shuffle size={15} className="text-[color:var(--accent)]" />
-          <span className="text-sm font-semibold text-[color:var(--text-primary)]">碰碰车</span>
-          <span className="text-xs text-[color:var(--text-faint)]">把不相干的词撞在一起</span>
-        </div>
+        {error && <div className="pb-2 text-xs text-[color:var(--danger)]">{error}</div>}
 
-        {error && <div className="px-4 py-2 text-xs text-[color:var(--danger)]">{error}</div>}
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1 pt-1">
           {/* 词库 */}
           <div className="mb-1.5 flex items-center gap-2">
             <span className="text-xs text-[color:var(--text-secondary)]">词库</span>
-            <span className="text-[11px] text-[color:var(--text-faint)]">{words.length} 个</span>
+            <span className="text-2xs text-[color:var(--text-faint)]">{words.length} 个</span>
             {words.length > 0 &&
               (confirmClear ? (
                 <button
@@ -75,7 +69,7 @@ export function BumpWorkspace() {
                     setConfirmClear(false);
                   }}
                   title="确认清空词库"
-                  className="rounded px-1.5 py-0.5 text-[11px] text-[color:var(--danger)] transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+                  className="rounded px-1.5 py-0.5 text-2xs text-[color:var(--danger)] transition-colors duration-150 hover:bg-[var(--bg-hover)]"
                 >
                   确认清空
                 </button>
@@ -83,7 +77,7 @@ export function BumpWorkspace() {
                 <button
                   onClick={() => setConfirmClear(true)}
                   title="清空词库"
-                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
                 >
                   <Eraser size={11} />
                   清空
@@ -144,11 +138,11 @@ export function BumpWorkspace() {
                 </span>
                 <button
                   onClick={() => void addAll()}
-                  className="rounded-md bg-[var(--accent)] px-2.5 py-1 text-[11px] font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)]"
+                  className="rounded-md bg-[var(--accent)] px-2.5 py-1 text-2xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)]"
                 >
                   全部添加
                 </button>
-                <span className="text-[11px] text-[color:var(--text-faint)]">Esc 取消</span>
+                <span className="text-2xs text-[color:var(--text-faint)]">Esc 取消</span>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {pending.map((w) => {
@@ -164,7 +158,7 @@ export function BumpWorkspace() {
                     >
                       {w}
                       {exists && (
-                        <span className="text-[10px] text-[color:var(--text-faint)]">已存在</span>
+                        <span className="text-2xs text-[color:var(--text-faint)]">已存在</span>
                       )}
                       <button
                         onClick={() => setPending(pending.filter((p) => p !== w))}
@@ -201,7 +195,7 @@ export function BumpWorkspace() {
               {drawn.length > 0 ? "换一组" : "碰撞"}
             </button>
             {words.length < count && (
-              <span className="text-[11px] text-[color:var(--text-faint)]">词库至少需要 {count} 个词</span>
+              <span className="text-2xs text-[color:var(--text-faint)]">词库至少需要 {count} 个词</span>
             )}
           </div>
 
@@ -243,8 +237,8 @@ export function BumpWorkspace() {
         </div>
       </div>
 
-      {/* 灵感卡架 */}
-      <div className="w-[320px] shrink-0 border-l border-[color:var(--border-subtle)] bg-[var(--bg-panel)]">
+      {/* 灵感卡架：卡内一块微凸的面板（不画分割线） */}
+      <div className="w-80 shrink-0 overflow-hidden rounded-[var(--r-card)] bg-[var(--fill-element)]">
         <IdeaCardShelf />
       </div>
     </div>

@@ -3,13 +3,14 @@ import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { ChapterEditor } from "./ChapterEditor";
 import { AiDock } from "../chat/AiDock";
 import { useWorkspace } from "../../stores/workspace";
+import { useUiNav } from "../../lib/nav/uiStore";
 
-// 垂直 PanelGroup：编辑区上、AI Dock 下。用法约束同 WriteView（v4 实测）：
+// 垂直 PanelGroup：编辑卡在上、AI 卡在下，中间是 --sep 透明缝（阶段 1 Zen 骨架）。用法约束同 WriteView（v4 实测）：
 // 显式 defaultLayout + Panel 显式 id + 无单位字符串（=百分比）尺寸。
 // AiDock 折叠走 Panel 原生 collapsible：collapsedSize=36px，collapse()/expand() 切换，
 // onResize 按像素判定折叠态驱动 AiDock 渲染完整面板或 36px 条。
 // 分屏（M7 批次5）：编辑区内部再嵌一层 Group——vertical=左右并排、horizontal=上下堆叠；
-// 每个窗格顶边 2px accent 提示活动窗格（activePane，点击窗格内任意编辑器即跟随）。
+// 活动窗格的卡片外描一圈淡 accent（activePane，点击窗格内任意编辑器即跟随）。
 const COLLAPSED_PX = 36;
 
 function PaneShell({ pane }: { pane: "a" | "b" }) {
@@ -17,7 +18,7 @@ function PaneShell({ pane }: { pane: "a" | "b" }) {
   return (
     <div
       data-pane-active={active ? "" : undefined}
-      className={`h-full border-t-2 ${active ? "border-[color:var(--accent)]" : "border-transparent"}`}
+      className={`zen-card h-full transition-[box-shadow] duration-[var(--dur-md)] ${active ? "zen-card-active" : ""}`}
     >
       <ChapterEditor pane={pane} />
     </div>
@@ -28,16 +29,19 @@ export function EditorPane() {
   const panelRef = usePanelRef();
   const [collapsed, setCollapsed] = useState(false);
   const splitAxis = useWorkspace((s) => s.splitAxis);
+  const focusMode = useUiNav((s) => s.focusMode);
 
   const editorArea =
     splitAxis === "none" ? (
-      <ChapterEditor pane="a" />
+      <div className="zen-card h-full">
+        <ChapterEditor pane="a" />
+      </div>
     ) : splitAxis === "vertical" ? (
       <Group orientation="horizontal" className="h-full bg-transparent" defaultLayout={{ "pane-a": 50, "pane-b": 50 }}>
         <Panel id="pane-a" defaultSize="50" minSize="20">
           <PaneShell pane="a" />
         </Panel>
-        <Separator className="w-1 bg-transparent transition-colors duration-150 hover:bg-[var(--accent-dim)]" />
+        <Separator className="zen-splitter zen-splitter-x" />
         <Panel id="pane-b" defaultSize="50" minSize="20">
           <PaneShell pane="b" />
         </Panel>
@@ -47,7 +51,7 @@ export function EditorPane() {
         <Panel id="pane-a" defaultSize="50" minSize="20">
           <PaneShell pane="a" />
         </Panel>
-        <Separator className="h-1 bg-transparent transition-colors duration-150 hover:bg-[var(--accent-dim)]" />
+        <Separator className="zen-splitter zen-splitter-y" />
         <Panel id="pane-b" defaultSize="50" minSize="20">
           <PaneShell pane="b" />
         </Panel>
@@ -55,6 +59,8 @@ export function EditorPane() {
     );
 
   return (
+    // 专注模式：AI 卡与分隔缝 CSS 摘除（同侧栏折叠手法），只留稿纸
+    <div className="h-full" data-ai-hidden={focusMode ? "" : undefined}>
     <Group
       orientation="vertical"
       className="h-full bg-transparent"
@@ -63,9 +69,10 @@ export function EditorPane() {
       <Panel id="editor" defaultSize="68" minSize="30">
         {editorArea}
       </Panel>
-      <Separator className="h-1 bg-transparent transition-colors duration-150 hover:bg-[var(--accent-dim)]" />
+      {!focusMode && <Separator className="zen-splitter zen-splitter-y" />}
       <Panel
         id="aidock"
+        className="panel-aidock"
         panelRef={panelRef}
         defaultSize="32"
         minSize="15"
@@ -74,14 +81,18 @@ export function EditorPane() {
         collapsedSize={`${COLLAPSED_PX}px`}
         onResize={(size, _id, prev) => {
           if (prev === undefined) return; // 首帧：保持初值 false
+          if (useUiNav.getState().focusMode) return; // 专注模式 CSS 摘除不算折叠
           setCollapsed(size.inPixels <= COLLAPSED_PX + 4);
         }}
       >
-        <AiDock
-          collapsed={collapsed}
-          onToggle={() => (collapsed ? panelRef.current?.expand() : panelRef.current?.collapse())}
-        />
+        <div className="zen-card h-full">
+          <AiDock
+            collapsed={collapsed}
+            onToggle={() => (collapsed ? panelRef.current?.expand() : panelRef.current?.collapse())}
+          />
+        </div>
       </Panel>
     </Group>
+    </div>
   );
 }

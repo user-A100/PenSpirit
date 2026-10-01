@@ -46,7 +46,7 @@ export function StatsBadge() {
       title={`今日 ${fmtWords(words)} 字 · 活跃 ${activeMinutes} 分钟${
         goal > 0 ? ` · 日目标 ${fmtWords(goal)} 字${achieved ? " · 已达标 🎉" : ""}` : ""
       }`}
-      className="flex items-center justify-center gap-2 px-2 pb-1.5 text-[11px] text-[color:var(--text-faint)]"
+      className="flex items-center justify-center gap-2 px-2 pb-1.5 text-2xs text-[color:var(--text-faint)]"
     >
       {goal > 0 && (
         <svg width="24" height="24" viewBox="0 0 24 24" className="shrink-0" aria-hidden>

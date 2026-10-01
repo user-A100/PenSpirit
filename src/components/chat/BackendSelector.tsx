@@ -89,10 +89,10 @@ export function BackendSelector() {
                     {a.name}
                   </span>
                   {probing.has(a.id) && (
-                    <span className="shrink-0 animate-pulse text-[10px] text-[color:var(--text-faint)]">探测中</span>
+                    <span className="shrink-0 animate-pulse text-2xs text-[color:var(--text-faint)]">探测中</span>
                   )}
                   {a.is_default && !active && (
-                    <span className="shrink-0 rounded-full bg-[var(--accent-dim)] px-1.5 py-0.5 text-[10px] text-[color:var(--accent)]">默认</span>
+                    <span className="shrink-0 rounded-full bg-[var(--accent-dim)] px-1.5 py-0.5 text-2xs text-[color:var(--accent)]">默认</span>
                   )}
                   {active && <Check size={12} className="shrink-0 text-[color:var(--accent)]" />}
                 </button>

@@ -91,7 +91,7 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
       <button
         onClick={onToggle}
         title="展开 AI 续写"
-        className="flex h-9 w-full items-center gap-2 border-t border-[color:var(--border-subtle)] bg-[var(--bg-panel)] px-3 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+        className="flex h-full min-h-9 w-full items-center gap-2 px-3 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
       >
         <ChevronUp size={14} className="shrink-0" />
         <MessageSquare size={14} className={`shrink-0 ${streaming ? "text-[color:var(--accent)]" : ""}`} />
@@ -102,9 +102,9 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
   }
 
   return (
-    <div className="flex h-full flex-col bg-[var(--bg-panel)]">
+    <div className="flex h-full flex-col">
       {/* 顶栏 36px */}
-      <div className="flex h-9 shrink-0 items-center gap-1.5 border-b border-[color:var(--border-subtle)] pl-1.5 pr-2">
+      <div className="flex h-9 shrink-0 items-center gap-1.5 border-b border-[color:var(--hairline)] pl-1.5 pr-2">
         <button
           onClick={onToggle}
           title="折叠"
@@ -219,8 +219,8 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
           </div>
 
           {/* 输入区：Enter 发送，Shift+Enter 换行（IME 组合中回车不发送） */}
-          <div className="shrink-0 border-t border-[color:var(--border-subtle)] p-2">
-            <div className="flex items-end gap-1.5 rounded-md border border-transparent bg-[var(--bg-elevated)] px-2 py-1.5 transition-colors duration-150 focus-within:border-[color:var(--accent)]">
+          <div className="shrink-0 p-2 pt-0">
+            <div className="flex items-end gap-1.5 rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--fill-element)] px-2 py-1.5 transition-colors duration-150 focus-within:border-[color:var(--accent)]">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}

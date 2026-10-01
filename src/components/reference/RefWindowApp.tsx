@@ -64,7 +64,7 @@ export function RefWindowApp({ bookId, initialChapterId }: { bookId: number | nu
         </div>
         {error && <div className="mb-2 shrink-0 text-[color:var(--accent-hover)]">{error}</div>}
         {selected != null && meta && (
-          <div className="mb-1 shrink-0 text-[10px] text-[color:var(--text-faint)]">
+          <div className="mb-1 shrink-0 text-2xs text-[color:var(--text-faint)]">
             {meta.title}
             {content != null && ` · ${countWords(content).toLocaleString()} 字`}
           </div>

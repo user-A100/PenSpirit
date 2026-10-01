@@ -85,7 +85,7 @@ export async function connect() {
 }
 
 const KEYCODES = {
-  Enter: 13, Escape: 27, Delete: 46, Backspace: 8, Tab: 9, F2: 113,
+  Enter: 13, Escape: 27, Delete: 46, Backspace: 8, Tab: 9, F2: 113, F11: 122,
   ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40, Home: 36, End: 35,
 };
 

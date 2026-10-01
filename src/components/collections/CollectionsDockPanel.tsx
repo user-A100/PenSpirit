@@ -181,7 +181,7 @@ export function CollectionsDockPanel() {
         </div>
       )}
 
-      {msg && <div className="mb-2 shrink-0 text-[10px] text-[color:var(--danger)]">{msg}</div>}
+      {msg && <div className="mb-2 shrink-0 text-2xs text-[color:var(--danger)]">{msg}</div>}
 
       {cols != null && cols.length === 0 && (
         <div className="text-[color:var(--text-faint)]">
@@ -270,9 +270,9 @@ function Row(props: {
       {props.open && (
         <div className="border-t border-[color:var(--border-subtle)] px-1.5 py-1">
           {props.members == null ? (
-            <div className="px-2 py-1 text-[10px] text-[color:var(--text-faint)]">载入中…</div>
+            <div className="px-2 py-1 text-2xs text-[color:var(--text-faint)]">载入中…</div>
           ) : props.members.length === 0 ? (
-            <div className="px-2 py-1 text-[10px] text-[color:var(--text-faint)]">
+            <div className="px-2 py-1 text-2xs text-[color:var(--text-faint)]">
               {manual ? "空集合" : "没有章命中当前查询"}
             </div>
           ) : (
@@ -324,7 +324,7 @@ function Row(props: {
               onClick={props.onAddCurrent}
               disabled={props.currentChapterId == null}
               title={props.currentChapterId == null ? "先选一章" : "把当前章加入集合"}
-              className="mt-0.5 flex w-full items-center justify-center gap-1 rounded px-2 py-1 text-[10px] text-[color:var(--text-faint)] transition-colors duration-150 disabled:cursor-default enabled:hover:bg-[var(--bg-hover)] enabled:hover:text-[color:var(--text-primary)]"
+              className="mt-0.5 flex w-full items-center justify-center gap-1 rounded px-2 py-1 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 disabled:cursor-default enabled:hover:bg-[var(--bg-hover)] enabled:hover:text-[color:var(--text-primary)]"
             >
               <Plus size={10} />
               添加当前章
@@ -339,7 +339,7 @@ function Row(props: {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-3">
-      <div className="mb-1 text-[10px] uppercase tracking-wider text-[color:var(--text-faint)]">{title}</div>
+      <div className="mb-1 text-2xs uppercase tracking-wider text-[color:var(--text-faint)]">{title}</div>
       {children}
     </div>
   );

@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const meta = { synopsis: "", label_id: null, status_id: null, target_words: null };
 const chapters = [
-  { id: 11, book_id: 1, file_path: "a", title: "一", sort_key: 1, word_count: 0, created_at: "", updated_at: "" },
-  { id: 12, book_id: 1, file_path: "b", title: "二", sort_key: 2, word_count: 0, created_at: "", updated_at: "" },
-  { id: 13, book_id: 1, file_path: "c", title: "三", sort_key: 3, word_count: 0, created_at: "", updated_at: "" },
+  { id: 11, book_id: 1, file_path: "a", title: "一", sort_key: 1, word_count: 0, created_at: "", updated_at: "", ...meta },
+  { id: 12, book_id: 1, file_path: "b", title: "二", sort_key: 2, word_count: 0, created_at: "", updated_at: "", ...meta },
+  { id: 13, book_id: 1, file_path: "c", title: "三", sort_key: 3, word_count: 0, created_at: "", updated_at: "", ...meta },
 ];
+const lastToast = () => {
+  const ts = useToasts.getState().toasts;
+  return ts[ts.length - 1];
+};
 
 vi.mock("../lib/tauri", () => ({
   api: {
@@ -48,7 +53,7 @@ describe("workspace 章节增删改", () => {
     expect(st.currentChapterId).toBe(13); // 原位置的下一章
     expect(st.history).toEqual([11, 13]);
 
-    const t = useToasts.getState().toasts.at(-1)!;
+    const t = lastToast();
     expect(t.message).toContain("二");
     vi.mocked(api.listChapters).mockResolvedValue(chapters);
     await t.action!.run();
@@ -82,7 +87,7 @@ describe("workspace 章节增删改", () => {
 
     vi.mocked(api.renameChapter).mockRejectedValueOnce({ code: "invalid", message: "目标文件名已存在" });
     expect(await useWorkspace.getState().renameChapter(11, "二")).toBe(false);
-    expect(useToasts.getState().toasts.at(-1)?.message).toContain("目标文件名已存在");
+    expect(lastToast()?.message).toContain("目标文件名已存在");
     expect(useWorkspace.getState().chapters[0].title).toBe("一");
   });
 });

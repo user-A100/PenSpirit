@@ -104,13 +104,16 @@ export function StylePanel() {
         </select>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2.5">
+      <div className="@container flex-1 overflow-y-auto p-2.5">
         {error && (
           <div className="mb-2 rounded-md border border-[color:var(--danger)] px-2.5 py-1.5 text-xs text-[color:var(--danger)]">
             {error}
           </div>
         )}
 
+        {/* 宽屏：左列表右表单；窄屏上下堆叠 */}
+        <div className="grid gap-6 @3xl:grid-cols-[minmax(15rem,20rem)_1fr]">
+        <div className="min-w-0">
         {/* 列表：名称 + 标签 chips + 激活标记，点击编辑 */}
         <div className="mb-1.5 flex items-center justify-between text-xs text-[color:var(--text-faint)]">
           <span>文风库（{styles.length}）</span>
@@ -165,6 +168,8 @@ export function StylePanel() {
           </div>
         )}
 
+        </div>
+        <div className="min-w-0">
         {/* 编辑表单 */}
         <div className="mb-1.5 text-xs text-[color:var(--text-faint)]">
           {editing ? `编辑「${form.name}」` : "新建文风"}
@@ -211,6 +216,8 @@ export function StylePanel() {
             placeholder="标签，逗号分隔，如：仙侠, 冷峻"
             className={INPUT}
           />
+        </div>
+        </div>
         </div>
       </div>
 

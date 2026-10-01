@@ -1,5 +1,5 @@
-import { useState, type ComponentType } from "react";
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import type { ComponentType } from "react";
+import { PanelRightClose } from "lucide-react";
 import { ForeshadowPanel } from "../foreshadow/ForeshadowPanel";
 import { CharactersPanel } from "../characters/CharactersPanel";
 import { OutlineDockPanel } from "../outline/OutlineDockPanel";
@@ -12,10 +12,8 @@ import { NamesPanel } from "../names/NamesPanel";
 import { getView } from "../../lib/nav/registry";
 import { useUiNav } from "../../lib/nav/uiStore";
 
-// tab 由当前一级视图的 dockPanels 驱动（registry 注册）；
-// 内容按 DockPanelDef.id 映射：已实现的渲染真实组件，其余保持空态。
-const PANEL_EMPTY_TEXT: Record<string, string> = {};
-
+// 右侧 dock 卡片：顶部面板标题 + 内容。面板切换由右侧竖条 DockRail 负责
+// （阶段 1：原 9 个 tab 平分一行、文字全被截断，改为竖条图标 + 这里的完整标题）。
 const PANEL_COMPONENTS: Record<string, ComponentType> = {
   meta: MetaDockPanel,
   links: LinksDockPanel,
@@ -30,68 +28,38 @@ const PANEL_COMPONENTS: Record<string, ComponentType> = {
 
 export function PanelDock() {
   const activeView = useUiNav((s) => s.activeView);
-  const dockCollapsed = useUiNav((s) => s.dockCollapsed);
+  const stored = useUiNav((s) => s.dockPanels[activeView]);
   const toggleDock = useUiNav((s) => s.toggleDock);
   const panels = getView(activeView)?.dockPanels ?? [];
-  const [tab, setTab] = useState<string>(() => panels[0]?.id ?? "");
-  const activePanel = panels.find((p) => p.id === tab) ?? panels[0];
+  const activePanel = panels.find((p) => p.id === stored) ?? panels[0];
 
-  // 视图无 dock 面板（如碰碰车）时不渲染 tab 栏
-  if (!activePanel) return <div className="h-full bg-[var(--bg-panel)]" />;
-
+  if (!activePanel) return <div className="h-full" />;
   const Content = PANEL_COMPONENTS[activePanel.id];
-  const ActiveIcon = activePanel.icon;
+  const Icon = activePanel.icon;
 
   return (
-    <div className="flex h-full flex-col bg-[var(--bg-panel)]">
-      {/* 标签栏 36px：Zen 选中态=浮纸卡（--tab-selected-bg + 单层阴影） */}
-      <div className="flex h-9 shrink-0 border-b border-[color:var(--border-subtle)]">
-        {panels.map((p) => {
-          const active = p.id === activePanel.id;
-          const Icon = p.icon;
-          return (
-            <button
-              key={p.id}
-              onClick={() => setTab(p.id)}
-              className={`relative flex min-w-0 flex-1 items-center justify-center gap-1 px-1 text-xs transition-colors duration-[var(--dur-md)] ${
-                active
-                  ? "text-[color:var(--text-primary)]"
-                  : "text-[color:var(--text-faint)] hover:text-[color:var(--text-secondary)]"
-              }`}
-            >
-              {active && (
-                <span
-                  aria-hidden
-                  className="absolute inset-x-1 inset-y-1 rounded-[var(--radius-sm)] bg-[var(--tab-selected-bg)] [box-shadow:var(--shadow-pop)]"
-                />
-              )}
-              <Icon size={14} className="relative shrink-0" />
-              <span className="relative truncate">{p.label}</span>
-            </button>
-          );
-        })}
-        {/* 折叠入口（同 Sidebar 的 PanelLeftClose 手法；展开走 Ctrl+\ 或拖出） */}
+    <div className="flex h-full flex-col">
+      <div className="group flex h-10 shrink-0 items-center gap-2 pl-3.5 pr-2">
+        <Icon size={15} strokeWidth={1.75} className="shrink-0 text-[color:var(--text-faint)]" />
+        <span className="min-w-0 flex-1 truncate text-ui font-medium text-[color:var(--text-primary)]">
+          {activePanel.label}
+        </span>
+        {activePanel.group && (
+          <span className="shrink-0 text-2xs text-[color:var(--text-faint)]">{activePanel.group}</span>
+        )}
         <button
           onClick={toggleDock}
-          title={dockCollapsed ? "展开右侧面板（Ctrl+\\）" : "折叠右侧面板（Ctrl+\\）"}
-          className="flex shrink-0 items-center justify-center px-2 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
+          aria-label="折叠右侧面板"
+          data-tip="折叠右侧面板"
+          data-tip-key="Ctrl+\"
+          className="rounded-[var(--r-control)] p-1 text-[color:var(--text-faint)] opacity-0 transition-[opacity,background-color] duration-[var(--dur-md)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-secondary)] focus-visible:opacity-100 group-hover:opacity-100"
         >
-          {dockCollapsed ? <PanelRightOpen size={15} /> : <PanelRightClose size={15} />}
+          <PanelRightClose size={15} />
         </button>
       </div>
-
-      {/* 已实现标签渲染真实面板；其余空态：大图标 + 功能名 + 一句说明 */}
-      {Content ? (
-        <Content />
-      ) : (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-          <ActiveIcon size={32} strokeWidth={1.5} className="text-[color:var(--text-faint)]" />
-          <div className="text-sm text-[color:var(--text-secondary)]">{activePanel.label}</div>
-          <div className="text-xs leading-relaxed text-[color:var(--text-faint)]">
-            {PANEL_EMPTY_TEXT[activePanel.id] ?? ""}
-          </div>
-        </div>
-      )}
+      <div key={activePanel.id} className="panel-swap flex min-h-0 flex-1 flex-col">
+        {Content ? <Content /> : null}
+      </div>
     </div>
   );
 }

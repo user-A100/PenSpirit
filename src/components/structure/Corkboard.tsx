@@ -38,7 +38,7 @@ function Card({ ch, active, dragging, over }: { ch: ChapterMeta; active: boolean
         {label && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: label.color }} title={label.title} />}
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-[color:var(--text-primary)]">{ch.title}</span>
         {status && (
-          <span className="shrink-0 rounded px-1 py-0.5 text-[10px] text-[color:var(--text-secondary)]" style={{ backgroundColor: "var(--bg-hover)" }}>
+          <span className="shrink-0 rounded px-1 py-0.5 text-2xs text-[color:var(--text-secondary)]" style={{ backgroundColor: "var(--bg-hover)" }}>
             {status.title}
           </span>
         )}
@@ -46,7 +46,7 @@ function Card({ ch, active, dragging, over }: { ch: ChapterMeta; active: boolean
       <p className="line-clamp-4 flex-1 text-xs leading-relaxed text-[color:var(--text-secondary)]">
         {ch.synopsis || <span className="text-[color:var(--text-faint)]">（无梗概）</span>}
       </p>
-      <div className="flex items-center gap-2 text-[10px] text-[color:var(--text-faint)]">
+      <div className="flex items-center gap-2 text-2xs text-[color:var(--text-faint)]">
         <span>{ch.word_count} 字</span>
         {progress != null && (
           <>

@@ -64,12 +64,12 @@ function InstallHint(props: { agentId: string }) {
   };
   return (
     <div className="mt-1.5 flex items-center gap-1.5 rounded border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] px-2 py-1">
-      <span className="shrink-0 text-[10px] text-[color:var(--text-faint)]">未检测到命令，可安装：</span>
-      <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-[color:var(--text-secondary)]">{cmd}</code>
+      <span className="shrink-0 text-2xs text-[color:var(--text-faint)]">未检测到命令，可安装：</span>
+      <code className="min-w-0 flex-1 truncate font-mono text-2xs text-[color:var(--text-secondary)]">{cmd}</code>
       <button
         onClick={() => void copy()}
         title="复制安装命令"
-        className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+        className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-2xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
       >
         {copied ? <Check size={11} className="text-[color:var(--success)]" /> : <Copy size={11} />}
         {copied ? "已复制" : "复制"}
@@ -213,7 +213,7 @@ export function AgentsPane() {
                       <span className="shrink-0 rounded-full bg-[var(--accent-dim)] px-2 py-0.5 text-xs text-[color:var(--accent)]">默认</span>
                     )}
                   </div>
-                  <div className="truncate font-mono text-[11px] text-[color:var(--text-faint)]">
+                  <div className="truncate font-mono text-2xs text-[color:var(--text-faint)]">
                     {a.command}
                     {a.args.length > 0 ? ` ${a.args.join(" ")}` : ""}
                   </div>
@@ -249,7 +249,7 @@ export function AgentsPane() {
 
               {/* 探测结果行内展示 */}
               {a.last_probe && (
-                <div className={`mt-1 text-[11px] ${a.last_probe.ok ? "text-[color:var(--success)]" : "text-[color:var(--danger)]"}`}>
+                <div className={`mt-1 text-2xs ${a.last_probe.ok ? "text-[color:var(--success)]" : "text-[color:var(--danger)]"}`}>
                   {a.last_probe.ok
                     ? `已连接 ${a.last_probe.agent_name ?? a.name}${a.last_probe.protocol_version ? ` · 协议 ${a.last_probe.protocol_version}` : ""}${a.last_probe.can_resume ? " · 支持恢复会话" : ""}`
                     : `探测失败：${a.last_probe.detail ?? "未知原因"}`}

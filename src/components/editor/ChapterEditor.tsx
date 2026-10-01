@@ -8,12 +8,18 @@ import {
   ArrowRight,
   History,
   ListTree,
-  PanelRightOpen,
+  Maximize2,
+  MoreHorizontal,
   PenLine,
+  Pencil,
   ScanSearch,
   SquareSplitHorizontal,
   SquareSplitVertical,
+  Trash2,
+  Type,
 } from "lucide-react";
+import { openMenuAt, type MenuEntry } from "../../stores/menu";
+import { commandShortcut, runCommand } from "../../lib/commands";
 import { useWorkspace, type PaneId } from "../../stores/workspace";
 import { useChat } from "../../stores/chat";
 import { useSearch } from "../../stores/search";
@@ -63,6 +69,9 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   const outlineJump = useOutline((s) => s.jumpTarget);
   const typewriter = useUiNav((s) => s.typewriter);
   const toggleTypewriter = useUiNav((s) => s.toggleTypewriter);
+  const focusMode = useUiNav((s) => s.focusMode);
+  // 正文滚离顶部后顶栏才显发丝线（Zen：边界只在需要时出现）
+  const [scrolled, setScrolled] = useState(false);
   const dirty = useRef<string | null>(null);
   // 编辑器里的正文属于哪一章（与 chapterId 区分：换章时新内容到达前，编辑器里仍是上一章）。
   // 自动保存与换章冲刷都按它落盘——修复「防抖窗口内切章，最后几秒的改动丢失」。
@@ -81,8 +90,6 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
   const lastMinute = useRef<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [sensitiveOpen, setSensitiveOpen] = useState(false);
-  // 「检查」下拉（M4-T6：敏感词 + 占位符两项）
-  const [checkOpen, setCheckOpen] = useState(false);
   const [placeholderOpen, setPlaceholderOpen] = useState(false);
 
   const editor = useEditor({
@@ -224,10 +231,6 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
 
   const book = books.find((b) => b.id === currentBookId);
   const meta = chapters.find((c) => c.id === chapterId);
-  // dock 折叠后的展开入口（模仿侧栏在 Ribbon 底部的条件性展开按钮）：
-  // 折叠时整个 dock 被 CSS 摘除，按钮必须挂在编辑器这侧才能被点到
-  const dockCollapsed = useUiNav((s) => s.dockCollapsed);
-  const toggleDock = useUiNav((s) => s.toggleDock);
 
   if (chapterId == null) {
     return (
@@ -235,149 +238,130 @@ export function ChapterEditor({ pane = "a" }: { pane?: PaneId }) {
         onClick={() => useWorkspace.getState().focusPane(pane)}
         className="relative flex h-full cursor-default flex-col items-center justify-center gap-3 bg-transparent"
       >
-        {/* 空态也没有顶部栏——dock 折叠时的展开入口挂这里（同顶栏按钮） */}
-        {dockCollapsed && (
-          <button
-            onClick={toggleDock}
-            title="展开右侧面板（Ctrl+\\）"
-            className="absolute right-3 top-3 rounded p-1.5 text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
-          >
-            <PanelRightOpen size={15} />
-          </button>
-        )}
         <PenLine size={32} strokeWidth={1.5} className="text-[color:var(--text-faint)]" />
         <div className="text-sm text-[color:var(--text-secondary)]">
           {pane === "b" ? "点击此处聚焦，再从左侧目录选一章在本窗打开" : "选择或创建一个章节开始写作"}
         </div>
-        {pane === "a" && <div className="text-xs text-[color:var(--text-faint)]">Ctrl+N 快速新建（即将支持）</div>}
+        {pane === "a" && currentBookId != null && (
+          <button
+            onClick={() => runCommand("chapter.new")}
+            className="flex items-center gap-2 rounded-[var(--r-control)] px-3 py-1.5 text-ui text-[color:var(--accent)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--fill-hover)]"
+          >
+            新建章节
+            <kbd className="rounded-[4px] px-1 font-sans text-2xs text-[color:var(--text-faint)] [box-shadow:inset_0_0_0_1px_var(--hairline)]">
+              {commandShortcut("chapter.new")}
+            </kbd>
+          </button>
+        )}
       </div>
     );
   }
 
   const text = editor?.state.doc.textBetween(0, editor.state.doc.content.size, "\n", " ") ?? "";
 
+  // 「⋯」更多：低频动作收进菜单（Zen 安静界面——次要控件不常驻）
+  const moreMenu = (): MenuEntry[] => [
+    {
+      label: "分屏",
+      icon: SquareSplitHorizontal,
+      shortcut: commandShortcut("editor.cycleSplit"),
+      submenu: [
+        { label: "不分屏", checked: splitAxis === "none", onSelect: () => useWorkspace.getState().setSplitAxis("none") },
+        { label: "左右分屏", icon: SquareSplitHorizontal, checked: splitAxis === "vertical", onSelect: () => useWorkspace.getState().setSplitAxis("vertical") },
+        { label: "上下分屏", icon: SquareSplitVertical, checked: splitAxis === "horizontal", onSelect: () => useWorkspace.getState().setSplitAxis("horizontal") },
+      ],
+    },
+    { label: "打字机滚动", icon: Type, checked: typewriter, onSelect: toggleTypewriter },
+    { label: "悬浮大纲", icon: ListTree, checked: outlineOpen, shortcut: commandShortcut("editor.toggleOutline"), onSelect: () => useOutline.getState().toggle() },
+    { label: focusMode ? "退出专注模式" : "专注模式", icon: Maximize2, shortcut: commandShortcut("view.focusMode"), onSelect: () => useUiNav.getState().toggleFocusMode() },
+    { type: "separator" },
+    { label: "版本历史", icon: History, checked: historyOpen, onSelect: () => setHistoryOpen((v) => !v) },
+    {
+      label: "检查",
+      icon: ScanSearch,
+      submenu: [
+        { label: "敏感词检查…", onSelect: () => setSensitiveOpen(true) },
+        { label: "占位符扫描…", onSelect: () => setPlaceholderOpen(true) },
+      ],
+    },
+    { type: "separator" },
+    { label: "重命名本章", icon: Pencil, shortcut: "F2", onSelect: () => runCommand("chapter.rename") },
+    { label: "移到回收站", icon: Trash2, danger: true, onSelect: () => runCommand("chapter.delete") },
+  ];
+
+  const navBtn =
+    "rounded-[var(--r-control)] p-1 text-[color:var(--text-faint)] transition-colors duration-[var(--dur-md)] enabled:hover:bg-[var(--fill-hover)] enabled:hover:text-[color:var(--text-primary)] disabled:opacity-30";
+
   return (
     <div className="relative flex h-full flex-col bg-transparent">
-      {/* 顶部栏 40px：面包屑 + 保存状态 + 字数 */}
-      <div className="flex h-10 shrink-0 items-center justify-between gap-4 border-b border-[color:var(--border-subtle)] pl-4 pr-5">
+      {/* 顶栏 44px：面包屑 + 保存态 + 字数 + 历史前后 + 「⋯」。无描边；正文滚动后才出现发丝线。
+          专注模式下平时隐去，鼠标移到顶部才浮现。 */}
+      <div
+        className={`group/top flex h-11 shrink-0 items-center justify-between gap-4 pl-4 pr-2 transition-[opacity,box-shadow] duration-[var(--dur-md)] ${
+          scrolled ? "[box-shadow:inset_0_-1px_0_var(--hairline)]" : ""
+        } ${focusMode ? "opacity-0 hover:opacity-100 focus-within:opacity-100" : ""}`}
+      >
         <div className="flex min-w-0 items-center gap-1.5 text-sm">
-          <span className="truncate text-[color:var(--text-secondary)]">{book?.title ?? ""}</span>
+          <span className="truncate text-[color:var(--text-faint)]">{book?.title ?? ""}</span>
           <span className="shrink-0 text-[color:var(--text-faint)]">/</span>
-          <span className="truncate text-[color:var(--text-primary)]">{meta?.title ?? ""}</span>
+          <span className="truncate font-medium text-[color:var(--text-primary)]">{meta?.title ?? ""}</span>
         </div>
-        <div className="flex shrink-0 items-center gap-3 text-xs text-[color:var(--text-faint)]">
-          {/* 导航历史：浏览器式后退/前进，作用于活动窗格 */}
-          <span className="flex items-center gap-0.5">
-            <button
-              onClick={() => void useWorkspace.getState().goBack()}
-              disabled={!canBack}
-              title="后退（Alt+←）"
-              className="rounded p-1 transition-colors duration-150 enabled:hover:bg-[var(--bg-hover)] enabled:hover:text-[color:var(--text-primary)] disabled:opacity-40"
-            >
-              <ArrowLeft size={14} />
-            </button>
-            <button
-              onClick={() => void useWorkspace.getState().goForward()}
-              disabled={!canForward}
-              title="前进（Alt+→）"
-              className="rounded p-1 transition-colors duration-150 enabled:hover:bg-[var(--bg-hover)] enabled:hover:text-[color:var(--text-primary)] disabled:opacity-40"
-            >
-              <ArrowRight size={14} />
-            </button>
-          </span>
-          <button
-            onClick={() => useWorkspace.getState().cycleSplit()}
-            title="分屏：全部/左右/上下循环切换（Alt+S）"
-            className={`rounded p-1 transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] ${
-              splitAxis !== "none" ? "text-[color:var(--accent)]" : ""
-            }`}
+        <div className="flex shrink-0 items-center gap-1 text-xs text-[color:var(--text-faint)]">
+          <span
+            className="mr-1 flex items-center gap-1.5"
+            data-tip={status === "saving" ? "正在保存" : status === "saved" ? "已保存到磁盘" : "自动保存已就绪"}
           >
-            {splitAxis === "horizontal" ? <SquareSplitVertical size={14} /> : <SquareSplitHorizontal size={14} />}
-          </button>
-          <button
-            onClick={toggleTypewriter}
-            title="打字机滚动：光标行固定在视口偏上位置"
-            className={`rounded px-1.5 py-0.5 text-[11px] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] ${
-              typewriter ? "bg-[var(--accent-dim)] text-[color:var(--text-primary)]" : ""
-            }`}
-          >
-            打字机
-          </button>
-          <button
-            onClick={() => useOutline.getState().toggle()}
-            title="悬浮大纲"
-            className={`rounded p-1 transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] ${
-              outlineOpen ? "text-[color:var(--accent)]" : ""
-            }`}
-          >
-            <ListTree size={14} />
-          </button>
-          <button
-            onClick={() => setHistoryOpen((v) => !v)}
-            title="版本历史"
-            className={`rounded p-1 transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] ${
-              historyOpen ? "text-[color:var(--accent)]" : ""
-            }`}
-          >
-            <History size={14} />
-          </button>
-          <div className="relative">
-            <button
-              onClick={() => setCheckOpen((v) => !v)}
-              title="检查"
-              className={`rounded p-1 transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] ${
-                checkOpen ? "text-[color:var(--accent)]" : ""
+            <span
+              className={`h-1.5 w-1.5 rounded-full transition-colors duration-[var(--dur-md)] ${
+                status === "saving" ? "animate-pulse bg-[color:var(--warning)]" : status === "saved" ? "bg-[color:var(--success)]" : "bg-[var(--hairline)]"
               }`}
-            >
-              <ScanSearch size={14} />
-            </button>
-            {checkOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setCheckOpen(false)} />
-                <div className="absolute right-0 top-full z-20 mt-1 w-32 rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] py-1 text-xs [box-shadow:var(--shadow-pop)]">
-                  <button
-                    onClick={() => { setCheckOpen(false); setSensitiveOpen(true); }}
-                    className="block w-full px-3 py-1.5 text-left text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
-                  >
-                    敏感词检查
-                  </button>
-                  <button
-                    onClick={() => { setCheckOpen(false); setPlaceholderOpen(true); }}
-                    className="block w-full px-3 py-1.5 text-left text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
-                  >
-                    占位符扫描
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-          {status !== "idle" && (
-            <span className="flex items-center gap-1.5">
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  status === "saving" ? "animate-pulse bg-[color:var(--warning)]" : "bg-[color:var(--success)]"
-                }`}
-              />
-              {status === "saving" ? "保存中" : "已保存"}
-            </span>
-          )}
-          <span>{countWords(text).toLocaleString()} 字</span>
-          {dockCollapsed && isActive && (
-            <button
-              onClick={toggleDock}
-              title="展开右侧面板（Ctrl+\\）"
-              className="rounded p-1 text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
-            >
-              <PanelRightOpen size={14} />
-            </button>
-          )}
+            />
+            {status === "saving" && <span>保存中</span>}
+          </span>
+          <span className="mr-1 tabular-nums">{countWords(text).toLocaleString()} 字</span>
+          <button
+            onClick={() => void useWorkspace.getState().goBack()}
+            disabled={!canBack}
+            aria-label="后退"
+            data-tip="后退"
+            data-tip-key={commandShortcut("nav.back")}
+            className={navBtn}
+          >
+            <ArrowLeft size={15} />
+          </button>
+          <button
+            onClick={() => void useWorkspace.getState().goForward()}
+            disabled={!canForward}
+            aria-label="前进"
+            data-tip="前进"
+            data-tip-key={commandShortcut("nav.forward")}
+            className={navBtn}
+          >
+            <ArrowRight size={15} />
+          </button>
+          <button
+            onClick={(e) => openMenuAt(e.currentTarget, moreMenu(), "end")}
+            aria-label="更多"
+            aria-haspopup="menu"
+            data-tip="更多"
+            className={`${navBtn} ${splitAxis !== "none" || typewriter || outlineOpen || historyOpen ? "text-[color:var(--accent)]" : ""}`}
+          >
+            <MoreHorizontal size={16} />
+          </button>
         </div>
       </div>
 
-      {/* 正文：720px 单列衬线排版，无边框融入背景；[[章题]] 补全浮层 fixed 定位不占版面。
+      {/* 正文：720px 单列衬线排版，无边框融入卡片；[[章题]] 补全浮层 fixed 定位不占版面。
           scrollerRef 供打字机滚动定位光标行。 */}
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto">
-        <EditorContent editor={editor} className="prose-serif mx-auto max-w-[720px] px-8 py-10" />
+      <div
+        ref={scrollerRef}
+        onScroll={(e) => setScrolled((e.currentTarget as HTMLDivElement).scrollTop > 4)}
+        className="flex-1 overflow-y-auto"
+      >
+        <EditorContent
+          editor={editor}
+          className={`prose-serif mx-auto max-w-[720px] px-8 ${focusMode ? "py-16" : "py-8"}`}
+        />
         <WikiSuggest editor={editor} />
       </div>
 

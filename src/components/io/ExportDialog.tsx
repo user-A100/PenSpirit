@@ -119,7 +119,7 @@ export function ExportDialog(props: {
                 <span className="min-w-0 flex-1 truncate text-xs text-[color:var(--text-primary)]">
                   {c.title}
                 </span>
-                <span className="shrink-0 text-[11px] text-[color:var(--text-faint)]">
+                <span className="shrink-0 text-2xs text-[color:var(--text-faint)]">
                   {c.word_count.toLocaleString()} 字
                 </span>
               </label>
@@ -138,7 +138,7 @@ export function ExportDialog(props: {
             {allPicked ? "全不选" : "全选"}
           </button>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-[color:var(--text-faint)]">
+            <span className="text-2xs text-[color:var(--text-faint)]">
               {totalWords > 0 && `约 ${totalWords.toLocaleString()} 字`}
             </span>
             <button

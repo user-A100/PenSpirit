@@ -160,18 +160,18 @@ export function OutlineDockPanel() {
           }
           className={`${INPUT} min-h-0 flex-1 resize-none leading-relaxed`}
         />
-        {error && <div className="text-[11px] text-[color:var(--danger)]">{error}</div>}
+        {error && <div className="text-2xs text-[color:var(--danger)]">{error}</div>}
         <div className="flex justify-end gap-1.5">
           <button
             onClick={() => setEditing(null)}
-            className="rounded px-2 py-1 text-[11px] text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
+            className="rounded px-2 py-1 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
           >
             取消
           </button>
           <button
             onClick={() => void save()}
             disabled={editing.kind === "volume" && !title.trim()}
-            className="rounded-md bg-[color:var(--accent)] px-2.5 py-1 text-[11px] font-medium text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md bg-[color:var(--accent)] px-2.5 py-1 text-2xs font-medium text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             保存
           </button>

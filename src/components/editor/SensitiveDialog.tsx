@@ -89,11 +89,11 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
             <ScanSearch size={13} />
             {busy ? "检查中…" : "检查本章"}
           </button>
-          <span className="text-[11px] text-[color:var(--text-faint)]">
+          <span className="text-2xs text-[color:var(--text-faint)]">
             {wordCount === 0 ? "词库为空，先在下方添加词" : `词库 ${wordCount} 个词`}
           </span>
           {hits != null && (
-            <span className="ml-auto text-[11px] text-[color:var(--text-faint)]">
+            <span className="ml-auto text-2xs text-[color:var(--text-faint)]">
               {hits.length === 0 ? "未发现敏感词" : `命中 ${hits.length} 处`}
             </span>
           )}
@@ -107,10 +107,10 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
           <div className="max-h-48 shrink-0 overflow-y-auto border-b border-[color:var(--border-subtle)] px-4 py-2">
             {hits.map((h, i) => (
               <div key={i} className="flex items-baseline gap-2 py-1">
-                <span className="shrink-0 rounded bg-[color:var(--danger)]/15 px-1.5 py-0.5 text-[11px] text-[color:var(--danger)]">
+                <span className="shrink-0 rounded bg-[color:var(--danger)]/15 px-1.5 py-0.5 text-2xs text-[color:var(--danger)]">
                   {h.word}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[11px] text-[color:var(--text-secondary)]" title={h.context}>
+                <span className="min-w-0 flex-1 truncate text-2xs text-[color:var(--text-secondary)]" title={h.context}>
                   …{h.context}…
                 </span>
               </div>
@@ -124,7 +124,7 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
             <span className="text-xs text-[color:var(--text-secondary)]">词库（一行一词）</span>
             <button
               onClick={() => void importTxt()}
-              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
             >
               <FileUp size={11} />
               从 txt 导入
@@ -132,7 +132,7 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
             {dirty && (
               <button
                 onClick={() => void saveBank()}
-                className="rounded bg-[var(--accent)]/15 px-2 py-0.5 text-[11px] text-[color:var(--accent-hover)] transition-colors duration-150 hover:bg-[var(--accent)]/25"
+                className="rounded bg-[var(--accent)]/15 px-2 py-0.5 text-2xs text-[color:var(--accent-hover)] transition-colors duration-150 hover:bg-[var(--accent)]/25"
               >
                 保存词库
               </button>
@@ -151,7 +151,7 @@ export function SensitiveDialog(props: { content: string; onClose: () => void })
         </div>
 
         <div className="flex shrink-0 justify-end gap-2 border-t border-[color:var(--border-subtle)] px-4 py-3">
-          <span className="mr-auto self-center text-[11px] text-[color:var(--text-faint)]">
+          <span className="mr-auto self-center text-2xs text-[color:var(--text-faint)]">
             检查不会改动正文
           </span>
           <button

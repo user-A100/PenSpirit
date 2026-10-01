@@ -119,11 +119,11 @@ export function NamesPanel() {
               className="flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left transition-colors duration-150 hover:border-[color:var(--accent)] hover:bg-[var(--bg-hover)]"
             >
               <span className="text-sm text-[color:var(--text-primary)]">{n.full}</span>
-              <span className="text-[10px] text-[color:var(--text-faint)]">
+              <span className="text-2xs text-[color:var(--text-faint)]">
                 {GENDER_LABEL[n.gender]}
                 {n.rare && " · 生僻"}
               </span>
-              <span className="ml-auto shrink-0 text-[10px] text-[color:var(--text-faint)]">
+              <span className="ml-auto shrink-0 text-2xs text-[color:var(--text-faint)]">
                 {copied === n.full ? "已复制" : <Copy size={11} />}
               </span>
             </button>

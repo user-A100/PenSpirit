@@ -107,7 +107,7 @@ export function HistoryPanel(props: {
         </button>
       </div>
 
-      {error && <div className="px-3 py-2 text-[11px] text-[color:var(--danger)]">{error}</div>}
+      {error && <div className="px-3 py-2 text-2xs text-[color:var(--danger)]">{error}</div>}
 
       {/* 快照列表（新→旧） */}
       <div className="max-h-56 shrink-0 overflow-y-auto border-b border-[color:var(--border-subtle)] p-1.5">
@@ -127,7 +127,7 @@ export function HistoryPanel(props: {
                 }`}
               >
                 <span className="min-w-0 flex-1 truncate text-xs">{s.ts}</span>
-                <span className="shrink-0 text-[11px] text-[color:var(--text-faint)]">
+                <span className="shrink-0 text-2xs text-[color:var(--text-faint)]">
                   {s.words.toLocaleString()} 字
                 </span>
                 {confirmFile === s.file ? (
@@ -137,7 +137,7 @@ export function HistoryPanel(props: {
                       void restore(s);
                     }}
                     title="确认恢复"
-                    className="shrink-0 rounded bg-[color:var(--accent)]/15 px-1.5 py-0.5 text-[11px] text-[color:var(--accent-hover)] transition-colors duration-150 hover:bg-[color:var(--accent)]/25"
+                    className="shrink-0 rounded bg-[color:var(--accent)]/15 px-1.5 py-0.5 text-2xs text-[color:var(--accent-hover)] transition-colors duration-150 hover:bg-[color:var(--accent)]/25"
                   >
                     确认恢复
                   </button>
@@ -161,14 +161,14 @@ export function HistoryPanel(props: {
 
       {/* diff 视图：当前 → 选中快照 */}
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="shrink-0 px-3 py-1.5 text-[11px] text-[color:var(--text-faint)]">
+        <div className="shrink-0 px-3 py-1.5 text-2xs text-[color:var(--text-faint)]">
           {selected == null
             ? "选择上方一个版本查看与当前正文的差异"
             : changed
               ? "绿 = 恢复后新增的行，红 = 恢复后消失的行"
               : "与当前正文没有差异"}
         </div>
-        <div className="min-h-0 flex-1 overflow-auto pb-3 font-mono text-[11px] leading-5">
+        <div className="min-h-0 flex-1 overflow-auto pb-3 font-mono text-2xs leading-5">
           {parts?.map((p, i) => {
             const lines = linesOf(p.value);
             if (!p.added && !p.removed && lines.length > COLLAPSE_OVER) {
@@ -182,7 +182,7 @@ export function HistoryPanel(props: {
             return lines.map((l, j) => <Line key={`${i}-${j}`} text={l} kind={kind} />);
           })}
         </div>
-        <div className="shrink-0 border-t border-[color:var(--border-subtle)] px-3 py-1.5 text-[11px] text-[color:var(--text-faint)]">
+        <div className="shrink-0 border-t border-[color:var(--border-subtle)] px-3 py-1.5 text-2xs text-[color:var(--text-faint)]">
           自动保存每 5 分钟记一版（大段改动立即记）；恢复前会先保留当前内容
         </div>
       </div>

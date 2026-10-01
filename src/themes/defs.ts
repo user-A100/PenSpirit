@@ -35,8 +35,10 @@ export interface ThemeDef {
   id: string;
   /** 展示名（中文） */
   name: string;
-  /** 明暗倾向：true=深色底浅色字。仅作展示角标与语义标注，与 mode（界面明暗）正交 */
+  /** 明暗倾向：true=深色底浅色字 */
   dark: boolean;
+  /** 明暗配对主题 id：界面明暗与本主题倾向相反时（如跟随系统转浅色）改用它 */
+  pair?: string;
   /** 完整覆盖 THEME_VAR_KEYS 的变量表 */
   vars: Record<ThemeVarKey, string>;
 }
@@ -45,6 +47,7 @@ const bixianDark: ThemeDef = {
   id: "bixian-dark",
   name: "暗夜（默认）",
   dark: true,
+  pair: "bixian-light",
   vars: {
     "--bg-base": "#17171a",
     "--bg-panel": "#1d1d21",
@@ -70,6 +73,7 @@ const bixianLight: ThemeDef = {
   id: "bixian-light",
   name: "晨光",
   dark: false,
+  pair: "bixian-dark",
   vars: {
     "--bg-base": "#f6f6f8",
     "--bg-panel": "#ffffff",
@@ -199,6 +203,7 @@ const maple: ThemeDef = {
   id: "maple",
   name: "枫叶",
   dark: false,
+  pair: "mapleNight",
   vars: {
     // bg = hsl(35,12%,97%) / alt(35,10%,95%) / secondary(h-18, 8%,93%)
     "--bg-base": "#f8f8f6",
@@ -226,6 +231,7 @@ const mapleNight: ThemeDef = {
   id: "mapleNight",
   name: "枫夜",
   dark: true,
+  pair: "maple",
   vars: {
     // bg = hsl(207,5%,11%) / alt(207,10%,13%) / secondary(h-18, 6%,12%)
     "--bg-base": "#1b1c1d",
@@ -283,6 +289,7 @@ const zenInk: ThemeDef = {
   id: "zenInk",
   name: "墨岩",
   dark: true,
+  pair: "zenPaper",
   vars: {
     "--bg-base": "#1b1b1b",
     "--bg-panel": "#1f1f1f",
@@ -310,6 +317,7 @@ const zenPaper: ThemeDef = {
   id: "zenPaper",
   name: "纸白",
   dark: false,
+  pair: "zenInk",
   vars: {
     "--bg-base": mix(ZEN_PRIMARY, "#f4f4f4", 0.03),
     "--bg-panel": mix(ZEN_PRIMARY, "#ffffff", 0.02),
@@ -348,8 +356,19 @@ export function findTheme(id: string): ThemeDef | undefined {
   return THEMES.find((t) => t.id === id);
 }
 
-/** 背板色：bg-base 再压暗一档，内容浮卡与窗口边框之间要有可感知的落差
- *  （Zen 的 chrome backdrop 比内容深；比例经实机核验定档） */
+/**
+ * 实际生效的主题：所选主题的明暗倾向与界面明暗相反、且有配对主题时换成配对主题；
+ * 无配对的单态主题（墨色/午夜蓝/羊皮纸/抹茶）保持自身。
+ */
+export function resolveThemeId(colorTheme: string, wantDark: boolean): string {
+  const t = findTheme(colorTheme);
+  if (!t) return colorTheme;
+  if (t.dark === wantDark || !t.pair || !findTheme(t.pair)) return t.id;
+  return t.pair;
+}
+
+/** 背板色：bg-base 再压一档。Zen 的窗口背板与内容卡差一档但不刺眼
+ *  （深色：卡 #202020 / 背板 ~#131313；浅色：卡 #fff / 背板 ~#ebebeb） */
 export function backdropOf(theme: ThemeDef): string {
-  return mix(theme.vars["--bg-base"], "#000000", theme.dark ? 0.45 : 0.9);
+  return mix(theme.vars["--bg-base"], "#000000", theme.dark ? 0.7 : 0.94);
 }
