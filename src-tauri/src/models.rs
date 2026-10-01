@@ -243,6 +243,50 @@ pub struct AiTurnOptions {
     pub temperature: Option<f64>,
     /// 斜杠命令 id（记入 meta，便于回看）
     pub command: Option<String>,
+    /// 阶段 2B：本轮手动选用的写作规则（mode = manual）
+    pub rules: Vec<i64>,
+    /// 阶段 2B：重试选项（更长 / 更短 / 换写法…）追加在指令后，不落库
+    pub retry_hint: Option<String>,
+}
+
+/// 写作规则（阶段 2B）：mode = always（全书常驻）/ scoped（scope_ids 里的章或卷）/ manual（本轮手选）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WritingRule {
+    pub id: i64,
+    pub book_id: i64,
+    pub title: String,
+    pub content: String,
+    pub mode: String,
+    pub scope_ids: Vec<i64>,
+    pub sort_key: i64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct WritingRuleInput {
+    pub id: Option<i64>,
+    pub book_id: i64,
+    pub title: String,
+    #[serde(default)]
+    pub content: String,
+    #[serde(default = "default_rule_mode")]
+    pub mode: String,
+    #[serde(default)]
+    pub scope_ids: Vec<i64>,
+}
+
+fn default_rule_mode() -> String {
+    "always".into()
+}
+
+/// 常驻记忆 + 作者注（阶段 2B）：本书记忆、所在卷记忆（章在卷里时）、本章作者注
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AiMemory {
+    pub book: String,
+    pub volume_id: Option<i64>,
+    pub volume_title: Option<String>,
+    pub volume: String,
+    pub chapter_note: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -360,6 +404,9 @@ pub struct Idea {
 /// 章软删后引用仍保留——前端以 -1 特判显示「章已删」）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Foreshadow {
+    /// 阶段 2B：对 AI 隐藏（伏笔提醒里不列）
+    #[serde(default)]
+    pub ai_hidden: bool,
     pub id: i64,
     pub book_id: i64,
     pub title: String,
@@ -400,6 +447,12 @@ pub struct ForeshadowInput {
 /// 人物卡（characters 表）。图谱化（关系/出场章节）在此之上迭代。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Character {
+    /// 阶段 2B：对 AI 隐藏（注入时跳过）
+    #[serde(default)]
+    pub ai_hidden: bool,
+    /// 阶段 2B：仅作者可见的笔记（真实身份等），永不发给 AI
+    #[serde(default)]
+    pub secret_note: String,
     pub id: i64,
     pub book_id: i64,
     pub name: String,
@@ -496,6 +549,9 @@ pub struct PlaceInput {
 /// volume=卷纲（手动分卷）、chapter=章细纲（chapter_id 关联，每章一篇）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Outline {
+    /// 阶段 2B：对 AI 隐藏
+    #[serde(default)]
+    pub ai_hidden: bool,
     pub id: i64,
     pub book_id: i64,
     pub kind: String,
@@ -547,6 +603,9 @@ pub struct MaterialInput {
 /// status 三态（idea=点子 → ready=可写 → used=已用），chapter_id 记录用在哪章。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlotBlock {
+    /// 阶段 2B：对 AI 隐藏
+    #[serde(default)]
+    pub ai_hidden: bool,
     pub id: i64,
     pub book_id: i64,
     pub content: String,
@@ -657,6 +716,13 @@ pub struct ContextConfig {
     pub foreshadows: SlotConfig,
     pub plots: SlotConfig,
     pub ideas: SlotConfig,
+    /// 阶段 2B：上下文预算（估算 token；0 = 不限）。超出时按固定顺序裁剪槽位
+    #[serde(default = "default_budget_tokens")]
+    pub budget_tokens: i64,
+}
+
+pub fn default_budget_tokens() -> i64 {
+    16000
 }
 
 /// 默认配置：角色卡/伏笔自动触发开，情节块/灵感手动语义默认关。
@@ -672,6 +738,7 @@ pub fn default_context_config() -> ContextConfig {
         foreshadows: slot(true, 800),
         plots: slot(false, 1000),
         ideas: slot(false, 600),
+        budget_tokens: default_budget_tokens(),
     }
 }
 

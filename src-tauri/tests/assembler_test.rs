@@ -36,6 +36,7 @@ fn injection(name: &str, source: &str, text: &str, budget: usize) -> bixian::con
         source: source.to_string(),
         text: text.to_string(),
         budget,
+        reason: String::new(),
     }
 }
 

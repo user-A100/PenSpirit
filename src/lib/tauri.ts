@@ -38,8 +38,10 @@ export interface ChatMessage {
   /** JSON：mode / command / truncated / error */
   meta?: string;
 }
-export interface SlotLog { name: string; source: string; chars: number; est_tokens: number; preview_head: string; disabled?: boolean }
-export interface AssemblyLog { slots: SlotLog[]; total_est_tokens: number }
+/** 槽位摘要；阶段 2B：trimmed = 超预算被裁、reason = 为何被包含 */
+export interface SlotLog { name: string; source: string; chars: number; est_tokens: number; preview_head: string; disabled?: boolean; trimmed?: boolean; reason?: string }
+/** budget_tokens：本次预算（0 = 不限） */
+export interface AssemblyLog { slots: SlotLog[]; total_est_tokens: number; budget_tokens?: number }
 /** 阶段 2A：@ 引用 */
 export interface MentionRef { kind: "chapter" | "character" | "foreshadow" | "plot" | "outline"; id: number }
 /** 阶段 2A：单轮 AI 请求可选参数（字段 snake_case 与 Rust AiTurnOptions 对齐） */
@@ -53,11 +55,21 @@ export interface AiTurnOptions {
   target_chars?: number | null;
   temperature?: number | null;
   command?: string | null;
+  /** 阶段 2B：本轮手选的写作规则 */
+  rules?: number[];
+  /** 阶段 2B：重试选项（追加在指令后，不落库） */
+  retry_hint?: string | null;
 }
+/** 阶段 2B：写作规则 */
+export type RuleMode = "always" | "scoped" | "manual";
+export interface WritingRule { id: number; book_id: number; title: string; content: string; mode: RuleMode; scope_ids: number[]; sort_key: number; created_at: string }
+export interface WritingRuleInput { id: number | null; book_id: number; title: string; content: string; mode: RuleMode; scope_ids: number[] }
+/** 阶段 2B：常驻记忆（本书 / 所在卷）+ 本章作者注 */
+export interface AiMemory { book: string; volume_id: number | null; volume_title: string | null; volume: string; chapter_note: string }
 
 // ---- M7 批次6：注入原子每书配置（settings context:book:{id}） ----
 export interface SlotConfig { enabled: boolean; budget: number; ids: number[] | null; all: boolean }
-export interface ContextConfig { characters: SlotConfig; foreshadows: SlotConfig; plots: SlotConfig; ideas: SlotConfig }
+export interface ContextConfig { characters: SlotConfig; foreshadows: SlotConfig; plots: SlotConfig; ideas: SlotConfig; budget_tokens?: number }
 
 // ---- M7 批次7：自定义元数据字段 / 名字生成器 / 自由卡片墙 ----
 export type CustomFieldType = "text" | "checkbox" | "list" | "date";
@@ -114,6 +126,8 @@ export interface Foreshadow {
   status: string; note: string; created_at: string; resolved_chapter_id: number | null;
   /** M4-T5 还债登记：放行理由 + 登记的还债章（null=未登记） */
   override_note: string; repay_chapter_id: number | null;
+  /** 阶段 2B：对 AI 隐藏 */
+  ai_hidden?: boolean;
 }
 export interface ForeshadowInput {
   id: number | null; book_id: number; title: string;
@@ -126,6 +140,8 @@ export interface DailyStat { date: string; words: number; active_minutes: number
 export interface Character {
   id: number; book_id: number; name: string; role: string;
   aliases: string; description: string; created_at: string; updated_at: string;
+  /** 阶段 2B：对 AI 隐藏；仅作者可见的笔记（永不发给 AI） */
+  ai_hidden?: boolean; secret_note?: string;
 }
 export interface CharacterInput {
   id: number | null; book_id: number; name: string;
@@ -138,6 +154,7 @@ export interface Outline {
   id: number; book_id: number; kind: OutlineKind;
   chapter_id: number | null; title: string; content: string;
   sort_key: number; created_at: string; updated_at: string;
+  ai_hidden?: boolean;
 }
 export interface OutlineInput {
   id: number | null; book_id: number; kind: OutlineKind;
@@ -156,6 +173,7 @@ export type PlotBlockStatus = "idea" | "ready" | "used";
 export interface PlotBlock {
   id: number; book_id: number; content: string; status: PlotBlockStatus;
   chapter_id: number | null; sort_key: number; created_at: string;
+  ai_hidden?: boolean;
 }
 export interface PlotBlockInput {
   id: number | null; book_id: number; content: string; status: PlotBlockStatus;
@@ -313,6 +331,16 @@ export const api = {
     invoke<AssemblyLog>("preview_context", { sessionId, instruction, options: options ?? null }),
   // ---- M7 批次6：注入原子每书配置 ----
   contextConfigGet: (bookId: number) => invoke<ContextConfig>("context_config_get", { bookId }),
+  // ---- 阶段 2B：常驻记忆 / 作者注 / 写作规则 / 对 AI 隐藏 ----
+  aiMemoryGet: (bookId: number, chapterId: number | null) => invoke<AiMemory>("ai_memory_get", { bookId, chapterId }),
+  /** scope = book（id = 书）/ volume（id = 卷）/ chapter（id = 章，作者注）；空文本 = 删除 */
+  aiMemorySet: (scope: "book" | "volume" | "chapter", id: number, text: string) => invoke<void>("ai_memory_set", { scope, id, text }),
+  rulesList: (bookId: number) => invoke<WritingRule[]>("rules_list", { bookId }),
+  ruleUpsert: (input: WritingRuleInput) => invoke<WritingRule>("rule_upsert", { input }),
+  ruleDelete: (id: number) => invoke<void>("rule_delete", { id }),
+  cardSetAiHidden: (kind: "character" | "foreshadow" | "plot" | "outline", id: number, hidden: boolean) =>
+    invoke<void>("card_set_ai_hidden", { kind, id, hidden }),
+  characterSetSecret: (id: number, note: string) => invoke<void>("character_set_secret", { id, note }),
   contextConfigSet: (bookId: number, config: ContextConfig) =>
     invoke<ContextConfig>("context_config_set", { bookId, config }),
   // ---- M7 批次7：自定义字段 / 名字生成 / 自由摆位 ----

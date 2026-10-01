@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AtSign, BookOpen, Flag, Blocks, ListTree, Quote, SendHorizontal, Slash, Square, Users, X } from "lucide-react";
 import { buildTurnOptions, useChat, type MentionItem } from "../../stores/chat";
 import { useWorkspace } from "../../stores/workspace";
-import { api, type AssemblyLog, type MentionRef } from "../../lib/tauri";
+import { api, type AssemblyLog, type MentionRef, type WritingRule } from "../../lib/tauri";
 import { findCommand, matchCommands, type SlashCommand } from "../../lib/ai/slashCommands";
 import { fuzzyMatch } from "../../lib/pinyin";
 import { quoteSelection } from "../../lib/ai/actions";
@@ -21,7 +21,7 @@ const TEMPS: Array<{ label: string; value: number | null }> = [
   { label: "放飞：1.1（脑暴/描写）", value: 1.1 },
 ];
 /** 胶囊里展示的槽位（System/写作指令不展示） */
-const PILL_SLOTS = ["文风", "角色卡", "伏笔提醒", "情节块", "灵感卡", "上一章结尾", "对话历史", "光标前文", "当前章正文", "光标后文", "选中段落"];
+const PILL_SLOTS = ["文风", "常驻记忆", "写作规则", "角色卡", "伏笔提醒", "情节块", "灵感卡", "引用资料", "上一章结尾", "对话历史", "光标前文", "当前章正文", "光标后文", "选中段落", "作者注"];
 const KIND_LABEL: Record<MentionRef["kind"], string> = { chapter: "章节", character: "人物", foreshadow: "伏笔", plot: "情节块", outline: "大纲" };
 const KIND_ICON = { chapter: BookOpen, character: Users, foreshadow: Flag, plot: Blocks, outline: ListTree } as const;
 
@@ -51,6 +51,10 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help") => v
   const targetChars = useChat((s) => s.targetChars);
   const temperature = useChat((s) => s.temperature);
   const disabledSlots = useChat((s) => s.disabledSlots);
+  const pickedRules = useChat((s) => s.manualRules);
+  const previewSeq = useChat((s) => s.previewSeq);
+  const toggleRule = useChat((s) => s.toggleRule);
+  const [manualRules, setManualRules] = useState<WritingRule[]>([]);
   const mentions = useChat((s) => s.mentions);
   const quote = useChat((s) => s.quote);
   const compose = useChat((s) => s.compose);
@@ -124,7 +128,20 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help") => v
       cancelled = true;
       window.clearTimeout(h);
     };
-  }, [sessionId, streaming, text, command, mode, targetChars, disabledSlots, mentions, quote, messages.length]);
+  }, [sessionId, streaming, text, command, mode, targetChars, disabledSlots, mentions, quote, messages.length, pickedRules, previewSeq]);
+
+  // 阶段 2B：手动选用的写作规则（记忆与规则面板里改了会触发 previewSeq 重取）
+  useEffect(() => {
+    if (bookId == null) return;
+    let cancelled = false;
+    api
+      .rulesList(bookId)
+      .then((rs) => !cancelled && setManualRules(rs.filter((r) => r.mode === "manual")))
+      .catch(() => !cancelled && setManualRules([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [bookId, previewSeq]);
 
   // @ 候选：首次打开菜单时按书拉取（章节直接用工作区列表）
   const loadPool = async () => {
@@ -277,6 +294,8 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help") => v
 
   const pills = (log?.slots ?? []).filter((s) => PILL_SLOTS.includes(s.name));
   const totalTokens = log?.total_est_tokens ?? 0;
+  const budget = log?.budget_tokens ?? 0;
+  const trimmedCount = (log?.slots ?? []).filter((s) => s.trimmed).length;
   const disabled = chapterId == null;
 
   return (
@@ -357,9 +376,10 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help") => v
                 data-slot-pill={s.name}
                 aria-pressed={!s.disabled}
                 onClick={() => toggleSlot(s.name)}
-                data-tip={`${s.source} · ${s.chars} 字 · 约 ${s.est_tokens} tokens${s.disabled ? "（本轮已关闭，点击打开）" : "（点击本轮关闭）"}`}
+                data-trimmed={s.trimmed ? "" : undefined}
+                data-tip={`${s.reason ? `${s.reason}\n` : ""}${s.source} · ${s.chars} 字 · 约 ${s.est_tokens} tokens${s.trimmed ? "（超出上下文预算，本轮已裁）" : s.disabled ? "（本轮已关闭，点击打开）" : "（点击本轮关闭）"}`}
                 className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs transition-[background-color,color,opacity] duration-[var(--dur-md)] [box-shadow:inset_0_0_0_1px_var(--hairline)] hover:bg-[var(--fill-hover)] ${
-                  s.disabled ? "text-[color:var(--text-faint)] line-through opacity-60" : "text-[color:var(--text-secondary)]"
+                  s.disabled ? "text-[color:var(--text-faint)] line-through opacity-60" : s.trimmed ? "border border-dashed border-[color:var(--danger)] text-[color:var(--danger)] opacity-70" : "text-[color:var(--text-secondary)]"
                 }`}
               >
                 {s.name}
@@ -469,10 +489,29 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help") => v
           >
             {temperature == null ? "温度默认" : `温度 ${temperature}`}
           </button>
+          {manualRules.length > 0 && (
+            <button
+              data-tip="本轮手动选用的写作规则（发送后清空）"
+              onClick={(e) =>
+                openMenuAt(
+                  e.currentTarget,
+                  manualRules.map((r) => ({ label: r.title, checked: pickedRules.includes(r.id), onSelect: () => toggleRule(r.id) })),
+                )
+              }
+              className={`rounded-[4px] px-1.5 py-1 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)] ${pickedRules.length > 0 ? "text-[color:var(--accent)]" : ""}`}
+            >
+              {pickedRules.length > 0 ? `规则 ${pickedRules.length}` : "规则"}
+            </button>
+          )}
           <div className="flex-1" />
           {totalTokens > 0 && (
-            <span className="mr-1.5 tabular-nums" data-tip="本轮将发送的上下文估算（不含回答）">
-              ~{fmtTokens(totalTokens)} tokens
+            <span
+              className={`mr-1.5 tabular-nums ${trimmedCount > 0 ? "text-[color:var(--danger)]" : ""}`}
+              data-testid="composer-tokens"
+              data-tip={trimmedCount > 0 ? `超出上下文预算，本轮已裁 ${trimmedCount} 个槽位（查看上下文预览）` : "本轮将发送的上下文估算（不含回答）/ 预算"}
+            >
+              ~{fmtTokens(totalTokens)}
+              {budget > 0 ? ` / ${fmtTokens(budget)}` : ""} tokens
             </span>
           )}
           {streaming ? (

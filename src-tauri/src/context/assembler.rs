@@ -50,6 +50,12 @@ pub struct SlotLog {
     /// 本轮被用户关闭（未注入，仅在预览中列出以便重新打开）
     #[serde(default)]
     pub disabled: bool,
+    /// 阶段 2B：超出上下文预算被裁掉（未注入）
+    #[serde(default)]
+    pub trimmed: bool,
+    /// 阶段 2B：为何被包含（预览面板展示，排查「它为什么提到了 X」）
+    #[serde(default)]
+    pub reason: String,
 }
 
 /// 一次组装的完整日志：各槽摘要 + 总估算 token（只计实际注入的槽位）。
@@ -57,6 +63,9 @@ pub struct SlotLog {
 pub struct AssemblyLog {
     pub slots: Vec<SlotLog>,
     pub total_est_tokens: i64,
+    /// 阶段 2B：本次使用的预算（0 = 不限），前端画预算条
+    #[serde(default)]
+    pub budget_tokens: i64,
 }
 
 /// 组装输入：各注入源由调用方（命令层）读取后传入，组装器保持纯函数。
@@ -85,6 +94,19 @@ pub struct AssembleInput<'a> {
     pub disabled: Vec<String>,
     /// 期望输出字数（长度预设）
     pub target_chars: Option<i64>,
+    /// 阶段 2B：常驻记忆（本书 + 所在卷），放进 system
+    pub memory: Option<&'a str>,
+    pub memory_reason: Option<&'a str>,
+    /// 阶段 2B：写作规则（已按作用域筛好、渲染成一个槽位）
+    pub rules: Option<InjectionInput>,
+    /// 阶段 2B：本章作者注——放在写作指令之前（近端强约束）
+    pub author_note: Option<&'a str>,
+    /// 阶段 2B：上一章标题（「为何被包含」用）
+    pub prev_title: Option<&'a str>,
+    /// 阶段 2B：上下文预算（估算 token）；None / 0 = 不限
+    pub budget_tokens: Option<i64>,
+    /// 阶段 2B：重试选项追加在指令后（更长 / 更短 / 换写法…）
+    pub retry_hint: Option<&'a str>,
 }
 
 /// 单个注入原子槽位：命令层渲染完成的整段文本 + 每书预算（0 = 不限）。
@@ -96,6 +118,8 @@ pub struct InjectionInput {
     pub source: String,
     pub text: String,
     pub budget: usize,
+    /// 阶段 2B：为何被包含（如「正文提到：南宫婉、晚儿→林晚」）
+    pub reason: String,
 }
 
 /// 组装产物：system / history / user 与 llm::stream::StreamReq 同构，log 供预览面板。
@@ -136,12 +160,11 @@ fn slot(name: &str, source: &str, payload: &str) -> SlotLog {
         est_tokens: estimate_tokens(payload),
         preview_head: preview_head(payload),
         disabled: false,
+        trimmed: false,
+        reason: String::new(),
     }
 }
 
-fn off_slot(name: &str, source: &str, payload: &str) -> SlotLog {
-    SlotLog { disabled: true, ..slot(name, source, payload) }
-}
 
 /// 写正文模式的默认提示（保持 M1 原文：既有用户的续写行为不变）。
 pub fn write_prompt(book_title: &str) -> String {
@@ -196,102 +219,193 @@ pub fn trim_history(history: &[(String, String)], mode: Mode) -> Vec<(String, St
     out
 }
 
-/// 固定槽位顺序组装：System → 文风 → 注入原子（按传入序）→ 上一章结尾 → 对话历史 →
-/// 当前章正文/光标前文 → 光标后文 → 选中段落 → 写作指令；逐槽记录摘要与总估算 token。
+/// 超预算时的裁剪顺序（先裁前面的）：清单类注入 → 历史 → 提醒 → 前情 → 后文 → 主动引用；
+/// System / 文风 / 常驻记忆 / 写作规则 / 选中段落 / 作者注 / 写作指令永不裁；当前章正文最后缩窗。
+pub const TRIM_ORDER: [&str; 8] = ["灵感卡", "情节块", "对话历史", "伏笔提醒", "角色卡", "上一章结尾", "光标后文", "引用资料"];
+/// 缩窗后当前章正文至少保留的字数
+const MIN_CHAPTER_CHARS: usize = 500;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Place {
+    /// 拼进 system：`\n\n【header】\n正文`
+    System,
+    /// 对话历史（独立消息）
+    History,
+    /// user 消息里的上下文块（label 行 + 正文）
+    User,
+}
+
+struct Part {
+    name: String,
+    source: String,
+    reason: String,
+    /// 记日志 / 估 token 的载荷
+    payload: String,
+    place: Place,
+    /// System：【header】；User：标签行
+    header: String,
+    off: bool,
+    trimmed: bool,
+}
+
+impl Part {
+    fn new(name: &str, source: &str, reason: &str, payload: String, place: Place, header: &str, off: bool) -> Self {
+        Part {
+            name: name.into(),
+            source: source.into(),
+            reason: reason.into(),
+            payload,
+            place,
+            header: header.into(),
+            off,
+            trimmed: false,
+        }
+    }
+    fn tokens(&self) -> i64 {
+        estimate_tokens(&self.payload)
+    }
+    fn log(&self) -> SlotLog {
+        SlotLog {
+            disabled: self.off,
+            trimmed: self.trimmed,
+            reason: self.reason.clone(),
+            ..slot(&self.name, &self.source, &self.payload)
+        }
+    }
+}
+
+/// 固定槽位顺序组装：System → 文风 → 常驻记忆 → 写作规则 → 注入原子（按传入序）→ 上一章结尾 → 对话历史 →
+/// 当前章正文/光标前文 → 光标后文 → 选中段落 → 作者注 → 写作指令；逐槽记录摘要、来由与总估算 token。
 /// 本轮关闭的槽位不注入，但仍以 disabled 记入日志（预览里可重新打开）。
+/// 阶段 2B：给了预算且超出时，按 TRIM_ORDER 逐个裁掉（trimmed 记入日志），仍超则把当前章正文缩窗。
 pub fn assemble(input: &AssembleInput) -> Assembled {
     let off = |name: &str| input.disabled.iter().any(|d| d == name);
     let default_prompt = match input.mode {
         Mode::Write => write_prompt(input.book_title),
         Mode::Discuss => discuss_prompt(input.book_title),
     };
-    let mut slots = vec![slot("System", "默认创作提示", &default_prompt)];
-    let mut system = default_prompt.clone();
+    let mode_reason = match input.mode {
+        Mode::Write => "固定：写正文模式的创作提示",
+        Mode::Discuss => "固定：讨论模式的顾问提示",
+    };
+    let mut parts: Vec<Part> = vec![Part::new("System", "默认创作提示", mode_reason, default_prompt.clone(), Place::System, "", false)];
 
     if let Some(style) = input.style_prompt.filter(|s| !s.is_empty()) {
-        if off("文风") {
-            slots.push(off_slot("文风", "激活文风卡", style));
-        } else {
-            system.push_str("\n\n【文风要求】\n");
-            system.push_str(style);
-            slots.push(slot("文风", "激活文风卡", style));
-        }
+        parts.push(Part::new("文风", "激活文风卡", "本书当前激活的文风卡", style.to_string(), Place::System, "文风要求", off("文风")));
     }
-
+    if let Some(mem) = input.memory.filter(|s| !s.trim().is_empty()) {
+        let reason = input.memory_reason.unwrap_or("本书常驻记忆");
+        parts.push(Part::new("常驻记忆", "记忆", reason, mem.to_string(), Place::System, "常驻记忆", off("常驻记忆")));
+    }
+    if let Some(rules) = input.rules.as_ref().filter(|r| !r.text.is_empty()) {
+        parts.push(Part::new(&rules.name, &rules.source, &rules.reason, rules.text.clone(), Place::System, &rules.name, off(&rules.name)));
+    }
     // 注入原子（M7 批次6）：预算截断保头（清单丢尾），逐槽独立记日志
     for inj in &input.injections {
         if inj.text.is_empty() {
             continue;
         }
         let kept = head_window(&inj.text, inj.budget);
-        if off(&inj.name) {
-            slots.push(off_slot(&inj.name, &inj.source, &kept));
-            continue;
-        }
-        system.push_str(&format!("\n\n【{}】\n{}", inj.name, kept));
-        slots.push(slot(&inj.name, &inj.source, &kept));
+        parts.push(Part::new(&inj.name, &inj.source, &inj.reason, kept, Place::System, &inj.name, off(&inj.name)));
     }
-
     // 上一章结尾：作为前情放进 system（历史只留真实对话，角色才能严格交替）
     if let Some(prev) = input.prev_chapter_tail.filter(|s| !s.is_empty()) {
         let tail = tail_window(prev, PREV_WINDOW_CHARS);
-        if off("上一章结尾") {
-            slots.push(off_slot("上一章结尾", "上一章正文", &tail));
+        let reason = match input.prev_title {
+            Some(t) => format!("全书序前一章《{t}》的结尾 {PREV_WINDOW_CHARS} 字（跨卷亦然）"),
+            None => format!("全书序前一章的结尾 {PREV_WINDOW_CHARS} 字"),
+        };
+        parts.push(Part::new("上一章结尾", "上一章正文", &reason, tail, Place::System, "上一章结尾", off("上一章结尾")));
+    }
+    // 对话历史（阶段 2A 多轮）：按模式预算裁剪
+    let trimmed_history = if input.history.is_empty() { Vec::new() } else { trim_history(&input.history, input.mode) };
+    if !trimmed_history.is_empty() {
+        let joined: String = trimmed_history.iter().map(|(_, c)| c.as_str()).collect::<Vec<_>>().join("\n");
+        let source = format!("最近 {} 条", trimmed_history.len());
+        let (budget, max) = match input.mode {
+            Mode::Write => (HISTORY_BUDGET_WRITE, HISTORY_MAX_WRITE),
+            Mode::Discuss => (HISTORY_BUDGET_DISCUSS, HISTORY_MAX_DISCUSS),
+        };
+        let reason = format!("本会话最近的对话（本模式最多 {max} 条 / {budget} 字）");
+        parts.push(Part::new("对话历史", &source, &reason, joined, Place::History, "", off("对话历史")));
+    }
+    // user：正文上下文块 + 指令
+    let chapter_slot = if input.cursor_aware { "光标前文" } else { "当前章正文" };
+    if !input.chapter_text.is_empty() {
+        let tail = tail_window(input.chapter_text, CHAPTER_WINDOW_CHARS);
+        let label = if input.cursor_aware { "【光标前文（续写从这里接着写）】" } else { "【当前章节已有正文（尾部）】" };
+        let reason = if input.cursor_aware {
+            format!("编辑器光标之前的正文（尾部 {CHAPTER_WINDOW_CHARS} 字）")
         } else {
-            system.push_str(&format!("\n\n【上一章结尾】\n{tail}"));
-            slots.push(slot("上一章结尾", "上一章正文", &tail));
-        }
+            format!("当前章已写正文（尾部 {CHAPTER_WINDOW_CHARS} 字）")
+        };
+        parts.push(Part::new(chapter_slot, "当前章节", &reason, tail, Place::User, label, off(chapter_slot)));
+    }
+    if let Some(after) = input.cursor_after.filter(|s| !s.trim().is_empty()) {
+        let head = head_window(after, AFTER_WINDOW_CHARS);
+        let reason = format!("光标之后的正文（头部 {AFTER_WINDOW_CHARS} 字），让新内容接得上");
+        parts.push(Part::new("光标后文", "当前章节", &reason, head, Place::User, "【光标后文（新内容要能自然接上它）】", off("光标后文")));
+    }
+    if let Some(sel) = input.selection.filter(|s| !s.trim().is_empty()) {
+        let kept = head_window(sel, SELECTION_MAX_CHARS);
+        parts.push(Part::new("选中段落", "编辑器选区", "编辑器里选中的段落（改写 / 润色的对象）", kept, Place::User, "【选中段落】", off("选中段落")));
+    }
+    if let Some(note) = input.author_note.filter(|s| !s.trim().is_empty()) {
+        parts.push(Part::new(
+            "作者注",
+            "本章作者注",
+            "本章作者注：放在指令之前，作近端强约束",
+            note.to_string(),
+            Place::User,
+            "【作者注（本章要求，务必遵守）】",
+            off("作者注"),
+        ));
     }
 
-    // 对话历史（阶段 2A 多轮）：按模式预算裁剪
-    let mut history = Vec::new();
-    if !input.history.is_empty() {
-        let trimmed = trim_history(&input.history, input.mode);
-        if !trimmed.is_empty() {
-            let joined: String = trimmed.iter().map(|(_, c)| c.as_str()).collect::<Vec<_>>().join("\n");
-            let source = format!("最近 {} 条", trimmed.len());
-            if off("对话历史") {
-                slots.push(off_slot("对话历史", &source, &joined));
-            } else {
-                slots.push(slot("对话历史", &source, &joined));
-                history = trimmed;
+    // 预算裁剪（阶段 2B）
+    let instruction_tokens = estimate_tokens(input.instruction);
+    let live = |ps: &[Part]| ps.iter().filter(|p| !p.off && !p.trimmed).map(|p| p.tokens()).sum::<i64>() + instruction_tokens;
+    if let Some(budget) = input.budget_tokens.filter(|b| *b > 0) {
+        for name in TRIM_ORDER {
+            if live(&parts) <= budget {
+                break;
+            }
+            if let Some(p) = parts.iter_mut().find(|p| p.name == name && !p.off && !p.trimmed) {
+                p.trimmed = true;
+                p.reason = format!("{}——超出上下文预算 {budget}，本轮未发送", p.reason);
+            }
+        }
+        let over = live(&parts) - budget;
+        if over > 0 {
+            if let Some(p) = parts.iter_mut().find(|p| p.name == chapter_slot && !p.off) {
+                let chars = p.payload.chars().count();
+                let tokens = p.tokens().max(1);
+                let keep_tokens = (tokens - over).max(0);
+                let keep = ((chars as i64 * keep_tokens / tokens) as usize).max(MIN_CHAPTER_CHARS).min(chars);
+                if keep < chars {
+                    p.payload = tail_window(&p.payload, keep);
+                    p.reason = format!("{}——超预算缩窗至最后 {keep} 字", p.reason);
+                }
             }
         }
     }
 
-    // user：正文上下文块 + 指令
+    // 渲染
+    let mut system = String::new();
+    let mut history = Vec::new();
     let mut blocks: Vec<String> = Vec::new();
-    let chapter_slot = if input.cursor_aware { "光标前文" } else { "当前章正文" };
-    if !input.chapter_text.is_empty() {
-        let tail = tail_window(input.chapter_text, CHAPTER_WINDOW_CHARS);
-        if off(chapter_slot) {
-            slots.push(off_slot(chapter_slot, "当前章节", &tail));
-        } else {
-            let label = if input.cursor_aware { "【光标前文（续写从这里接着写）】" } else { "【当前章节已有正文（尾部）】" };
-            blocks.push(format!("{label}\n{tail}"));
-            slots.push(slot(chapter_slot, "当前章节", &tail));
+    for p in parts.iter().filter(|p| !p.off && !p.trimmed) {
+        match p.place {
+            Place::System if p.name == "System" => system.push_str(&p.payload),
+            Place::System => system.push_str(&format!("\n\n【{}】\n{}", p.header, p.payload)),
+            Place::History => history = trimmed_history.clone(),
+            Place::User => blocks.push(format!("{}\n{}", p.header, p.payload)),
         }
     }
-    if let Some(after) = input.cursor_after.filter(|s| !s.trim().is_empty()) {
-        let head = head_window(after, AFTER_WINDOW_CHARS);
-        if off("光标后文") {
-            slots.push(off_slot("光标后文", "当前章节", &head));
-        } else {
-            blocks.push(format!("【光标后文（新内容要能自然接上它）】\n{head}"));
-            slots.push(slot("光标后文", "当前章节", &head));
-        }
-    }
-    if let Some(sel) = input.selection.filter(|s| !s.trim().is_empty()) {
-        let kept = head_window(sel, SELECTION_MAX_CHARS);
-        if off("选中段落") {
-            slots.push(off_slot("选中段落", "编辑器选区", &kept));
-        } else {
-            blocks.push(format!("【选中段落】\n{kept}"));
-            slots.push(slot("选中段落", "编辑器选区", &kept));
-        }
-    }
-
     let mut instruction = input.instruction.to_string();
+    if let Some(hint) = input.retry_hint.filter(|h| !h.trim().is_empty()) {
+        instruction.push_str(&format!("\n（{hint}）"));
+    }
     if let Some(n) = input.target_chars.filter(|n| *n > 0) {
         match input.mode {
             Mode::Write => instruction.push_str(&format!("\n（本次输出约 {n} 字）")),
@@ -307,13 +421,14 @@ pub fn assemble(input: &AssembleInput) -> Assembled {
         };
         format!("{}\n\n{label}\n{instruction}", blocks.join("\n\n"))
     };
-    slots.push(slot("写作指令", "用户输入", input.instruction));
 
-    let total_est_tokens = slots.iter().filter(|s| !s.disabled).map(|s| s.est_tokens).sum();
+    let mut slots: Vec<SlotLog> = parts.iter().map(Part::log).collect();
+    slots.push(SlotLog { reason: "你的输入".into(), ..slot("写作指令", "用户输入", input.instruction) });
+    let total_est_tokens = slots.iter().filter(|s| !s.disabled && !s.trimmed).map(|s| s.est_tokens).sum();
     Assembled {
         system,
         history,
         user,
-        log: AssemblyLog { slots, total_est_tokens },
+        log: AssemblyLog { slots, total_est_tokens, budget_tokens: input.budget_tokens.unwrap_or(0) },
     }
 }

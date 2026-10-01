@@ -203,6 +203,7 @@ fn config_roundtrip_default_and_corrupt_guard() {
         foreshadows: SlotConfig { enabled: false, budget: 0, ids: Some(vec![1]), all: false },
         plots: SlotConfig { enabled: true, budget: 500, ids: Some(vec![2, 3]), all: false },
         ideas: SlotConfig { enabled: false, budget: 100, ids: None, all: false },
+        budget_tokens: 8000,
     };
     {
         let conn = s.db.lock().unwrap();

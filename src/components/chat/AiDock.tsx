@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Eye, MessageSquarePlus, Pencil, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
+import { BookMarked, ChevronDown, ChevronUp, Eye, MessageSquarePlus, Pencil, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
 import { useWorkspace } from "../../stores/workspace";
 import { buildTurnOptions, useChat } from "../../stores/chat";
 import { useSettings } from "../../stores/settings";
@@ -11,6 +11,7 @@ import { SLASH_COMMANDS } from "../../lib/ai/slashCommands";
 import { commandShortcut } from "../../lib/commands";
 import { BackendSelector } from "./BackendSelector";
 import { ContextPreview } from "./ContextPreview";
+import { MemoryRules } from "./MemoryRules";
 import { MessageList } from "./MessageList";
 import { Composer } from "./Composer";
 
@@ -21,7 +22,7 @@ interface AiDockProps {
   onToggle: () => void;
 }
 
-type View = "chat" | "preview" | "help";
+type View = "chat" | "preview" | "help" | "memory";
 
 const SUGGESTIONS: Array<{ label: string; cmd: string }> = [
   { label: "/续写", cmd: "continue" },
@@ -176,6 +177,14 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
         </div>
         <BackendSelector />
         <button
+          onClick={() => setView(view === "memory" ? "chat" : "memory")}
+          aria-label="记忆与规则"
+          data-tip={view === "memory" ? "返回对话" : "常驻记忆 · 作者注 · 写作规则"}
+          className={`rounded-[var(--r-control)] p-1 transition-colors hover:bg-[var(--fill-hover)] ${view === "memory" ? "text-[color:var(--accent)]" : "text-[color:var(--text-faint)] hover:text-[color:var(--text-primary)]"}`}
+        >
+          <BookMarked size={14} />
+        </button>
+        <button
           onClick={() => {
             if (view === "preview") setView("chat");
             else showLocal("context");
@@ -234,6 +243,8 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
             <ContextPreview log={log} loading={previewLoading} onConfigChanged={() => void loadPreview()} />
           </div>
         </div>
+      ) : view === "memory" ? (
+        <MemoryRules onChanged={() => useChat.getState().requestPreviewRefresh()} />
       ) : view === "help" ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 text-xs leading-relaxed text-[color:var(--text-secondary)]">
           <div className="mb-2 flex items-center justify-between">

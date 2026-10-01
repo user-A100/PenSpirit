@@ -13,7 +13,7 @@ use crate::error::{AppError, AppResult};
 use crate::fs_service;
 use crate::llm::provider;
 use crate::llm::stream::{chat_stream, classify_error, StreamEvent, StreamReq};
-use crate::models::{AiTurnOptions, ChatMessage, ChatSession, ContextConfig, ProviderProfile, StyleCard};
+use crate::models::{AiMemory, AiTurnOptions, ChatMessage, ChatSession, ContextConfig, ProviderProfile, StyleCard, WritingRule, WritingRuleInput};
 use crate::repo;
 use crate::state::AppState;
 
@@ -30,6 +30,15 @@ pub(crate) struct ContextBundle {
     injections: Vec<InjectionInput>,
     cursor_aware: bool,
     history: Vec<(String, String)>,
+    /// 阶段 2B：常驻记忆（本书 + 所在卷）与来由
+    memory: String,
+    memory_reason: String,
+    /// 阶段 2B：写作规则槽位（已按作用域筛好）
+    rules: Option<InjectionInput>,
+    /// 阶段 2B：本章作者注
+    author_note: String,
+    prev_title: Option<String>,
+    budget_tokens: i64,
 }
 
 pub(crate) fn assemble_with(bundle: &ContextBundle, instruction: &str, opts: &AiTurnOptions) -> Assembled {
@@ -47,7 +56,136 @@ pub(crate) fn assemble_with(bundle: &ContextBundle, instruction: &str, opts: &Ai
         history: bundle.history.clone(),
         disabled: opts.disabled_slots.clone(),
         target_chars: opts.target_chars,
+        memory: Some(bundle.memory.as_str()),
+        memory_reason: Some(bundle.memory_reason.as_str()),
+        rules: bundle.rules.clone(),
+        author_note: Some(bundle.author_note.as_str()),
+        prev_title: bundle.prev_title.as_deref(),
+        budget_tokens: Some(bundle.budget_tokens),
+        retry_hint: opts.retry_hint.as_deref(),
     })
+}
+
+// ---------- 阶段 2B：常驻记忆 / 作者注 / 写作规则 ----------
+
+const MEMORY_BOOK: &str = "memory:book:";
+const MEMORY_VOLUME: &str = "memory:volume:";
+const AUTHOR_NOTE: &str = "authornote:chapter:";
+
+/// 读记忆三件套：本书记忆、章所在卷的记忆、本章作者注（chapter_id 为空时只给本书）
+pub fn ai_memory_get_inner(s: &AppState, book_id: i64, chapter_id: Option<i64>) -> AppResult<AiMemory> {
+    let conn = lock(s)?;
+    let get = |k: String| repo::settings::get(&conn, &k).map(|v| v.unwrap_or_default());
+    let mut m = AiMemory { book: get(format!("{MEMORY_BOOK}{book_id}"))?, ..Default::default() };
+    if let Some(cid) = chapter_id {
+        let ch = repo::chapters::get(&conn, cid)?;
+        m.chapter_note = get(format!("{AUTHOR_NOTE}{cid}"))?;
+        let vol = if ch.kind == "folder" { Some(ch.clone()) } else { ch.parent_id.and_then(|p| repo::chapters::get(&conn, p).ok()) };
+        if let Some(v) = vol.filter(|v| v.kind == "folder" && v.deleted_at.is_none()) {
+            m.volume = get(format!("{MEMORY_VOLUME}{}", v.id))?;
+            m.volume_id = Some(v.id);
+            m.volume_title = Some(v.title);
+        }
+    }
+    Ok(m)
+}
+
+/// 写记忆：scope = book（id = 书）/ volume（id = 卷）/ chapter（id = 章，作者注）
+pub fn ai_memory_set_inner(s: &AppState, scope: &str, id: i64, text: &str) -> AppResult<()> {
+    let key = match scope {
+        "book" => format!("{MEMORY_BOOK}{id}"),
+        "volume" => format!("{MEMORY_VOLUME}{id}"),
+        "chapter" => format!("{AUTHOR_NOTE}{id}"),
+        _ => return Err(AppError::Invalid(format!("未知的记忆范围：{scope}"))),
+    };
+    let conn = lock(s)?;
+    if text.trim().is_empty() {
+        repo::settings::remove(&conn, &key)
+    } else {
+        repo::settings::set(&conn, &key, text.trim())
+    }
+}
+
+/// 本轮适用的写作规则：全书常驻 + 作用于本章或本章所在卷 + 本轮手选
+fn applicable_rules(rules: &[WritingRule], chapter_id: i64, volume_id: Option<i64>, manual: &[i64]) -> (Vec<String>, String) {
+    let mut lines = Vec::new();
+    let (mut always, mut scoped, mut picked) = (Vec::new(), Vec::new(), Vec::new());
+    for r in rules {
+        let hit = match r.mode.as_str() {
+            "always" => {
+                always.push(r.title.clone());
+                true
+            }
+            "scoped" if r.scope_ids.contains(&chapter_id) || volume_id.is_some_and(|v| r.scope_ids.contains(&v)) => {
+                scoped.push(r.title.clone());
+                true
+            }
+            "manual" if manual.contains(&r.id) => {
+                picked.push(r.title.clone());
+                true
+            }
+            _ => false,
+        };
+        if hit {
+            lines.push(if r.content.is_empty() { format!("- {}", r.title) } else { format!("- {}：{}", r.title, r.content) });
+        }
+    }
+    let mut why = Vec::new();
+    if !always.is_empty() {
+        why.push(format!("全书常驻：{}", always.join("、")));
+    }
+    if !scoped.is_empty() {
+        why.push(format!("本章 / 本卷适用：{}", scoped.join("、")));
+    }
+    if !picked.is_empty() {
+        why.push(format!("本轮手选：{}", picked.join("、")));
+    }
+    (lines, why.join("；"))
+}
+
+pub fn rules_list_inner(s: &AppState, book_id: i64) -> AppResult<Vec<WritingRule>> {
+    repo::rules::list_by_book(&*lock(s)?, book_id)
+}
+pub fn rule_upsert_inner(s: &AppState, input: &WritingRuleInput) -> AppResult<WritingRule> {
+    repo::rules::upsert(&*lock(s)?, input)
+}
+pub fn rule_delete_inner(s: &AppState, id: i64) -> AppResult<()> {
+    repo::rules::delete(&*lock(s)?, id)
+}
+pub fn card_set_ai_hidden_inner(s: &AppState, kind: &str, id: i64, hidden: bool) -> AppResult<()> {
+    repo::rules::set_ai_hidden(&*lock(s)?, kind, id, hidden)
+}
+pub fn character_set_secret_inner(s: &AppState, id: i64, note: &str) -> AppResult<()> {
+    repo::rules::set_secret_note(&*lock(s)?, id, note)
+}
+
+#[tauri::command]
+pub fn ai_memory_get(s: State<AppState>, book_id: i64, chapter_id: Option<i64>) -> AppResult<AiMemory> {
+    ai_memory_get_inner(&s, book_id, chapter_id)
+}
+#[tauri::command]
+pub fn ai_memory_set(s: State<AppState>, scope: String, id: i64, text: String) -> AppResult<()> {
+    ai_memory_set_inner(&s, &scope, id, &text)
+}
+#[tauri::command]
+pub fn rules_list(s: State<AppState>, book_id: i64) -> AppResult<Vec<WritingRule>> {
+    rules_list_inner(&s, book_id)
+}
+#[tauri::command]
+pub fn rule_upsert(s: State<AppState>, input: WritingRuleInput) -> AppResult<WritingRule> {
+    rule_upsert_inner(&s, &input)
+}
+#[tauri::command]
+pub fn rule_delete(s: State<AppState>, id: i64) -> AppResult<()> {
+    rule_delete_inner(&s, id)
+}
+#[tauri::command]
+pub fn card_set_ai_hidden(s: State<AppState>, kind: String, id: i64, hidden: bool) -> AppResult<()> {
+    card_set_ai_hidden_inner(&s, &kind, id, hidden)
+}
+#[tauri::command]
+pub fn character_set_secret(s: State<AppState>, id: i64, note: String) -> AppResult<()> {
+    character_set_secret_inner(&s, id, &note)
 }
 
 /// 读会话并收集组装素材：书名 / 激活文风 / 当前章正文（或前端给的光标前文）/
@@ -77,20 +215,22 @@ pub(crate) fn gather_context(
             None => None,
         }
     };
-    let (disk_text, prev_rel) = {
+    let (disk_text, prev_rel, prev_title) = {
         let conn = lock(s)?;
         let cur = repo::chapters::get(&conn, chapter_id)?;
         let chapters = repo::chapters::list_by_book(&conn, book_id)?; // 已按 sort_key, id 排序
-        let prev = chapters
+        let prev_ch = chapters
             .iter()
             .position(|c| c.id == chapter_id)
             .and_then(|i| i.checked_sub(1))
-            .map(|i| chapters[i].file_path.clone());
+            .map(|i| &chapters[i]);
+        let prev = prev_ch.map(|c| c.file_path.clone());
+        let prev_title = prev_ch.map(|c| c.title.clone());
         // 卷（卷首语）也能开对话：读卷目录内的 _index.md，未写过则为空
         let text = fs_service::read_chapter(&s.root, &crate::commands::body_rel(&cur)).or_else(|e| {
             if cur.kind == "folder" { Ok(String::new()) } else { Err(e) }
         })?;
-        (text, prev)
+        (text, prev, prev_title)
     };
     // 光标感知：前端给了光标前文就以它为准（编辑器里的内容比磁盘新，且续写位置正确）
     let cursor_aware = opts.cursor_before.is_some();
@@ -114,7 +254,46 @@ pub(crate) fn gather_context(
         let history = repo::sessions::history_for_assembly(&conn, session_id, history_before)?;
         (injections, history)
     };
-    Ok(ContextBundle { book_title, style_prompt, chapter_text, prev_tail, injections, cursor_aware, history })
+    // 阶段 2B：常驻记忆（本书 + 所在卷）、作者注、写作规则、预算
+    let mem = ai_memory_get_inner(s, book_id, Some(chapter_id))?;
+    let mut memory_parts = Vec::new();
+    let mut memory_why = Vec::new();
+    if !mem.book.trim().is_empty() {
+        memory_parts.push(mem.book.trim().to_string());
+        memory_why.push("本书常驻记忆".to_string());
+    }
+    if !mem.volume.trim().is_empty() {
+        memory_parts.push(format!("（本卷「{}」）{}", mem.volume_title.clone().unwrap_or_default(), mem.volume.trim()));
+        memory_why.push(format!("本卷「{}」记忆", mem.volume_title.clone().unwrap_or_default()));
+    }
+    let (rules, budget_tokens) = {
+        let conn = lock(s)?;
+        let all = repo::rules::list_by_book(&conn, book_id)?;
+        let (lines, why) = applicable_rules(&all, chapter_id, mem.volume_id, &opts.rules);
+        let rules = (!lines.is_empty()).then(|| InjectionInput {
+            name: "写作规则".into(),
+            source: format!("{} 条", lines.len()),
+            text: lines.join("\n"),
+            budget: 0,
+            reason: why,
+        });
+        (rules, inject_ctx::load_config(&conn, book_id)?.budget_tokens)
+    };
+    Ok(ContextBundle {
+        book_title,
+        style_prompt,
+        chapter_text,
+        prev_tail,
+        injections,
+        cursor_aware,
+        history,
+        memory: memory_parts.join("\n"),
+        memory_reason: memory_why.join(" + "),
+        rules,
+        author_note: mem.chapter_note,
+        prev_title,
+        budget_tokens,
+    })
 }
 
 /// 回合元信息（落到回答的 meta 里，便于回看与重新生成沿用参数）。

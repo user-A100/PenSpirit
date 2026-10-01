@@ -13,6 +13,7 @@ pub mod meta;
 pub mod outlines;
 pub mod plot_blocks;
 pub mod relations;
+pub mod rules;
 pub mod sessions;
 pub mod settings;
 pub mod styles;

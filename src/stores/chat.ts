@@ -47,6 +47,8 @@ export interface SendExtra {
   mode?: ChatMode;
   targetChars?: number | null;
   disable?: string[];
+  /** 阶段 2B：重试选项（更长 / 更短 / 换写法…），追加在指令后、不落库 */
+  retryHint?: string | null;
 }
 
 interface ChatPrefs {
@@ -123,6 +125,12 @@ interface ChatState {
   temperature: number | null;
   clean: boolean;
   disabledSlots: string[];
+  /** 阶段 2B：本轮手选的写作规则（切会话清空） */
+  manualRules: number[];
+  toggleRule: (id: number) => void;
+  /** 阶段 2B：记忆 / 规则 / 注入设置改了 → 输入区胶囊重取一次组装日志 */
+  previewSeq: number;
+  requestPreviewRefresh: () => void;
   mentions: MentionItem[];
   quote: QuoteRef | null;
   quoteByMessage: Record<number, QuoteRef>;
@@ -304,6 +312,8 @@ export function buildTurnOptions(extra: SendExtra & { quote?: QuoteRef | null })
     target_chars: extra.targetChars !== undefined ? extra.targetChars : st.targetChars,
     temperature: st.temperature,
     command: extra.command ?? null,
+    rules: st.manualRules,
+    retry_hint: extra.retryHint ?? null,
   };
 }
 
@@ -327,6 +337,9 @@ export const useChat = create<ChatState>((set, get) => ({
   temperature: prefs.temperature,
   clean: prefs.clean,
   disabledSlots: [],
+  manualRules: [],
+  previewSeq: 0,
+  requestPreviewRefresh: () => set((st) => ({ previewSeq: st.previewSeq + 1 })),
   mentions: [],
   quote: null,
   quoteByMessage: {},
@@ -341,7 +354,7 @@ export const useChat = create<ChatState>((set, get) => ({
     set({
       chapterId, sessions: [], sessionId: null, messages: [], streaming: false, streamText: "", streamReplyTo: null,
       error: null, errorCode: null, errorKind: null, lastFailure: null, permission: null,
-      disabledSlots: [], mentions: [], quote: null,
+      disabledSlots: [], manualRules: [], mentions: [], quote: null,
     });
     try {
       let sessions = await api.listSessions(chapterId);
@@ -444,6 +457,7 @@ export const useChat = create<ChatState>((set, get) => ({
         mentions: [],
         quote: null,
         disabledSlots: [],
+        manualRules: [],
       }));
       const chapterId = get().chapterId;
       if (chapterId != null) void refreshSessions(chapterId);
@@ -576,6 +590,7 @@ export const useChat = create<ChatState>((set, get) => ({
     set({ clean });
     savePrefs({ mode: get().mode, targetChars: get().targetChars, temperature: get().temperature, clean });
   },
+  toggleRule: (id) => set((st) => ({ manualRules: st.manualRules.includes(id) ? st.manualRules.filter((x) => x !== id) : [...st.manualRules, id] })),
   toggleSlot: (name) =>
     set((st) => ({ disabledSlots: st.disabledSlots.includes(name) ? st.disabledSlots.filter((x) => x !== name) : [...st.disabledSlots, name] })),
   addMention: (m) =>

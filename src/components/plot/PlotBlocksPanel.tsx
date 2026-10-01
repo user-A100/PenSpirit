@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, ChevronRight, Plus, Trash2, X } from "lucide-react"
 import { usePlotBlocks } from "../../stores/plotBlocks";
 import { useWorkspace } from "../../stores/workspace";
 import { Badge, type BadgeTone } from "../ui/Badge";
+import { AiHiddenToggle } from "../ui/AiHiddenToggle";
 import type { PlotBlockStatus } from "../../lib/tauri";
 
 // 情节块 dock 面板（write 视图 plot tab，M4）。
@@ -126,6 +127,7 @@ export function PlotBlocksPanel() {
                   <div className="min-w-0 flex-1 whitespace-pre-wrap break-words text-xs leading-relaxed text-[color:var(--text-primary)]">
                     {b.content}
                   </div>
+                  <AiHiddenToggle kind="plot" id={b.id} hidden={!!b.ai_hidden} />
                   <div className="flex shrink-0 flex-col gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                     <div className="flex gap-0.5">
                       <button

@@ -4,6 +4,7 @@ import type { Foreshadow } from "../../lib/tauri";
 import { useForeshadow } from "../../stores/foreshadow";
 import { useWorkspace } from "../../stores/workspace";
 import { Badge } from "../ui/Badge";
+import { AiHiddenToggle } from "../ui/AiHiddenToggle";
 import { FORESHADOW_TONE, urgencyOf, type ForeshadowState } from "./urgency";
 
 // 伏笔面板（M3-T10，write 视图 dock 的 foreshadow tab）。
@@ -327,6 +328,7 @@ export function ForeshadowPanel() {
                       已登记还债
                     </Badge>
                   )}
+                  <AiHiddenToggle kind="foreshadow" id={r.f.id} hidden={!!r.f.ai_hidden} />
                 </div>
                 <div className="mt-1 flex items-center gap-2 text-xs text-[color:var(--text-faint)]">
                   <span>{`${chLabel(r.plantedIdx)}埋 → ${chLabel(r.targetIdx)}收`}</span>

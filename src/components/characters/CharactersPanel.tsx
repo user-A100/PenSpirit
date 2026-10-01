@@ -5,6 +5,7 @@ import { useRelations } from "../../stores/relations";
 import { useWorkspace } from "../../stores/workspace";
 import { Badge } from "../ui/Badge";
 import { confirmDialog } from "../../stores/confirm";
+import { AiHiddenToggle, SecretNote } from "../ui/AiHiddenToggle";
 
 // 人物卡面板（M4，write 视图 dock 的 characters tab）——人物图谱的第一块底座：
 // 姓名必填，角色/别名（逗号分隔）/描述可选；别名供后续检索与图谱消歧用。
@@ -183,6 +184,7 @@ export function CharactersPanel() {
                       className={`shrink-0 text-[color:var(--text-faint)] transition-transform duration-[var(--dur-md)] ${expanded ? "rotate-180" : ""}`}
                     />
                   </button>
+                  <AiHiddenToggle kind="character" id={c.id} hidden={!!c.ai_hidden} />
                   <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity duration-[var(--dur-fast)] group-hover:opacity-100">
                     <button onClick={() => openEdit(c)} title="编辑" className={ICON_BTN}>
                       <Pencil size={14} />
@@ -218,6 +220,7 @@ export function CharactersPanel() {
                     )}
                   </div>
                 )}
+                {expanded && <SecretNote id={c.id} initial={c.secret_note ?? ""} />}
               </div>
             );
           })}
