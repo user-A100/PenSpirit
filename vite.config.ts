@@ -15,5 +15,8 @@ export default defineConfig({
     environment: "happy-dom",
     globals: true,
     setupFiles: "./src/test-setup.ts",
+    // 多核机器上默认并发（核数 − 1）个 worker 同时冷启动 happy-dom，慢盘上会「worker 启动超时」，
+    // npm test 偶发非零退出（与用例无关）。限制并发换稳定。
+    maxWorkers: 8,
   },
 });
