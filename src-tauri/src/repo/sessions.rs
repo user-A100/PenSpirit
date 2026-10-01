@@ -208,14 +208,25 @@ pub fn history_for_assembly(
     before: Option<i64>,
 ) -> AppResult<Vec<(String, String)>> {
     let mut stmt = conn.prepare(
-        "SELECT role, content FROM messages \
+        "SELECT role, content, meta FROM messages \
          WHERE session_id = ?1 AND id < ?2 AND (role = 'user' OR (role = 'assistant' AND active = 1)) \
          ORDER BY id",
     )?;
-    let rows = stmt.query_map(params![session_id, before.unwrap_or(i64::MAX)], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-    })?;
-    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    let rows = stmt
+        .query_map(params![session_id, before.unwrap_or(i64::MAX)], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    // 阶段 2B「/压缩」：最近一份压缩摘要代替它之前的全部对话（连同请求压缩的那句）
+    if let Some(pos) = rows.iter().rposition(|(role, _, meta)| role == "assistant" && meta.contains("\"command\":\"compact\"")) {
+        let mut out = vec![
+            ("user".to_string(), "（以下是此前对话的压缩摘要，之前的内容以它为准）".to_string()),
+            ("assistant".to_string(), rows[pos].1.clone()),
+        ];
+        out.extend(rows[pos + 1..].iter().map(|(r, c, _)| (r.clone(), c.clone())));
+        return Ok(out);
+    }
+    Ok(rows.into_iter().map(|(r, c, _)| (r, c)).collect())
 }
 
 /// 会话里最近一条 user 消息（编辑/重新生成定位用）。

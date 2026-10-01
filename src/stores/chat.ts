@@ -49,6 +49,29 @@ export interface SendExtra {
   disable?: string[];
   /** 阶段 2B：重试选项（更长 / 更短 / 换写法…），追加在指令后、不落库 */
   retryHint?: string | null;
+  /** 阶段 2B：多候选（本轮共生成几版） */
+  candidates?: number;
+}
+
+const CANDIDATES_KEY = "bixian.chat.candidates";
+function loadCandidates(): number {
+  try {
+    const n = Number(localStorage.getItem(CANDIDATES_KEY));
+    return n === 2 || n === 3 ? n : 1;
+  } catch {
+    return 1;
+  }
+}
+
+/** 阶段 2B：这条回答属于几版并排的候选（meta.candidates） */
+export function messageCandidates(m: ChatMessage): number {
+  const c = parseMeta(m).candidates;
+  return typeof c === "number" ? c : 1;
+}
+/** 阶段 2B：这版是按什么重试选项生成的（meta.retry） */
+export function messageRetry(m: ChatMessage): string | null {
+  const r = parseMeta(m).retry;
+  return typeof r === "string" ? r : null;
 }
 
 interface ChatPrefs {
@@ -145,7 +168,12 @@ interface ChatState {
   renameSession: (id: number, title: string) => Promise<void>;
   deleteSession: (id: number) => Promise<void>;
   send: (instruction: string, extra?: SendExtra) => Promise<boolean>;
-  regenerate: (userMessageId: number) => Promise<boolean>;
+  regenerate: (userMessageId: number, opts?: { retryHint?: string | null; candidates?: number }) => Promise<boolean>;
+  /** 阶段 2B：多候选——每轮生成几版（1 / 2 / 3），并排对比 */
+  candidates: number;
+  setCandidates: (n: number) => void;
+  /** 进行中的多候选：还要再生成几版 */
+  pendingCandidates: { userMessageId: number; remaining: number; total: number } | null;
   editResend: (userMessageId: number, content: string) => Promise<boolean>;
   switchVariant: (messageId: number) => Promise<void>;
   stop: () => Promise<void>;
@@ -230,12 +258,26 @@ function finalizeTurn(sessionId: number, content: string | null) {
     messages.push({ id: --tempIdSeq, session_id: sessionId, role: "assistant", content, created_at: "", reply_to: replyTo, active: true, adopted: false, meta: JSON.stringify({ mode: st.mode }) });
     return { ...base, messages };
   });
-  void refresh(sessionId);
+  void refresh(sessionId).then(() => {
+    // 多候选：本版落定后接着生成下一版（同一问题的新版本）
+    const st = useChat.getState();
+    const pc = st.pendingCandidates;
+    if (!pc || st.streaming || st.sessionId !== sessionId) return;
+    if (pc.remaining <= 0) {
+      useChat.setState({ pendingCandidates: null });
+      return;
+    }
+    useChat.setState({ pendingCandidates: { ...pc, remaining: pc.remaining - 1 } });
+    void st.regenerate(pc.userMessageId, { candidates: pc.total }).then((ok) => {
+      if (!ok) useChat.setState({ pendingCandidates: null });
+    });
+  });
 }
 
 function failTurn(sessionId: number, message: string, kind: string | null, partial: string | null) {
   const st = useChat.getState();
   useChat.setState({
+    pendingCandidates: null,
     streaming: false,
     streamText: "",
     permission: null,
@@ -314,6 +356,7 @@ export function buildTurnOptions(extra: SendExtra & { quote?: QuoteRef | null })
     command: extra.command ?? null,
     rules: st.manualRules,
     retry_hint: extra.retryHint ?? null,
+    candidates: extra.candidates && extra.candidates > 1 ? extra.candidates : null,
   };
 }
 
@@ -338,6 +381,17 @@ export const useChat = create<ChatState>((set, get) => ({
   clean: prefs.clean,
   disabledSlots: [],
   manualRules: [],
+  candidates: loadCandidates(),
+  setCandidates: (n) => {
+    const v = n === 2 || n === 3 ? n : 1;
+    set({ candidates: v });
+    try {
+      localStorage.setItem(CANDIDATES_KEY, String(v));
+    } catch {
+      // 忽略
+    }
+  },
+  pendingCandidates: null,
   previewSeq: 0,
   requestPreviewRefresh: () => set((st) => ({ previewSeq: st.previewSeq + 1 })),
   mentions: [],
@@ -438,7 +492,9 @@ export const useChat = create<ChatState>((set, get) => ({
     const text = instruction.trim();
     if (sessionId == null || streaming || !text) return false;
     const quote = get().quote;
-    const options = buildTurnOptions({ ...extra, quote });
+    // 多候选只用于产出正文 / 讨论回答；本地与「继续写」类命令不并排
+    const n = extra.candidates ?? (extra.command === "continue-reply" || extra.command === "compact" || extra.command === "directions" ? 1 : get().candidates);
+    const options = buildTurnOptions({ ...extra, quote, candidates: n });
     set({ streaming: true, streamText: "", streamReplyTo: null, error: null, errorCode: null, errorKind: null, lastFailure: null });
     const tempId = --tempIdSeq;
     set((st) => ({
@@ -458,6 +514,7 @@ export const useChat = create<ChatState>((set, get) => ({
         quote: null,
         disabledSlots: [],
         manualRules: [],
+        pendingCandidates: n > 1 ? { userMessageId: userMsg.id, remaining: n - 1, total: n } : null,
       }));
       const chapterId = get().chapterId;
       if (chapterId != null) void refreshSessions(chapterId);
@@ -476,13 +533,13 @@ export const useChat = create<ChatState>((set, get) => ({
     }
   },
 
-  regenerate: async (userMessageId) => {
+  regenerate: async (userMessageId, extra = {}) => {
     const { sessionId, streaming, messages } = get();
     if (sessionId == null || streaming) return false;
     const prior = messages.find((m) => m.reply_to === userMessageId && m.active !== false);
     const mode = prior ? messageMode(prior) : get().mode;
     const command = get().commandByMessage[userMessageId] ?? (prior ? messageCommand(prior) : null);
-    const options = buildTurnOptions({ mode, command, quote: get().quoteByMessage[userMessageId] ?? null });
+    const options = buildTurnOptions({ mode, command, quote: get().quoteByMessage[userMessageId] ?? null, retryHint: extra.retryHint ?? null, candidates: extra.candidates });
     set({ streaming: true, streamText: "", streamReplyTo: userMessageId, error: null, errorKind: null, lastFailure: null });
     try {
       if (isAcpBackend()) await api.chatRegenerateAcp(userMessageId, options);
@@ -524,6 +581,8 @@ export const useChat = create<ChatState>((set, get) => ({
   stop: async () => {
     const { sessionId } = get();
     if (sessionId == null) return;
+    // 用户叫停：剩下的候选也不再生成
+    set({ pendingCandidates: null });
     try {
       // 后端取消后会对已收增量补发 done/turn，由事件处理器收尾
       if (isAcpBackend()) await api.cancelGenerationAcp(sessionId);

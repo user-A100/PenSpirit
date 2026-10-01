@@ -59,6 +59,8 @@ export interface AiTurnOptions {
   rules?: number[];
   /** 阶段 2B：重试选项（追加在指令后，不落库） */
   retry_hint?: string | null;
+  /** 阶段 2B：多候选——本轮共生成几版（只记入 meta） */
+  candidates?: number | null;
 }
 /** 阶段 2B：写作规则 */
 export type RuleMode = "always" | "scoped" | "manual";

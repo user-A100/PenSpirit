@@ -15,12 +15,14 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { ChatMessage } from "../../lib/tauri";
-import { isTruncated, messageCommand, messageMode, useChat, type QuoteRef } from "../../stores/chat";
+import { isTruncated, messageCandidates, messageCommand, messageMode, messageRetry, useChat, type QuoteRef } from "../../stores/chat";
 import { adoptReply, type AdoptHow } from "../../lib/ai/adopt";
 import { findCommand } from "../../lib/ai/slashCommands";
 import { plainText } from "../../lib/ai/cleanText";
+import { parseDirections } from "../../lib/ai/directions";
+import { estimateTokens } from "../../lib/ai/tokens";
 import { openMenuAt } from "../../stores/menu";
-import { confirmDialog } from "../../stores/confirm";
+import { confirmDialog, promptDialog } from "../../stores/confirm";
 import { toast } from "../../stores/toast";
 import { Markdown } from "./Markdown";
 import { PermissionCard } from "./PermissionCard";
@@ -82,6 +84,15 @@ function ReplyBody({ text, mode, streaming }: { text: string; mode: "write" | "d
 const ACT =
   "flex items-center gap-1 rounded-[4px] px-1.5 py-1 text-2xs text-[color:var(--text-faint)] transition-colors duration-[var(--dur-fast)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)] disabled:opacity-40";
 
+/** 重试选项（阶段 2B）：追加在原指令后的一次性要求 */
+const RETRY_OPTIONS: Array<{ label: string; hint: string }> = [
+  { label: "更长", hint: "这次写得更长、更细致，约为上一版的 1.5 倍" },
+  { label: "更短", hint: "这次写得更短、更紧凑，约为上一版的一半" },
+  { label: "换个写法", hint: "换一种明显不同的写法与切入角度，不要沿用上一版的句子" },
+  { label: "更细腻", hint: "加强动作、神态与心理的细节描写" },
+  { label: "更直白", hint: "写得更直白利落，少用修辞" },
+];
+
 function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
   const streaming = useChat((s) => s.streaming);
   const streamText = useChat((s) => s.streamText);
@@ -89,6 +100,7 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
   const quote: QuoteRef | null = useChat((s) => (turn.user ? s.quoteByMessage[turn.user.id] ?? null : null));
   const cmdId = useChat((s) => (turn.user ? s.commandByMessage[turn.user.id] ?? null : null));
   const { regenerate, switchVariant, deleteMessage, editResend, send } = useChat.getState();
+  const pending = useChat((s) => s.pendingCandidates);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
@@ -100,6 +112,23 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
   const mode = shown ? messageMode(shown) : useChat.getState().mode;
   const command = findCommand(cmdId ?? (shown ? messageCommand(shown) : null));
   const output = command?.output ?? (mode === "write" ? "insert" : "chat");
+  // 阶段 2B：多候选并排（本组任一版本标了 candidates≥2，或候选还在生成中）
+  const candidatesPending = pending != null && turn.user != null && pending.userMessageId === turn.user.id;
+  const candidateMode = turn.replies.some((r) => messageCandidates(r) >= 2) || (candidatesPending && turn.replies.length > 0);
+  // 阶段 2B：「走向」回答拆成可点的几条
+  const directions = !streamingHere && shown && command?.id === "directions" ? parseDirections(shown.content) : [];
+  const retryMenu = (el: Element) =>
+    openMenuAt(el, [
+      ...RETRY_OPTIONS.map((o) => ({ label: o.label, onSelect: () => void regenerate(turn.user!.id, { retryHint: o.hint }) })),
+      { type: "separator" as const },
+      {
+        label: "按我的要求重写…",
+        onSelect: async () => {
+          const hint = await promptDialog({ title: "这次要怎么改？", placeholder: "如：加一段雪景、对白更少一些", confirmLabel: "重新生成" });
+          if (hint) void regenerate(turn.user!.id, { retryHint: hint });
+        },
+      },
+    ]);
 
   const adopt = (how: AdoptHow) => shown && void adoptReply(shown, how, quote);
   const adoptMenu = (el: Element) =>
@@ -192,7 +221,61 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
         </div>
       )}
 
-      {(shown || streamingHere) && (
+      {candidateMode && (
+        <div
+          data-candidates={turn.replies.length}
+          className="grid gap-2"
+          style={{ gridTemplateColumns: `repeat(${Math.min(3, turn.replies.length + (streamingHere ? 1 : 0))}, minmax(0, 1fr))` }}
+        >
+          {turn.replies.map((r, i) => {
+            const on = r.active !== false;
+            return (
+              <div
+                key={r.id}
+                data-candidate={i + 1}
+                className={`flex min-w-0 flex-col gap-1 rounded-[10px] border p-2 ${on ? "border-[color:var(--accent)]" : "border-[color:var(--hairline)]"}`}
+              >
+                <div className="flex items-center gap-1 text-2xs text-[color:var(--text-faint)]">
+                  <span className={on ? "font-medium text-[color:var(--accent)]" : ""}>候选 {i + 1}</span>
+                  {messageRetry(r) && <span className="truncate">· {messageRetry(r)}</span>}
+                  <span className="ml-auto shrink-0 tabular-nums">{r.content.replace(/\s/g, "").length} 字</span>
+                </div>
+                <div className="max-h-64 overflow-y-auto text-sm">
+                  <ReplyBody text={r.content} mode={messageMode(r)} />
+                </div>
+                <div className="flex items-center gap-0.5">
+                  {on ? (
+                    <span className="flex items-center gap-1 px-1.5 text-2xs text-[color:var(--accent)]">
+                      <Check size={11} />
+                      当前版
+                    </span>
+                  ) : (
+                    <button onClick={() => void switchVariant(r.id)} disabled={streaming} className={ACT}>
+                      用这版
+                    </button>
+                  )}
+                  {output !== "chat" && (
+                    <button onClick={() => void adoptReply(r, output === "replace" ? "replace" : "insert", quote)} className={ACT}>
+                      {output === "replace" ? <Replace size={12} /> : <CornerDownLeft size={12} />}
+                      {output === "replace" ? "替换选区" : "插入"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {streamingHere && (
+            <div data-candidate="streaming" className="flex min-w-0 flex-col gap-1 rounded-[10px] border border-dashed border-[color:var(--hairline)] p-2">
+              <div className="text-2xs text-[color:var(--text-faint)]">候选 {turn.replies.length + 1} 生成中…</div>
+              <div className="max-h-64 overflow-y-auto text-sm">
+                <ReplyBody text={streamText} mode={mode} streaming />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {(shown || streamingHere) && !(candidateMode && streamingHere) && (
         <div className="group/ai flex flex-col gap-1.5" data-reply={shown?.id}>
           {streamingHere ? (
             <ReplyBody text={streamText} mode={mode} streaming />
@@ -215,7 +298,31 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                     )}
                   </div>
                 )}
-                <ReplyBody text={shown.content} mode={mode} />
+                {command?.id === "compact" && (
+                  <div className="flex items-center gap-1 text-2xs text-[color:var(--accent)]" data-compact-summary>
+                    <Check size={11} />
+                    会话摘要 · 之后的对话只带这份摘要，不再发送此前的内容
+                  </div>
+                )}
+                {candidateMode ? null : directions.length >= 2 ? (
+                  <div className="flex flex-col gap-1.5" data-directions={directions.length}>
+                    {directions.map((d, i) => (
+                      <div key={i} className="flex items-start gap-2 rounded-[10px] border border-[color:var(--hairline)] px-3 py-2">
+                        <span className="shrink-0 text-sm font-medium tabular-nums text-[color:var(--accent)]">{i + 1}</span>
+                        <span className="min-w-0 flex-1 text-sm leading-relaxed text-[color:var(--text-primary)]">{d}</span>
+                        <button
+                          disabled={streaming}
+                          onClick={() => void send(`按这条走向往下写：${d}`, { command: "continue", mode: "write", targetChars: 800 })}
+                          className={`${ACT} shrink-0 text-[color:var(--accent)]`}
+                        >
+                          按这条写
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <ReplyBody text={shown.content} mode={mode} />
+                )}
                 <div
                   className={`flex flex-wrap items-center gap-0.5 transition-opacity duration-[var(--dur-md)] ${
                     isLast ? "opacity-100" : "opacity-0 group-hover/ai:opacity-100 focus-within:opacity-100"
@@ -249,9 +356,14 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                     <Copy size={12} />
                   </button>
                   {turn.user && (
-                    <button aria-label="重新生成" data-tip="重新生成（保留当前版本）" disabled={streaming} onClick={() => void regenerate(turn.user!.id)} className={ACT}>
-                      <RefreshCw size={12} />
-                    </button>
+                    <span className="flex items-center">
+                      <button aria-label="重新生成" data-tip="重新生成（保留当前版本）" disabled={streaming} onClick={() => void regenerate(turn.user!.id)} className={ACT}>
+                        <RefreshCw size={12} />
+                      </button>
+                      <button aria-label="带要求重新生成" data-tip="更长 / 更短 / 换个写法…" disabled={streaming} onClick={(e) => retryMenu(e.currentTarget)} className={`${ACT} -ml-1 px-0.5`}>
+                        <ChevronDown size={11} />
+                      </button>
+                    </span>
                   )}
                   {turn.replies.length > 1 && (
                     <span className="flex items-center text-2xs tabular-nums text-[color:var(--text-faint)]" aria-label="回答版本">
@@ -282,7 +394,9 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                   >
                     <MoreHorizontal size={12} />
                   </button>
-                  <span className="ml-auto text-2xs tabular-nums text-[color:var(--text-faint)]">{shown.content.replace(/\s/g, "").length} 字</span>
+                  <span className="ml-auto text-2xs tabular-nums text-[color:var(--text-faint)]" data-tip="字数 · 估算 token">
+                    {shown.content.replace(/\s/g, "").length} 字 · ~{estimateTokens(shown.content)} tokens
+                  </span>
                 </div>
               </>
             )

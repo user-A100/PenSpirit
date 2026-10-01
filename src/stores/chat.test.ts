@@ -141,6 +141,37 @@ describe("chat store v2", () => {
     expect(st.lastFailure).toEqual({ kind: "send", instruction: "续写一段", command: null });
   });
 
+  it("多候选：send 带上 candidates；每版落定后自动再生成，凑齐即停", async () => {
+    vi.mocked(api.sendMessage).mockResolvedValue(userMsg);
+    vi.mocked(api.chatRegenerate).mockResolvedValue(aiMsg);
+    vi.mocked(api.messageSetAdopted).mockResolvedValue(undefined as never);
+    await init();
+    useChat.getState().setCandidates(3);
+    await useChat.getState().send("续写一段");
+    expect(vi.mocked(api.sendMessage).mock.calls[0][2]).toMatchObject({ candidates: 3 });
+    expect(useChat.getState().pendingCandidates).toEqual({ userMessageId: 101, remaining: 2, total: 3 });
+    emit("stream://7", { type: "done", session_id: 7, content: "第一版" });
+    await vi.waitFor(() => expect(api.chatRegenerate).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.chatRegenerate).mock.calls[0]).toEqual([101, expect.objectContaining({ candidates: 3 })]);
+    emit("stream://7", { type: "done", session_id: 7, content: "第二版" });
+    await vi.waitFor(() => expect(api.chatRegenerate).toHaveBeenCalledTimes(2));
+    emit("stream://7", { type: "done", session_id: 7, content: "第三版" });
+    await vi.waitFor(() => expect(useChat.getState().pendingCandidates).toBeNull());
+    expect(api.chatRegenerate).toHaveBeenCalledTimes(2);
+    // 「继续写」类命令不并排
+    vi.mocked(api.sendMessage).mockClear();
+    await useChat.getState().send("接着写", { command: "continue-reply" });
+    expect(vi.mocked(api.sendMessage).mock.calls[0][2]).toMatchObject({ candidates: null });
+    useChat.getState().setCandidates(1);
+  });
+
+  it("重试选项：regenerate 带上 retry_hint", async () => {
+    vi.mocked(api.chatRegenerate).mockResolvedValue(aiMsg);
+    await init([userMsg, aiMsg]);
+    await useChat.getState().regenerate(101, { retryHint: "这次写得更短" });
+    expect(vi.mocked(api.chatRegenerate).mock.calls[0][1]).toMatchObject({ retry_hint: "这次写得更短" });
+  });
+
   it("流式错误按类别给说明，重试走重新生成", async () => {
     vi.mocked(api.sendMessage).mockResolvedValue(userMsg);
     vi.mocked(api.chatRegenerate).mockResolvedValue(userMsg);

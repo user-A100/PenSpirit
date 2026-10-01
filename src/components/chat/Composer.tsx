@@ -3,6 +3,7 @@ import { AtSign, BookOpen, Flag, Blocks, ListTree, Quote, SendHorizontal, Slash,
 import { buildTurnOptions, useChat, type MentionItem } from "../../stores/chat";
 import { useWorkspace } from "../../stores/workspace";
 import { api, type AssemblyLog, type MentionRef, type WritingRule } from "../../lib/tauri";
+import { StyleSwitch } from "./StyleSwitch";
 import { findCommand, matchCommands, type SlashCommand } from "../../lib/ai/slashCommands";
 import { fuzzyMatch } from "../../lib/pinyin";
 import { quoteSelection } from "../../lib/ai/actions";
@@ -54,6 +55,8 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help") => v
   const pickedRules = useChat((s) => s.manualRules);
   const previewSeq = useChat((s) => s.previewSeq);
   const toggleRule = useChat((s) => s.toggleRule);
+  const candidates = useChat((s) => s.candidates);
+  const setCandidates = useChat((s) => s.setCandidates);
   const [manualRules, setManualRules] = useState<WritingRule[]>([]);
   const mentions = useChat((s) => s.mentions);
   const quote = useChat((s) => s.quote);
@@ -489,6 +492,19 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help") => v
           >
             {temperature == null ? "温度默认" : `温度 ${temperature}`}
           </button>
+          <button
+            data-tip="多候选：每轮生成几版并排对比，挑一版用"
+            onClick={(e) =>
+              openMenuAt(
+                e.currentTarget,
+                [1, 2, 3].map((n) => ({ label: n === 1 ? "单版" : `${n} 版并排`, checked: candidates === n, onSelect: () => setCandidates(n) })),
+              )
+            }
+            className={`rounded-[4px] px-1.5 py-1 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)] ${candidates > 1 ? "text-[color:var(--accent)]" : ""}`}
+          >
+            {candidates > 1 ? `候选 ×${candidates}` : "单版"}
+          </button>
+          <StyleSwitch className="rounded-[4px] px-1.5 py-1 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]" />
           {manualRules.length > 0 && (
             <button
               data-tip="本轮手动选用的写作规则（发送后清空）"

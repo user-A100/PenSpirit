@@ -247,6 +247,8 @@ pub struct AiTurnOptions {
     pub rules: Vec<i64>,
     /// 阶段 2B：重试选项（更长 / 更短 / 换写法…）追加在指令后，不落库
     pub retry_hint: Option<String>,
+    /// 阶段 2B：多候选——本轮共生成几版（≥2 时前端并排展示），只记入 meta
+    pub candidates: Option<i64>,
 }
 
 /// 写作规则（阶段 2B）：mode = always（全书常驻）/ scoped（scope_ids 里的章或卷）/ manual（本轮手选）

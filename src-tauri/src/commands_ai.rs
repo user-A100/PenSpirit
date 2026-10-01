@@ -305,10 +305,21 @@ fn turn_meta(opts: &AiTurnOptions, extra: Option<(&str, &str)>) -> String {
     if let Some(n) = opts.target_chars {
         v["target_chars"] = serde_json::Value::from(n);
     }
+    if let Some(n) = opts.candidates.filter(|n| *n > 1) {
+        v["candidates"] = serde_json::Value::from(n);
+    }
+    if let Some(h) = opts.retry_hint.as_deref().filter(|h| !h.trim().is_empty()) {
+        v["retry"] = serde_json::Value::String(h.to_string());
+    }
     if let Some((k, val)) = extra {
         v[k] = serde_json::Value::String(val.to_string());
     }
     v.to_string()
+}
+
+/// 测试用：回合 meta 的拼装结果
+pub fn turn_meta_for_test(opts: &AiTurnOptions) -> String {
+    turn_meta(opts, None)
 }
 
 /// 一次生成的准备产物：针对哪条 user 消息、发给模型的请求、取消信号。
