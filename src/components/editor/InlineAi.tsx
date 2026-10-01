@@ -91,7 +91,9 @@ function InlinePanel({ editor, chapterId, pane, mode }: { editor: Editor; chapte
       if (!r || editor.isDestroyed) return;
       try {
         const c = editor.view.coordsAtPos(r.to);
-        const left = Math.max(12, Math.min(c.left - 24, window.innerWidth - PANEL_W - 12));
+        // 与正文栏左对齐、贴在待改区下方（不压在行尾右侧）
+        const col = editor.view.dom.getBoundingClientRect().left;
+        const left = Math.max(12, Math.min(col, window.innerWidth - PANEL_W - 12));
         const h = panelRef.current?.offsetHeight ?? 120;
         const below = c.bottom + 8;
         const top = below + h > window.innerHeight - 8 ? Math.max(8, c.top - h - 8) : below;
@@ -171,14 +173,22 @@ function InlinePanel({ editor, chapterId, pane, mode }: { editor: Editor; chapte
     toast.success(mode === "edit" ? "已就地改写（采纳前已存快照）" : "已续写到光标处", { action: { label: "撤销", run: () => bridge.undo() } });
   };
 
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.nativeEvent.isComposing) return;
-    if (e.key === "Escape") {
+  // Esc 随时丢弃——生成中焦点还在正文里，所以挂在 window 捕获阶段而不是浮条自身
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.isComposing) return;
       e.preventDefault();
       e.stopPropagation();
       close();
-      editor.commands.focus();
-    } else if (e.key === "Enter" && !e.shiftKey && status === "done" && e.target === panelRef.current) {
+      if (!editor.isDestroyed) editor.commands.focus();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [close, editor]);
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === "Enter" && !e.shiftKey && status === "done" && e.target === panelRef.current) {
       e.preventDefault();
       void apply();
     }

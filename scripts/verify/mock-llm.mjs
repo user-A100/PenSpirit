@@ -15,7 +15,15 @@ export function startMockLlm(port = 0) {
     }
     let body = "";
     req.on("data", (c) => (body += c));
-    req.on("end", async () => {
+    req.on("end", () => {
+      // 假服务自身出错只回 500，不能让核验进程崩掉（崩了清场就跑不到）
+      handle().catch((e) => {
+        console.error("mock-llm 出错：", e);
+        if (!res.headersSent) res.writeHead(500);
+        res.end();
+      });
+    });
+    const handle = async () => {
       let json = {};
       try {
         json = JSON.parse(body);
@@ -49,16 +57,23 @@ export function startMockLlm(port = 0) {
             ? [{ title: "半张地图", note: "另一半在反派手里，终局揭晓" }]
             : [{ content: "雪夜渡口初遇" }, { content: "旧城灯会交换地图" }];
         const text = "```json\n" + JSON.stringify(data) + "\n```";
-        res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
         res.write(`data: ${JSON.stringify({ id: "mock", object: "chat.completion.chunk", created: 0, model: "mock", choices: [{ index: 0, delta: { role: "assistant", content: text }, finish_reason: null }] })}\n\n`);
         res.write(`data: ${JSON.stringify({ id: "mock", object: "chat.completion.chunk", created: 0, model: "mock", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\n`);
         res.end("data: [DONE]\n\n");
         return;
       }
       const discuss = sys.includes("写作顾问");
-      const pieces = discuss
-        ? ["**建议**：", "节奏可以再快一些。\n", "- 删去重复的环境描写\n", `- 让冲突提前出现 [历史${historyN}条]`]
-        : ["好的，以下是续写内容：\n", "夜雨初歇，渡口的灯笼次第亮起。", "\n沈砚把斗篷裹紧了些，", `回头望了一眼旧城。[历史${historyN}条]`];
+      // 阶段 2B：选区里带「逐段核验」→ 逐段改写（含「原稿」的段改成「改稿」，其余原样），用来测逐段取舍 / 就地改写
+      const sel = last.match(/【选中段落】\n([\s\S]*?)(?:\n\n|$)/)?.[1] ?? "";
+      const pieces = sel.includes("逐段核验")
+        ? [sel.replace(/原稿/g, "改稿")]
+        : last.includes("明显不同的走向")
+          ? ["1. 雪夜追兵逼近渡口\n", "2. 林晚负伤躲进旧城\n", "3. 旧城灯会突然失火"]
+          : last.includes("压缩成一份要点摘要")
+            ? ["摘要：沈砚守渡口；", "林晚递来半张地图。"]
+            : discuss
+              ? ["**建议**：", "节奏可以再快一些。\n", "- 删去重复的环境描写\n", `- 让冲突提前出现 [历史${historyN}条]`]
+              : ["好的，以下是续写内容：\n", "夜雨初歇，渡口的灯笼次第亮起。", "\n沈砚把斗篷裹紧了些，", `回头望了一眼旧城。[历史${historyN}条]`];
       const slow = last.includes("【慢】");
       const cut = last.includes("【断流】");
       const out = slow ? [...pieces, ...pieces, ...pieces, ...pieces] : pieces;
@@ -73,7 +88,7 @@ export function startMockLlm(port = 0) {
       }
       res.write(`data: ${JSON.stringify({ id: "mock", object: "chat.completion.chunk", created: 0, model: "mock", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\n`);
       res.end("data: [DONE]\n\n");
-    });
+    };
   });
   return new Promise((resolve) => {
     server.listen(port, "127.0.0.1", () => {

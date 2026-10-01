@@ -6,14 +6,17 @@
 //
 // 状态保护（硬性要求）：withGuard() 在开始时快照 localStorage 全量，结束（含异常）时逐键还原
 // 并断言无差异；脚本自建的隔离测试书在结束时彻底删除（移入回收站 → purge）。
+// 阶段 2B 起：快照先落盘（.tmp-verify/guard-pending.json）——进程中途崩溃 / 被杀时清场没跑到，
+// 下一次核验开始（或 `node scripts/verify/app.mjs recover`）会按它补做还原。
 import { execSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PORT = Number(process.env.CDP_PORT ?? 9222);
 const EXE = fileURLToPath(new URL("../../src-tauri/target/debug/bixian.exe", import.meta.url));
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
+const PENDING = fileURLToPath(new URL("../../.tmp-verify/guard-pending.json", import.meta.url));
 
 async function findPage() {
   const list = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
@@ -176,6 +179,42 @@ export async function waitFor(evaluate, expr, timeout = 5000, interval = 100) {
 }
 
 /** 断言收集器：失败不立即退出，跑完汇总 */
+/**
+ * 按快照还原核验前的用户状态：删本次建的测试书、本次新增的素材（素材库是全局的）、
+ * 本次新增的服务商并还原「使用中」，localStorage 逐键还原。
+ */
+async function restoreFrom(app, p) {
+  for (const id of p.books) {
+    await app.invoke("delete_book", { id }).catch(() => {}); // 已在回收站时会失败，照常 purge
+    try {
+      await app.invoke("purge_book", { id });
+    } catch (e) {
+      console.error(`清理测试书 #${id} 失败：`, e?.message ?? e);
+    }
+  }
+  for (const m of await app.invoke("materials_list", { query: null }).catch(() => [])) {
+    if (m.id > p.materialsMaxId) await app.invoke("material_delete", { id: m.id }).catch(() => {});
+  }
+  for (const pr of await app.invoke("list_providers").catch(() => [])) {
+    if (!p.providers.ids.includes(pr.id)) await app.invoke("delete_provider", { id: pr.id }).catch(() => {});
+  }
+  if (p.providers.active != null) await app.invoke("set_active_provider", { id: p.providers.active }).catch(() => {});
+  await app.evaluate(
+    `(() => { const snap = ${JSON.stringify(p.localStorage)}; localStorage.clear(); for (const [k, v] of Object.entries(snap)) localStorage.setItem(k, v); return true; })()`,
+  );
+}
+
+/** 上一次核验中途崩溃、没走到清场：按落盘快照补做还原。返回是否做了还原 */
+export async function recoverPending(app) {
+  if (!existsSync(PENDING)) return false;
+  const p = JSON.parse(readFileSync(PENDING, "utf8"));
+  console.log(`⚠ 发现未清场的核验「${p.name}」（${p.at}），先按当时的快照还原…`);
+  await restoreFrom(app, p);
+  unlinkSync(PENDING);
+  await app.reload();
+  return true;
+}
+
 export function checker() {
   const results = [];
   const check = (name, ok, detail = "") => {
@@ -196,16 +235,30 @@ export function checker() {
  */
 export async function withGuard(name, body) {
   const app = await connect();
+  await recoverPending(app);
   const before = await app.evaluate("JSON.stringify(Object.fromEntries(Object.entries(localStorage)))");
   // 后端设置里与核验相关的用户状态：服务商列表与「使用中」（阶段 3A 起纳入还原断言）
   const providerState = async () => JSON.stringify({ active: await app.invoke("get_active_provider"), ids: (await app.invoke("list_providers")).map((p) => p.id) });
   const providersBefore = await providerState();
+  const materialsMaxId = Math.max(0, ...(await app.invoke("materials_list", { query: null })).map((m) => m.id));
+  // 快照先落盘：进程崩溃 / 被杀也能在下次补做还原
+  const pending = { name, at: new Date().toISOString(), localStorage: JSON.parse(before), providers: JSON.parse(providersBefore), materialsMaxId, books: [] };
+  const savePending = () => {
+    mkdirSync(dirname(PENDING), { recursive: true });
+    writeFileSync(PENDING, JSON.stringify(pending));
+  };
+  savePending();
+  // 异步回调里的异常（如本地假服务出错）不让进程直接退出——主流程会超时失败并照常清场
+  const onUncaught = (e) => console.error("✘ 未捕获异常：", e?.message ?? e);
+  process.on("uncaughtException", onUncaught);
   // 原生对话框探针：任何 alert/confirm 调用都记下来（阶段 0 起禁止原生对话框）
   await app.evaluate(`(() => { window.__nativeDialogs = []; for (const k of ['alert','confirm','prompt']) { const o = window[k]; window[k] = (...a) => { window.__nativeDialogs.push(k + ':' + a[0]); return k === 'confirm' ? false : undefined; }; window['__orig_' + k] = o; } return true; })()`);
   const books = [];
   const makeBook = async (title, chapters = []) => {
     const book = await app.invoke("create_book", { title: `${title}·核验${Date.now() % 100000}` });
     books.push(book.id);
+    pending.books = books;
+    savePending();
     const ids = [];
     for (const [t, body] of chapters) {
       const c = await app.invoke("create_chapter", { bookId: book.id, title: t });
@@ -227,17 +280,7 @@ export async function withGuard(name, body) {
       // 截图失败不影响清场
     }
   } finally {
-    for (const id of books) {
-      try {
-        await app.invoke("delete_book", { id });
-        await app.invoke("purge_book", { id });
-      } catch (e) {
-        console.error(`清理测试书 #${id} 失败：`, e?.message ?? e);
-      }
-    }
-    await app.evaluate(
-      `(() => { const snap = ${before}; localStorage.clear(); for (const [k, v] of Object.entries(snap)) localStorage.setItem(k, v); return true; })()`,
-    );
+    await restoreFrom(app, pending);
     await app.reload();
     const after = await app.evaluate("JSON.stringify(Object.fromEntries(Object.entries(localStorage)))");
     const a = JSON.parse(before);
@@ -250,8 +293,12 @@ export async function withGuard(name, body) {
     const providersAfter = await providerState();
     const providersOk = providersAfter === providersBefore;
     console.log(providersOk ? "✔ 状态还原：服务商列表与「使用中」与运行前一致" : `✘ 服务商状态未还原：${providersBefore} → ${providersAfter}`);
+    const matsLeft = (await app.invoke("materials_list", { query: null })).filter((m) => m.id > materialsMaxId);
+    if (matsLeft.length) console.log(`✘ 核验新增的素材未清理：${matsLeft.map((m) => m.title).join(", ")}`);
     app.close();
-    if (diff.length || leaked.length || !providersOk) ok = false;
+    process.off("uncaughtException", onUncaught);
+    if (diff.length || leaked.length || !providersOk || matsLeft.length) ok = false;
+    else unlinkSync(PENDING);
   }
   if (error) ok = false;
   console.log(ok ? `\n【${name}】通过` : `\n【${name}】未通过`);
