@@ -245,6 +245,17 @@ pub struct ChatMessage {
     /// 阶段 2B：已收藏（同时存进素材库）
     #[serde(default)]
     pub starred: bool,
+    /// 阶段 2C：评分（1 = 👍，-1 = 👎，0 = 未评）
+    #[serde(default)]
+    pub rating: i64,
+}
+
+/// 阶段 2C：按命令统计的评分（本地提示词调优）
+#[derive(Debug, Clone, Serialize)]
+pub struct RatingStat {
+    pub command: String,
+    pub up: i64,
+    pub down: i64,
 }
 
 fn default_true() -> bool {

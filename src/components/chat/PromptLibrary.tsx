@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
-import { api, type ProviderProfile } from "../../lib/tauri";
+import { api, type ProviderProfile, type RatingStat } from "../../lib/tauri";
 import { AUTO_VARS, blankPrompt, templateVars, usePrompts, type PromptTemplate } from "../../lib/ai/prompts";
 import { SLASH_COMMANDS, type CommandOutput } from "../../lib/ai/slashCommands";
 import { confirmDialog } from "../../stores/confirm";
@@ -194,10 +194,14 @@ export function PromptLibrary({ onClose }: { onClose: () => void }) {
   const list = usePrompts((s) => s.list);
   const [editing, setEditing] = useState<PromptTemplate | null>(null);
   const [providers, setProviders] = useState<ProviderProfile[]>([]);
+  const [stats, setStats] = useState<RatingStat[]>([]);
   useEffect(() => {
     if (!usePrompts.getState().loaded) void usePrompts.getState().load();
     api.listProviders().then(setProviders, () => setProviders([]));
+    // 阶段 2C：每个命令的 👍 / 👎（回答上的评分，本地提示词调优用）
+    api.ratingStats().then(setStats, () => setStats([]));
   }, []);
+  const statOf = (id: string) => stats.find((s) => s.command === `custom:${id}`);
   const providerName = (id: number | null) => providers.find((p) => p.id === id)?.name;
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3" data-testid="prompt-library">
@@ -241,6 +245,11 @@ export function PromptLibrary({ onClose }: { onClose: () => void }) {
                   {p.providerId != null && <span>· {providerName(p.providerId) ?? "已删除的模型（回落到使用中）"}</span>}
                   {p.inBubble && <span>· 进气泡</span>}
                   {p.sendNow && <span>· 选中即发</span>}
+                  {statOf(p.id) && (
+                    <span data-prompt-rating="">
+                      · 👍 {statOf(p.id)!.up} · 👎 {statOf(p.id)!.down}
+                    </span>
+                  )}
                 </div>
               </button>
             </li>

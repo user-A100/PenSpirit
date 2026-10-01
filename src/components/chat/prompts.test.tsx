@@ -7,6 +7,7 @@ vi.mock("../../lib/tauri", () => ({
     settingSet: vi.fn().mockResolvedValue(undefined),
     listProviders: vi.fn().mockResolvedValue([{ id: 3, name: "深度", model: "deep-v4", base_url: "", api_key: "", max_tokens: 1, temperature: 0.7 }]),
     listMessages: vi.fn().mockResolvedValue([]),
+    ratingStats: vi.fn().mockResolvedValue([{ command: "custom:x1", up: 3, down: 1 }]),
   },
 }));
 

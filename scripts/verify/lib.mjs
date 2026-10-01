@@ -17,6 +17,17 @@ const PORT = Number(process.env.CDP_PORT ?? 9222);
 const EXE = fileURLToPath(new URL("../../src-tauri/target/debug/bixian.exe", import.meta.url));
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
 const PENDING = fileURLToPath(new URL("../../.tmp-verify/guard-pending.json", import.meta.url));
+const CLOSE_DIALOGS = fileURLToPath(new URL("./close-native-dialogs.ps1", import.meta.url));
+
+/** 关掉应用留下的原生对话框（文件选择 / 消息框；Windows），返回关掉的个数 */
+export function closeNativeDialogs() {
+  if (process.platform !== "win32") return 0;
+  try {
+    return Number(execSync(`powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CLOSE_DIALOGS}"`, { encoding: "utf8" }).trim()) || 0;
+  } catch {
+    return 0;
+  }
+}
 /** 核验可能改到的全局设置键（不挂在测试书 id 上，书删了也不会跟着清）：开始时记下原值，结束原样还原 */
 const GLOBAL_SETTING_KEYS = ["ai_prompts"];
 
@@ -325,13 +336,16 @@ export async function withGuard(name, body) {
     console.log(providersOk ? "✔ 状态还原：服务商列表与「使用中」与运行前一致" : `✘ 服务商状态未还原：${providersBefore} → ${providersAfter}`);
     const matsLeft = (await app.invoke("materials_list", { query: null })).filter((m) => m.id > materialsMaxId);
     if (matsLeft.length) console.log(`✘ 核验新增的素材未清理：${matsLeft.map((m) => m.title).join(", ")}`);
+    // 原生对话框（保存 / 打开文件）留在桌面上 = 核验脚本没兜住：关掉并判不通过
+    const strayDialogs = closeNativeDialogs();
+    if (strayDialogs > 0) console.log(`✘ 核验留下了 ${strayDialogs} 个原生对话框（已关闭）`);
     const agentsOk = (await agentState()).json === agentsBefore.json;
     console.log(agentsOk ? "✔ 状态还原：agent 登记与默认 agent 与运行前一致" : "✘ agent 登记未还原");
     const settingsOk = JSON.stringify(await settingState()) === JSON.stringify(settingsBefore);
     console.log(settingsOk ? `✔ 状态还原：全局设置（${GLOBAL_SETTING_KEYS.join("、")}）与运行前一致` : "✘ 全局设置未还原");
     app.close();
     process.off("uncaughtException", onUncaught);
-    if (diff.length || leaked.length || !providersOk || matsLeft.length || !agentsOk || !settingsOk) ok = false;
+    if (diff.length || leaked.length || !providersOk || matsLeft.length || !agentsOk || !settingsOk || strayDialogs > 0) ok = false;
     else unlinkSync(PENDING);
   }
   if (error) ok = false;

@@ -549,6 +549,15 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
   50% { opacity: 0; }
 }
 
+/* ---------- 会话内查找（阶段 2C）：CSS 自定义高亮，不改消息 DOM ---------- */
+::highlight(chat-find) {
+  background-color: color-mix(in srgb, var(--warning) 30%, transparent);
+}
+::highlight(chat-find-current) {
+  background-color: color-mix(in srgb, var(--warning) 75%, transparent);
+  color: var(--text-primary);
+}
+
 /* ---------- 长按 Esc 退出阅读（ReadView，作家助手同款 1500ms） ---------- */
 /* 按下 Esc 出现提示胶囊，内嵌进度条 1500ms 线性填满即退出；松开即取消 */
 .esc-hold-bar {

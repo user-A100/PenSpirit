@@ -18,6 +18,10 @@ import {
   Wand2,
   NotebookPen,
   History,
+  ThumbsUp,
+  ThumbsDown,
+  FilePlus2,
+  ClipboardPaste,
 } from "lucide-react";
 import { api, type ChatMessage } from "../../lib/tauri";
 import { useWorkspace } from "../../stores/workspace";
@@ -28,6 +32,8 @@ import { findCommand } from "../../lib/ai/slashCommands";
 import { plainText } from "../../lib/ai/cleanText";
 import { parseDirections } from "../../lib/ai/directions";
 import { estimateTokens } from "../../lib/ai/tokens";
+import { cleanAiText } from "../../lib/ai/cleanText";
+import { fmtFull, fmtMsgTime } from "../../lib/time";
 import { EXTRACT_LABEL, runExtraction, type ExtractItem, type ExtractKind } from "../../lib/ai/extract";
 import { errMsg } from "../../lib/errors";
 import { ExtractDialog } from "./ExtractDialog";
@@ -111,7 +117,35 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
   const streamReplyTo = useChat((s) => s.streamReplyTo);
   const quote: QuoteRef | null = useChat((s) => (turn.user ? s.quoteByMessage[turn.user.id] ?? null : null));
   const cmdId = useChat((s) => (turn.user ? s.commandByMessage[turn.user.id] ?? null : null));
-  const { regenerate, switchVariant, deleteMessage, editResend, send, forkSession, starMessage } = useChat.getState();
+  const { regenerate, switchVariant, deleteMessage, editResend, send, forkSession, starMessage, rateMessage } = useChat.getState();
+  // 阶段 2C：另存为新章节（备选稿，紧随本章、同卷）/ 存为素材片段
+  const saveAsChapter = async (m: ChatMessage) => {
+    const ws = useWorkspace.getState();
+    const cur = ws.chapters.find((c) => c.id === useChat.getState().chapterId);
+    const title = await promptDialog({ title: "另存为新章节", initial: `${cur?.title ?? "备选稿"}（备选）`, confirmLabel: "创建" });
+    if (!title) return;
+    try {
+      const created = await ws.createChapter(title, { afterId: cur?.id ?? null, select: false });
+      if (!created) return;
+      await api.writeChapter(created.id, cleanAiText(m.content, { prose: messageMode(m) === "write" }));
+      await useWorkspace.getState().reloadChapters();
+      toast.success(`已另存为新章节「${title}」`, { action: { label: "打开", run: () => void useWorkspace.getState().selectChapter(created.id) } });
+    } catch (e) {
+      toast.error(`另存失败：${errMsg(e)}`);
+    }
+  };
+  const saveAsSnippet = async (m: ChatMessage) => {
+    const ws = useWorkspace.getState();
+    const cur = ws.chapters.find((c) => c.id === useChat.getState().chapterId);
+    const title = await promptDialog({ title: "存为素材片段", initial: plainText(m.content).replace(/\s+/g, "").slice(0, 18), confirmLabel: "保存" });
+    if (!title) return;
+    try {
+      await api.materialUpsert({ id: null, title, category: "片段", content: m.content, tags: cur?.title ?? "" });
+      toast.success(`已存进素材库「片段」：${title}`);
+    } catch (e) {
+      toast.error(`保存失败：${errMsg(e)}`);
+    }
+  };
   const pending = useChat((s) => s.pendingCandidates);
   const [extracting, setExtracting] = useState<{ kind: ExtractKind; items: ExtractItem[] } | null>(null);
   // 存为本章梗概（Binder / 软木板 / 大纲表都读这个字段）；已有梗概先确认再替换
@@ -289,9 +323,14 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                   <Trash2 size={12} />
                 </button>
               </div>
-              <div className="whitespace-pre-wrap break-words rounded-[12px] rounded-br-[4px] bg-[var(--fill-element)] px-3 py-2 text-sm leading-relaxed text-[color:var(--text-primary)]">
+              <div data-msg={turn.user.id} className="whitespace-pre-wrap break-words rounded-[12px] rounded-br-[4px] bg-[var(--fill-element)] px-3 py-2 text-sm leading-relaxed text-[color:var(--text-primary)]">
                 {turn.user.content}
               </div>
+              {turn.user.created_at && (
+                <time data-msg-time="" title={fmtFull(turn.user.created_at)} className="pr-1 text-2xs tabular-nums text-[color:var(--text-faint)]">
+                  {fmtMsgTime(turn.user.created_at)}
+                </time>
+              )}
             </div>
           )}
         </div>
@@ -477,6 +516,26 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                     </button>
                   )}
                   <button
+                    aria-label="有用"
+                    aria-pressed={shown.rating === 1}
+                    data-tip="有用（按命令统计，命令库里能看到）"
+                    disabled={shown.id < 0}
+                    onClick={() => void rateMessage(shown.id, shown.rating === 1 ? 0 : 1)}
+                    className={`${ACT} ${shown.rating === 1 ? "text-[color:var(--success)]" : ""}`}
+                  >
+                    <ThumbsUp size={12} fill={shown.rating === 1 ? "currentColor" : "none"} />
+                  </button>
+                  <button
+                    aria-label="没用"
+                    aria-pressed={shown.rating === -1}
+                    data-tip="没用"
+                    disabled={shown.id < 0}
+                    onClick={() => void rateMessage(shown.id, shown.rating === -1 ? 0 : -1)}
+                    className={`${ACT} ${shown.rating === -1 ? "text-[color:var(--danger)]" : ""}`}
+                  >
+                    <ThumbsDown size={12} fill={shown.rating === -1 ? "currentColor" : "none"} />
+                  </button>
+                  <button
                     aria-label={shown.starred ? "取消收藏" : "收藏到素材库"}
                     data-tip={shown.starred ? "已收藏（素材库「AI 收藏」）" : "收藏到素材库"}
                     disabled={shown.id < 0}
@@ -499,6 +558,8 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                           })),
                         },
                         { label: "存为本章梗概", icon: NotebookPen, onSelect: () => void saveAsSynopsis(shown) },
+                        { label: "另存为新章节（备选稿）…", icon: FilePlus2, onSelect: () => void saveAsChapter(shown) },
+                        { label: "存为素材片段…", icon: ClipboardPaste, onSelect: () => void saveAsSnippet(shown) },
                         ...(shown.adopted && checkpointFor(shown.id) ? [{ label: "恢复到采纳之前", icon: History, onSelect: () => void restore(shown) }] : []),
                         { type: "separator" },
                         { label: "删除这个版本", icon: Trash2, danger: true, onSelect: () => void deleteMessage(shown.id) },
@@ -508,7 +569,8 @@ function TurnView({ turn, isLast }: { turn: Turn; isLast: boolean }) {
                   >
                     <MoreHorizontal size={12} />
                   </button>
-                  <span className="ml-auto text-2xs tabular-nums text-[color:var(--text-faint)]" data-tip="字数 · 估算 token">
+                  <span className="ml-auto text-2xs tabular-nums text-[color:var(--text-faint)]" data-tip={shown.created_at ? `${fmtFull(shown.created_at)} · 字数 · 估算 token` : "字数 · 估算 token"}>
+                    {shown.created_at && <time data-msg-time="">{fmtMsgTime(shown.created_at)} · </time>}
                     {shown.content.replace(/\s/g, "").length} 字 · ~{estimateTokens(shown.content)} tokens
                   </span>
                 </div>
@@ -544,6 +606,9 @@ export function MessageList({ empty }: { empty: React.ReactNode }) {
     <div className="relative min-h-0 flex-1">
       <div
         ref={scrollRef}
+        data-message-list=""
+        // 可聚焦：点在消息流里后 Ctrl+F（会话内查找）、方向键滚动都作用于这里
+        tabIndex={-1}
         onScroll={(e) => {
           const el = e.currentTarget;
           const near = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
@@ -552,7 +617,7 @@ export function MessageList({ empty }: { empty: React.ReactNode }) {
             setAtBottom(near);
           }
         }}
-        className="h-full overflow-y-auto px-4 py-3"
+        className="h-full overflow-y-auto px-4 py-3 outline-none"
       >
         <PermissionCard />
         {turns.length === 0 && !streaming ? (

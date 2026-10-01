@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, BookMarked, ChevronDown, ChevronUp, Eye, Maximize2, MessageSquarePlus, Minimize2, Pencil, Pin, PinOff, RefreshCw, Search, ShieldOff, Sparkles, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, BookMarked, ChevronDown, ChevronUp, Eye, FileDown, Maximize2, MessageSquarePlus, Minimize2, Pencil, Pin, PinOff, RefreshCw, Search, ShieldOff, Sparkles, TextSearch, Trash2, X } from "lucide-react";
+import { pickSavePath } from "../../lib/dialogs";
+import { ChatFind, useChatFind } from "./ChatFind";
+import { chatToMarkdown } from "../../lib/ai/exportChat";
+import { findCommand } from "../../lib/ai/slashCommands";
+import { toast } from "../../stores/toast";
 import { TOOL_KIND_LABEL } from "./AgentTools";
 import { useUiNav } from "../../lib/nav/uiStore";
 import { useWorkspace } from "../../stores/workspace";
@@ -105,6 +110,28 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
   }, []);
 
   const current = sessions.find((s) => s.id === sessionId);
+  // 阶段 2C：导出对话为 Markdown（只导出各问题当前选用的回答）
+  const exportChat = async () => {
+    if (!current) return;
+    const ws = useWorkspace.getState();
+    const chapter = ws.chapters.find((c) => c.id === current.chapter_id);
+    const name = `${chapter?.title ?? "对话"}-${current.title}`.replace(/[\\/:*?"<>|]/g, "_");
+    const dest = await pickSavePath({ defaultPath: `${name}.md`, filters: [{ name: "Markdown", extensions: ["md"] }] });
+    if (!dest) return;
+    const md = chatToMarkdown({
+      bookTitle: ws.books.find((b) => b.id === ws.currentBookId)?.title ?? "",
+      chapterTitle: chapter?.title ?? "",
+      sessionTitle: current.title,
+      messages: useChat.getState().messages,
+      commandName: (id) => findCommand(id)?.name,
+    });
+    try {
+      await api.exportTextFile(dest, md);
+      toast.success(`已导出到 ${dest}`);
+    } catch (e) {
+      toast.error(`导出失败：${errMsg(e)}`);
+    }
+  };
   const autoKinds = useChat((s) => (s.sessionId != null ? s.autoAllow[s.sessionId] ?? NO_KINDS : NO_KINDS));
   const sessionMenu = (): MenuEntry[] => [
     { type: "label", label: "本章对话" },
@@ -138,6 +165,12 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
     ...(autoKinds.length > 0
       ? [{ label: `清除自动允许（${autoKinds.map((k) => TOOL_KIND_LABEL[k] ?? k).join("、")}）`, icon: ShieldOff, onSelect: () => useChat.getState().clearAutoAllow() }]
       : []),
+    {
+      label: "导出对话为 Markdown…",
+      icon: FileDown,
+      disabled: current == null,
+      onSelect: () => void exportChat(),
+    },
     {
       label: "重命名本对话…",
       icon: Pencil,
@@ -180,7 +213,7 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
   const providerHint = (errorCode === "invalid" && (error ?? "").includes("服务商")) || errorKind === "auth" || errorKind === "quota";
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col" data-ai-dock="">
       {/* 顶栏 */}
       <div className="flex h-10 shrink-0 items-center gap-1 pl-1.5 pr-2">
         <button
@@ -231,6 +264,15 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
           ))}
         </div>
         <BackendSelector />
+        <button
+          onClick={() => useChatFind.getState().setOpen(!useChatFind.getState().open)}
+          aria-label="在对话中查找"
+          data-tip="在本对话中查找"
+          data-tip-key={commandShortcut("ai.find")}
+          className="rounded-[var(--r-control)] p-1 text-[color:var(--text-faint)] transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
+        >
+          <TextSearch size={14} />
+        </button>
         <button
           onClick={() => useUiNav.getState().setAiMaximized(!aiMaximized)}
           aria-label={aiMaximized ? "还原 AI 卡" : "最大化 AI 卡"}
@@ -342,6 +384,8 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
           </div>
         </div>
       ) : (
+        <>
+        <ChatFind />
         <MessageList
           empty={
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
@@ -374,6 +418,7 @@ export function AiDock({ collapsed, onToggle }: AiDockProps) {
             </div>
           }
         />
+        </>
       )}
 
       {view !== "help" && view !== "prompts" && <Composer onLocal={showLocal} />}

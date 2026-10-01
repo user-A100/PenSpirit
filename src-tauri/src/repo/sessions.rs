@@ -18,7 +18,7 @@ fn session_from_row(row: &rusqlite::Row) -> rusqlite::Result<ChatSession> {
 }
 
 const SESSION_COLS: &str = "id, book_id, chapter_id, title, created_at, source, updated_at, pinned, archived";
-const MESSAGE_COLS: &str = "id, session_id, role, content, created_at, reply_to, active, adopted, meta, starred";
+const MESSAGE_COLS: &str = "id, session_id, role, content, created_at, reply_to, active, adopted, meta, starred, rating";
 
 /// 按创建先后（最早在前）：get_or_create 取首个，保持 M1 语义。
 pub fn list_by_chapter(conn: &Connection, chapter_id: i64) -> AppResult<Vec<ChatSession>> {
@@ -204,7 +204,25 @@ fn message_from_row(row: &rusqlite::Row) -> rusqlite::Result<ChatMessage> {
         adopted: row.get::<_, i64>(7)? != 0,
         meta: row.get(8)?,
         starred: row.get::<_, i64>(9)? != 0,
+        rating: row.get(10)?,
     })
+}
+
+/// 阶段 2C：给回答评分（1 / -1 / 0 取消）
+pub fn set_rating(conn: &Connection, id: i64, rating: i64) -> AppResult<ChatMessage> {
+    conn.execute("UPDATE messages SET rating = ?2 WHERE id = ?1", params![id, rating.clamp(-1, 1)])?;
+    get_message(conn, id)
+}
+
+/// 阶段 2C：按斜杠命令统计 👍 / 👎（只算带命令的回答）
+pub fn rating_stats(conn: &Connection) -> AppResult<Vec<crate::models::RatingStat>> {
+    let mut stmt = conn.prepare(
+        "SELECT json_extract(meta, '$.command') AS c, SUM(rating = 1), SUM(rating = -1) FROM messages \
+         WHERE role = 'assistant' AND rating != 0 AND json_valid(meta) AND json_extract(meta, '$.command') IS NOT NULL \
+         GROUP BY c ORDER BY c",
+    )?;
+    let rows = stmt.query_map([], |r| Ok(crate::models::RatingStat { command: r.get(0)?, up: r.get(1)?, down: r.get(2)? }))?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 pub fn list_messages(conn: &Connection, session_id: i64) -> AppResult<Vec<ChatMessage>> {

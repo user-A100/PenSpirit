@@ -16,6 +16,7 @@ import {
 import { errCode, errMsg } from "../lib/errors";
 import { toast } from "./toast";
 import { syncAfterAgentChanges } from "../lib/ai/agentFiles";
+import { notifyIfAway } from "../lib/ai/notify";
 import { getActiveEditor } from "../lib/editorBridge";
 import { useAgents } from "./agents";
 
@@ -46,6 +47,12 @@ export interface QuoteRef {
 type LastFailure =
   | { kind: "send"; instruction: string; command: string | null }
   | { kind: "regenerate"; userMessageId: number };
+
+/** 阶段 2C：排队待发的消息 */
+export interface QueuedSend {
+  text: string;
+  extra: SendExtra;
+}
 
 export interface SendExtra {
   command?: string | null;
@@ -159,6 +166,16 @@ interface ChatState {
   streamTools: AgentToolEntry[];
   /** 阶段 2B：撤销 / 恢复某个 agent 回合对书文件的全部改动 */
   undoAgentTurn: (messageId: number) => Promise<void>;
+  /** 阶段 2C：回答评分 */
+  rateMessage: (id: number, rating: number) => Promise<void>;
+  /** 阶段 2C：生成中输入的消息先排队，这一轮结束后自动依次发出 */
+  queue: QueuedSend[];
+  enqueue: (text: string, extra?: SendExtra) => void;
+  removeQueued: (index: number) => void;
+  /** 插话：把这条提到队首并停止当前生成（已生成部分照常保留），随即发出 */
+  interject: (index: number) => Promise<void>;
+  /** 本轮开始时间（长任务完成通知用） */
+  streamStartedAt: number | null;
   // —— 本轮上下文 ——
   mode: ChatMode;
   targetChars: number | null;
@@ -277,6 +294,16 @@ function allowOption(p: AcpPermissionEvent) {
   return p.options.find((o) => o.kind === "allow_once") ?? p.options.find((o) => o.kind.startsWith("allow"));
 }
 
+/** 阶段 2C：发出排队的下一条（这一轮正常结束后调用） */
+async function sendNextQueued(): Promise<void> {
+  const st = useChat.getState();
+  const q = st.queue[0];
+  if (!q || st.streaming || st.pendingCandidates) return;
+  useChat.setState({ queue: st.queue.slice(1) });
+  const ok = await st.send(q.text, q.extra);
+  if (!ok) useChat.setState((s) => ({ queue: [q, ...s.queue] }));
+}
+
 /** 刷新消息列表（以服务端为准）；期间切了会话或又开始生成则放弃 */
 async function refresh(sessionId: number) {
   try {
@@ -300,7 +327,8 @@ async function refreshSessions(chapterId: number) {
 /** 回合落定（provider done / agent turn 共用）：本地定稿 + 刷新收尾 */
 function finalizeTurn(sessionId: number, content: string | null) {
   useChat.setState((st) => {
-    const base = { streaming: false as const, streamText: "", permission: null, permissionQueue: [], streamTools: [] };
+    notifyIfAway(st.streamStartedAt, "AI 已完成");
+    const base = { streaming: false as const, streamText: "", permission: null, permissionQueue: [], streamTools: [], streamStartedAt: null };
     if (!content) return base;
     const replyTo = st.streamReplyTo;
     const messages = st.messages.map((m) => (replyTo != null && m.reply_to === replyTo ? { ...m, active: false } : m));
@@ -311,9 +339,15 @@ function finalizeTurn(sessionId: number, content: string | null) {
     // 多候选：本版落定后接着生成下一版（同一问题的新版本）
     const st = useChat.getState();
     const pc = st.pendingCandidates;
+    // 阶段 2C：没有待生成的候选 → 发排队的下一条
+    if (!pc && !st.streaming && st.sessionId === sessionId) {
+      void sendNextQueued();
+      return;
+    }
     if (!pc || st.streaming || st.sessionId !== sessionId) return;
     if (pc.remaining <= 0) {
       useChat.setState({ pendingCandidates: null });
+      void sendNextQueued();
       return;
     }
     useChat.setState({ pendingCandidates: { ...pc, remaining: pc.remaining - 1 } });
@@ -325,7 +359,9 @@ function finalizeTurn(sessionId: number, content: string | null) {
 
 function failTurn(sessionId: number, message: string, kind: string | null, partial: string | null) {
   const st = useChat.getState();
+  notifyIfAway(st.streamStartedAt, "AI 出错");
   useChat.setState({
+    streamStartedAt: null,
     pendingCandidates: null,
     streaming: false,
     streamText: "",
@@ -466,6 +502,28 @@ export const useChat = create<ChatState>((set, get) => ({
   permissionQueue: [],
   autoAllow: {},
   streamTools: [],
+  queue: [],
+  streamStartedAt: null,
+  rateMessage: async (id, rating) => {
+    try {
+      await api.messageRate(id, rating);
+      set((st) => ({ messages: st.messages.map((m) => (m.id === id ? { ...m, rating } : m)) }));
+    } catch (e) {
+      set({ error: errMsg(e) });
+    }
+  },
+  enqueue: (text, extra = {}) => {
+    const t = text.trim();
+    if (t) set((st) => ({ queue: [...st.queue, { text: t, extra }] }));
+  },
+  removeQueued: (index) => set((st) => ({ queue: st.queue.filter((_, i) => i !== index) })),
+  interject: async (index) => {
+    const q = get().queue[index];
+    if (!q) return;
+    set((st) => ({ queue: [q, ...st.queue.filter((_, i) => i !== index)] }));
+    if (get().streaming) await get().stop();
+    else await sendNextQueued();
+  },
   clearAutoAllow: () => {
     const sid = get().sessionId;
     if (sid != null) set((st) => ({ autoAllow: { ...st.autoAllow, [sid]: [] } }));
@@ -541,7 +599,7 @@ export const useChat = create<ChatState>((set, get) => ({
     detachListening();
     set({
       chapterId, sessions: [], sessionId: null, messages: [], streaming: false, streamText: "", streamReplyTo: null,
-      error: null, errorCode: null, errorKind: null, lastFailure: null, permission: null, permissionQueue: [], streamTools: [],
+      error: null, errorCode: null, errorKind: null, lastFailure: null, permission: null, permissionQueue: [], streamTools: [], queue: [],
       disabledSlots: [], manualRules: [], mentions: [], quote: null,
     });
     try {
@@ -632,7 +690,7 @@ export const useChat = create<ChatState>((set, get) => ({
     // 多候选只用于产出正文 / 讨论回答；本地与「继续写」类命令不并排
     const n = extra.candidates ?? (extra.command === "continue-reply" || extra.command === "compact" || extra.command === "directions" ? 1 : get().candidates);
     const options = buildTurnOptions({ ...extra, quote, candidates: n });
-    set({ streaming: true, streamText: "", streamTools: [], streamReplyTo: null, error: null, errorCode: null, errorKind: null, lastFailure: null });
+    set({ streaming: true, streamText: "", streamTools: [], streamReplyTo: null, streamStartedAt: Date.now(), error: null, errorCode: null, errorKind: null, lastFailure: null });
     const tempId = --tempIdSeq;
     set((st) => ({
       messages: [...st.messages, { id: tempId, session_id: sessionId, role: "user", content: text, created_at: "", meta: "{}" }],
@@ -677,7 +735,7 @@ export const useChat = create<ChatState>((set, get) => ({
     const mode = prior ? messageMode(prior) : get().mode;
     const command = get().commandByMessage[userMessageId] ?? (prior ? messageCommand(prior) : null);
     const options = buildTurnOptions({ mode, command, quote: get().quoteByMessage[userMessageId] ?? null, retryHint: extra.retryHint ?? null, candidates: extra.candidates });
-    set({ streaming: true, streamText: "", streamTools: [], streamReplyTo: userMessageId, error: null, errorKind: null, lastFailure: null });
+    set({ streaming: true, streamText: "", streamTools: [], streamReplyTo: userMessageId, streamStartedAt: Date.now(), error: null, errorKind: null, lastFailure: null });
     try {
       if (isAcpBackend()) await api.chatRegenerateAcp(userMessageId, options);
       else await api.chatRegenerate(userMessageId, options);

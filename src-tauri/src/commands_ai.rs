@@ -465,6 +465,44 @@ pub fn session_fork(s: State<AppState>, session_id: i64, upto_message_id: i64) -
 pub fn sessions_search(s: State<AppState>, book_id: i64, query: String) -> AppResult<Vec<SessionHit>> {
     sessions_search_inner(&s, book_id, &query)
 }
+// ---------- 阶段 2C：评分 / 导出 ----------
+
+pub fn message_rate_inner(s: &AppState, id: i64, rating: i64) -> AppResult<ChatMessage> {
+    repo::sessions::set_rating(&*lock(s)?, id, rating)
+}
+
+pub fn rating_stats_inner(s: &AppState) -> AppResult<Vec<crate::models::RatingStat>> {
+    repo::sessions::rating_stats(&*lock(s)?)
+}
+
+/// 把文本写到用户在保存对话框里选的位置（只允许 .md / .txt，导出对话用）
+pub fn export_text_file_inner(dest: &std::path::Path, content: &str) -> AppResult<()> {
+    let ext = dest.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+    if ext != "md" && ext != "txt" {
+        return Err(AppError::Invalid("只能导出为 .md 或 .txt".into()));
+    }
+    if let Some(p) = dest.parent() {
+        std::fs::create_dir_all(p)?;
+    }
+    std::fs::write(dest, content)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn message_rate(s: State<AppState>, id: i64, rating: i64) -> AppResult<ChatMessage> {
+    message_rate_inner(&s, id, rating)
+}
+
+#[tauri::command]
+pub fn rating_stats(s: State<AppState>) -> AppResult<Vec<crate::models::RatingStat>> {
+    rating_stats_inner(&s)
+}
+
+#[tauri::command]
+pub fn export_text_file(dest: String, content: String) -> AppResult<()> {
+    export_text_file_inner(std::path::Path::new(&dest), &content)
+}
+
 #[tauri::command]
 pub fn message_star(s: State<AppState>, id: i64, starred: bool) -> AppResult<Option<i64>> {
     message_star_inner(&s, id, starred)

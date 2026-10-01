@@ -41,6 +41,8 @@ export interface ChatMessage {
   reply_to?: number | null;
   /** 阶段 2B：已收藏（同时存进素材库） */
   starred?: boolean;
+  /** 阶段 2C：评分（1 = 👍，-1 = 👎，0 = 未评） */
+  rating?: number;
   /** 同组版本中当前选用的一条 */
   active?: boolean;
   /** 已采纳进正文 */
@@ -114,6 +116,8 @@ export interface AcpToolEvent { session_id: number; tool: AgentToolEntry }
 /** 书内文件改动（path 相对书目录） */
 export interface FileChange { path: string; kind: "added" | "modified" | "deleted" }
 export interface AgentUndoResult { undone: boolean; changes: FileChange[] }
+/** 阶段 2C：按命令统计的评分 */
+export interface RatingStat { command: string; up: number; down: number }
 
 // ---- M2-T7：章节快照版本历史 ----
 export interface SnapshotInfo { file: string; ts: string; words: number; title: string }
@@ -395,6 +399,10 @@ export const api = {
   cancelGenerationAcp: (sessionId: number) => invoke<void>("cancel_generation_acp", { sessionId }),
   agentsRespondPermission: (sessionId: number, requestId: string, optionId: string) =>
     invoke<void>("agents_respond_permission", { sessionId, requestId, optionId }),
+  /** 阶段 2C：回答评分 / 按命令统计 / 导出对话 */
+  messageRate: (id: number, rating: number) => invoke<ChatMessage>("message_rate", { id, rating }),
+  ratingStats: () => invoke<RatingStat[]>("rating_stats"),
+  exportTextFile: (dest: string, content: string) => invoke<void>("export_text_file", { dest, content }),
   /** 阶段 2B：撤销 agent 回合对书文件的全部改动；已撤销的再调一次 = 恢复 */
   agentUndoTurn: (messageId: number) => invoke<AgentUndoResult>("agent_undo_turn", { messageId }),
   // ---- M2-T7：章节快照版本历史 ----

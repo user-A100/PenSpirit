@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AtSign, BookOpen, Flag, Blocks, ListTree, Quote, SendHorizontal, Slash, Square, Users, X } from "lucide-react";
+import { AtSign, BookOpen, Clock, Flag, Blocks, ListTree, Quote, SendHorizontal, Slash, Square, Users, X } from "lucide-react";
 import { buildTurnOptions, useChat, type MentionItem } from "../../stores/chat";
 import { useWorkspace } from "../../stores/workspace";
 import { api, type AssemblyLog, type MentionRef, type WritingRule } from "../../lib/tauri";
@@ -48,6 +48,7 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
   const chapters = useWorkspace((s) => s.chapters);
   const sessionId = useChat((s) => s.sessionId);
   const streaming = useChat((s) => s.streaming);
+  const queue = useChat((s) => s.queue);
   const messages = useChat((s) => s.messages);
   const mode = useChat((s) => s.mode);
   const targetChars = useChat((s) => s.targetChars);
@@ -244,7 +245,15 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
   async function doSend(raw = text, cmd: SlashCommand | null = command) {
     const t = raw.trim();
     if (!t && !cmd) return;
-    if (streaming || chapterId == null) return;
+    if (chapterId == null) return;
+    // 阶段 2C：生成中回车 = 排队，这一轮结束后自动发出
+    if (streaming) {
+      useChat.getState().enqueue(t || cmd?.template || "", cmd ? { command: cmd.id, mode: cmd.mode, targetChars: cmd.targetChars ?? targetChars, disable: cmd.disable, temperature: cmd.temperature, providerId: cmd.providerId } : {});
+      setText("");
+      setCommand(null);
+      setMenu(null);
+      return;
+    }
     if (cmd?.needsSelection && !useChat.getState().quote && !quoteSelection()) {
       toast.error(`「${cmd.name}」需要先在正文中选中一段`);
       return;
@@ -368,6 +377,28 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
         </div>
       )}
 
+      {/* 阶段 2C：排队待发的消息（这一轮结束后自动依次发出；「立即发送」= 停下当前生成马上发这条） */}
+      {queue.length > 0 && (
+        <div className="mb-1 flex flex-col gap-1" data-testid="chat-queue">
+          {queue.map((q, i) => (
+            <div key={i} className="flex items-center gap-1.5 rounded-[var(--r-control)] bg-[var(--fill-element)] px-2 py-1 text-2xs text-[color:var(--text-secondary)]">
+              <Clock size={11} className="shrink-0 text-[color:var(--text-faint)]" />
+              <span className="shrink-0 text-[color:var(--text-faint)]">排队 {i + 1}</span>
+              <span className="min-w-0 flex-1 truncate">{q.text}</span>
+              <button
+                onClick={() => void useChat.getState().interject(i)}
+                data-tip="停下当前生成（已生成的保留），马上发这条"
+                className="shrink-0 rounded-[4px] px-1.5 py-0.5 text-[color:var(--accent)] hover:bg-[var(--fill-hover)]"
+              >
+                立即发送
+              </button>
+              <button aria-label="移出队列" onClick={() => useChat.getState().removeQueued(i)} className="shrink-0 rounded-[4px] p-0.5 text-[color:var(--text-faint)] hover:text-[color:var(--text-primary)]">
+                <X size={11} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="rounded-[10px] border border-[color:var(--hairline)] bg-[var(--fill-element)] transition-colors duration-[var(--dur-md)] focus-within:border-[color:color-mix(in_srgb,var(--accent)_60%,transparent)]">
         {/* 上下文胶囊行 */}
         {(pills.length > 0 || quote || mentions.length > 0) && (
@@ -433,7 +464,9 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
             placeholder={
               disabled
                 ? "选择章节后可用"
-                : mode === "discuss"
+                : streaming
+                  ? "生成中：回车排队，这一轮结束后自动发出"
+                  : mode === "discuss"
                   ? "讨论剧情、人物、设定…  / 命令 · @ 引用 · Enter 发送"
                   : "描述这段要怎么写…  / 命令 · @ 引用 · Ctrl+L 引用选区"
             }
