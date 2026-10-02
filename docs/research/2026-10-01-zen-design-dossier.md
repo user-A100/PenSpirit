@@ -6,7 +6,7 @@
 
 **来源说明**
 - 本地文件：`D:/playground/help3/shuilai/docs/zen-ref/` 下的 10 个 CSS 文件全部读过。
-- 上游文件：从 `zen-browser/desktop` 的 dev 分支抓取（2026-10-01），共约 30 个，涵盖 `src/zen/**`、`prefs/zen/*.yaml` 和若干 Firefox CSS patch。临时副本放在 `E:/Temp/claude/D--playground-help3-shuilai/d1f90bef-18ae-4eab-821e-e3f9a3ab3c30/scratchpad/zen/`。
+- 上游文件：从 `zen-browser/desktop` 的 dev 分支抓取（2026-10-01），共约 30 个，涵盖 `src/zen/**`、`prefs/zen/*.yaml` 和若干 Firefox CSS patch。调研时只拉到本地临时目录阅读，未入库（仓库里已有的 `docs/zen-ref/` 是更早的一批参考样式）。
 - 另外看了官网、release notes 和几篇评测。没有修改任何项目文件。
 - 下文提到的 `docs/zen-ref/...` 都在上述本地目录里，`src/zen/...` 和 `prefs/...` 是上游仓库路径。
 

@@ -644,7 +644,8 @@ export function MessageList({ empty }: { empty: React.ReactNode }) {
   }, [atBottom]);
 
   return (
-    <div className="relative min-h-0 flex-1">
+    // overflow-hidden：窗格被挤得很矮时（如开着侧聊），列表的内边距与「跳到最新」不溢出盖到输入框 / 标题栏上
+    <div className="relative min-h-0 flex-1 overflow-hidden">
       <div
         ref={scrollRef}
         data-message-list=""

@@ -425,7 +425,7 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
   const disabled = chapterId == null;
 
   return (
-    <div className="relative shrink-0 px-3 pb-3">
+    <div className="@container relative shrink-0 px-3 pb-3">
       {/* 斜杠 / @ 菜单（浮在输入框上方） */}
       {menu && (menu.kind === "slash" ? slashItems.length > 0 : true) && (
         <div role="listbox" aria-label={menu.kind === "slash" ? "命令" : "引用"} className="menu-pop absolute bottom-full left-3 right-3 z-30 mb-1 max-h-72 overflow-y-auto rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)] p-1 [box-shadow:var(--shadow-overlay)]">
@@ -507,7 +507,7 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
       <div className="rounded-[10px] border border-[color:var(--hairline)] bg-[var(--fill-element)] transition-colors duration-[var(--dur-md)] focus-within:border-[color:color-mix(in_srgb,var(--accent)_60%,transparent)]">
         {/* 上下文胶囊行 */}
         {(pills.length > 0 || quote || mentions.length > 0 || attachments.length > 0 || preset) && (
-          <div className="flex flex-wrap items-center gap-1 px-2 pt-2" aria-label="本轮上下文">
+          <div className="flex max-h-[3.6rem] flex-wrap items-center gap-1 overflow-y-auto px-2 pt-2" aria-label="本轮上下文">
             {preset && (
               <span data-ctx-preset={preset.name} className="flex max-w-40 items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--success)_14%,transparent)] py-0.5 pl-2 pr-1 text-2xs text-[color:var(--success)]" data-tip="常驻上下文包：每轮都带上">
                 <Package size={10} className="shrink-0" />
@@ -598,8 +598,8 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
           />
         </div>
 
-        {/* 底栏：命令 / 引用 / 长度 / 温度 · token · 发送 */}
-        <div className="flex items-center gap-0.5 px-1.5 pb-1.5 pt-1 text-2xs text-[color:var(--text-faint)]">
+        {/* 底栏：命令 / 引用 / 长度 / 温度 · token · 发送。不换行（窄时文字按钮会被挤成一字一行），放不下时横向滚动 */}
+        <div className="flex items-center gap-0.5 overflow-x-auto whitespace-nowrap no-scrollbar px-1.5 pb-1.5 pt-1 text-2xs text-[color:var(--text-faint)]">
           <button
             aria-label="斜杠命令"
             data-tip="命令（输入 / 也可）"
@@ -659,7 +659,7 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
           >
             <Package size={13} />
           </button>
-          <span aria-hidden className="mx-1 h-3 w-px bg-[var(--hairline)]" />
+          <span aria-hidden className="mx-1 h-3 w-px shrink-0 bg-[var(--hairline)]" />
           <button
             data-tip="期望长度"
             onClick={(e) =>
@@ -668,7 +668,7 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
                 LENGTHS.map((n) => ({ label: n == null ? "不限长度" : `约 ${n} 字`, checked: targetChars === n, onSelect: () => setTargetChars(n) })),
               )
             }
-            className="rounded-[4px] px-1.5 py-1 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
+            className="rounded-[4px] px-1 py-1 @[30rem]:px-1.5 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
           >
             {targetChars == null ? "长度不限" : `约 ${targetChars} 字`}
           </button>
@@ -680,7 +680,7 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
                 TEMPS.map((t) => ({ label: t.label, checked: temperature === t.value, onSelect: () => setTemperature(t.value) })),
               )
             }
-            className="rounded-[4px] px-1.5 py-1 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
+            className="rounded-[4px] px-1 py-1 @[30rem]:px-1.5 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
           >
             {temperature == null ? "温度默认" : `温度 ${temperature}`}
           </button>
@@ -692,11 +692,11 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
                 [1, 2, 3].map((n) => ({ label: n === 1 ? "单版" : `${n} 版并排`, checked: candidates === n, onSelect: () => setCandidates(n) })),
               )
             }
-            className={`rounded-[4px] px-1.5 py-1 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)] ${candidates > 1 ? "text-[color:var(--accent)]" : ""}`}
+            className={`rounded-[4px] px-1 py-1 @[30rem]:px-1.5 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)] ${candidates > 1 ? "text-[color:var(--accent)]" : ""}`}
           >
             {candidates > 1 ? `候选 ×${candidates}` : "单版"}
           </button>
-          <StyleSwitch className="rounded-[4px] px-1.5 py-1 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]" />
+          <StyleSwitch className="rounded-[4px] px-1 py-1 @[30rem]:px-1.5 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]" />
           {manualRules.length > 0 && (
             <button
               data-tip="本轮手动选用的写作规则（发送后清空）"
@@ -706,7 +706,7 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
                   manualRules.map((r) => ({ label: r.title, checked: pickedRules.includes(r.id), onSelect: () => toggleRule(r.id) })),
                 )
               }
-              className={`rounded-[4px] px-1.5 py-1 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)] ${pickedRules.length > 0 ? "text-[color:var(--accent)]" : ""}`}
+              className={`rounded-[4px] px-1 py-1 @[30rem]:px-1.5 transition-colors hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)] ${pickedRules.length > 0 ? "text-[color:var(--accent)]" : ""}`}
             >
               {pickedRules.length > 0 ? `规则 ${pickedRules.length}` : "规则"}
             </button>
@@ -714,7 +714,8 @@ export function Composer({ onLocal }: { onLocal: (kind: "context" | "help" | "pr
           <div className="flex-1" />
           {totalTokens > 0 && (
             <span
-              className={`mr-1.5 tabular-nums ${trimmedCount > 0 ? "text-[color:var(--danger)]" : ""}`}
+              // 窄输入框（开着侧聊时）先让出 token 估算；超预算（红字）时照样显示
+              className={`mr-1.5 tabular-nums ${trimmedCount > 0 ? "text-[color:var(--danger)]" : "hidden @[34rem]:inline"}`}
               data-testid="composer-tokens"
               data-tip={trimmedCount > 0 ? `超出上下文预算，本轮已裁 ${trimmedCount} 个槽位（查看上下文预览）` : "本轮将发送的上下文估算（不含回答）/ 预算"}
             >

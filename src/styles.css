@@ -116,6 +116,9 @@ html[data-tone="light"] {
   to { opacity: 1; transform: none; }
 }
 .menu-pop { animation: menu-pop 0.1s ease-out; transform-origin: top left; }
+/* 可横向滚动但不显示滚动条（窄输入框底栏）。必须是不分层的普通类：上面全局 * 的 scrollbar-width 也不分层，
+   Tailwind 工具类在 layer 里压不过它 */
+.no-scrollbar { scrollbar-width: none; }
 
 
 /* 弹窗/浮卡入场：Zen zen-dialog-fade-in（下移 10px 淡入，0.15s ease） */
