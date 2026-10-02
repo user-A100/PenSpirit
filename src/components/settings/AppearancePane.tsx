@@ -2,7 +2,7 @@
 // 所有改动即时生效（主题与明暗立即落盘，缩放防抖落盘）。
 import { CSSProperties } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
-import { THEMES } from "../../themes/defs";
+import { findTheme, THEMES } from "../../themes/defs";
 import { TEXTURES } from "../../themes/textures";
 import {
   AppearanceMode,
@@ -22,6 +22,7 @@ import {
   TEXTURE_SCALE_MIN,
   TEXTURE_SCALE_STEP,
   TextureBlend,
+  effectiveThemeId,
   UI_SCALE_MAX,
   UI_SCALE_MIN,
   UI_SCALE_STEP,
@@ -48,6 +49,8 @@ function SectionTitle(props: { children: React.ReactNode }) {
 export function AppearancePane() {
   const colorTheme = useAppearance((s) => s.colorTheme);
   const mode = useAppearance((s) => s.mode);
+  const systemDark = useAppearance((s) => s.systemDark);
+  const effective = effectiveThemeId(colorTheme, mode, systemDark);
   const uiScale = useAppearance((s) => s.uiScale);
   const prose = useAppearance((s) => s.prose);
   const texture = useAppearance((s) => s.texture);
@@ -64,30 +67,31 @@ export function AppearancePane() {
         <SectionTitle>配色主题</SectionTitle>
         <div className="grid grid-cols-2 gap-2.5">
           {THEMES.map((t) => {
-            const active = t.id === colorTheme;
+            const active = t.id === effective;
+            const pair = t.pair ? findTheme(t.pair) : undefined;
             return (
               <button
                 key={t.id}
                 onClick={() => setColorTheme(t.id)}
-                className={`rounded-[var(--radius-md)] border p-3 text-left transition-colors duration-[var(--dur-md)] ${
+                className={`rounded-[var(--r-control)] border p-3 text-left transition-colors duration-[var(--dur-md)] ${
                   active
                     ? "border-[color:var(--accent)] bg-[var(--accent-dim)]"
-                    : "border-[color:var(--border-subtle)] hover:border-[color:var(--accent)]"
+                    : "border-[color:var(--hairline)] hover:border-[color:var(--accent)]"
                 }`}
               >
                 {/* mini 预览：面板底 + 标题/正文示例 + 三个色块 */}
                 <div
                   style={{ ...t.vars } as unknown as CSSProperties}
-                  className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-2"
+                  className="rounded-md border border-[color:var(--hairline)] bg-[var(--bg-panel)] p-2"
                 >
                   <div className="mb-0.5 text-xs font-medium text-[var(--text-primary)]">章节标题</div>
-                  <div className="text-[11px] leading-relaxed text-[var(--text-secondary)]">
+                  <div className="text-2xs leading-relaxed text-[var(--text-secondary)]">
                     山雨欲来风满楼，正是落笔时。
                   </div>
                   <div className="mt-1.5 flex items-center gap-1">
                     <span className="h-2.5 w-5 rounded-[2px] bg-[var(--accent)]" />
                     <span className="h-2.5 w-5 rounded-[2px] bg-[var(--bg-elevated)]" />
-                    <span className="h-2.5 w-5 rounded-[2px] border border-[var(--border-subtle)] bg-[var(--bg-hover)]" />
+                    <span className="h-2.5 w-5 rounded-[2px] border border-[color:var(--hairline)] bg-[var(--fill-element)]" />
                   </div>
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-1">
@@ -97,8 +101,9 @@ export function AppearancePane() {
                       使用中
                     </span>
                   ) : (
-                    <span className="shrink-0 text-xs text-[color:var(--text-faint)]">
+                    <span className="shrink-0 text-xs text-[color:var(--text-faint)]" title={pair ? `跟随系统时与「${pair.name}」互换` : "单一明暗，不随系统切换"}>
                       {t.dark ? "深色" : "浅色"}
+                      {pair ? ` ↔ ${pair.name}` : ""}
                     </span>
                   )}
                 </div>
@@ -111,7 +116,7 @@ export function AppearancePane() {
       {/* 明暗：与配色主题正交，仅控制界面明暗属性（跟随系统时随 OS 自动切换） */}
       <section>
         <SectionTitle>界面明暗</SectionTitle>
-        <div className="flex rounded-md border border-[color:var(--border-subtle)] p-0.5">
+        <div className="flex rounded-md border border-[color:var(--hairline)] p-0.5">
           {MODES.map((m) => {
             const active = mode === m.id;
             const Icon = m.icon;
@@ -122,7 +127,7 @@ export function AppearancePane() {
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2 py-1.5 text-sm transition-colors duration-150 ${
                   active
                     ? "bg-[var(--accent-dim)] text-[color:var(--accent)]"
-                    : "text-[color:var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+                    : "text-[color:var(--text-secondary)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
                 }`}
               >
                 <Icon size={14} />
@@ -132,7 +137,7 @@ export function AppearancePane() {
           })}
         </div>
         <p className="mt-1.5 text-xs text-[color:var(--text-faint)]">
-          明暗与配色主题相互独立；主题自身的明暗倾向见卡片角标。
+          暗夜↔晨光、墨岩↔纸白、枫夜↔枫叶成对：跟随系统时自动互换；其余主题只有一种明暗。
         </p>
       </section>
 
@@ -169,7 +174,7 @@ export function AppearancePane() {
             aria-checked={prose.indent}
             onClick={() => setProse({ indent: !prose.indent })}
             className={`relative h-5 w-9 rounded-full transition-colors duration-150 ${
-              prose.indent ? "bg-[var(--accent)]" : "bg-[var(--bg-elevated)]"
+              prose.indent ? "bg-[var(--accent-solid)]" : "bg-[var(--bg-elevated)]"
             }`}
           >
             <span
@@ -247,7 +252,7 @@ export function AppearancePane() {
                 className={`rounded-full border px-3 py-1 text-sm transition-colors duration-150 ${
                   active
                     ? "border-[color:var(--accent)] bg-[var(--accent-dim)] text-[color:var(--accent)]"
-                    : "border-[color:var(--border-subtle)] text-[color:var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+                    : "border-[color:var(--hairline)] text-[color:var(--text-secondary)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
                 }`}
               >
                 {t.name}
@@ -295,7 +300,7 @@ export function AppearancePane() {
                 aria-label="混合模式"
                 value={texture.blend}
                 onChange={(e) => setTexture({ blend: e.target.value as TextureBlend })}
-                className="h-8 flex-1 rounded border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 text-sm text-[color:var(--text-primary)] outline-none focus:border-[color:var(--accent)]"
+                className="h-8 flex-1 rounded border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2 text-sm text-[color:var(--text-primary)] outline-none focus:border-[color:var(--accent)]"
               >
                 {TEXTURE_BLENDS.map((b) => (
                   <option key={b.id} value={b.id}>{b.label}</option>

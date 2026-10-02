@@ -4,16 +4,18 @@ import { useCharacters } from "../../stores/characters";
 import { useRelations } from "../../stores/relations";
 import { useWorkspace } from "../../stores/workspace";
 import { Badge } from "../ui/Badge";
+import { confirmDialog } from "../../stores/confirm";
+import { AiHiddenToggle, SecretNote } from "../ui/AiHiddenToggle";
 
 // 人物卡面板（M4，write 视图 dock 的 characters tab）——人物图谱的第一块底座：
 // 姓名必填，角色/别名（逗号分隔）/描述可选；别名供后续检索与图谱消歧用。
 // 关系数 Badge（M5）随 useRelations 计数，编辑入口在图谱视图（点节点弹窗）。
 
 const INPUT =
-  "w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 focus:border-[color:var(--accent)]";
+  "w-full rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 focus:border-[color:var(--accent)]";
 const SECTION = "mb-1 text-xs font-medium text-[color:var(--text-secondary)]";
 const ICON_BTN =
-  "rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)]";
+  "rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)]";
 
 export function CharactersPanel() {
   const currentBookId = useWorkspace((s) => s.currentBookId);
@@ -94,7 +96,7 @@ export function CharactersPanel() {
           <button
             onClick={openCreate}
             title="新建人物卡"
-            className="flex items-center gap-1 rounded-md border border-[color:var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            className="flex items-center gap-1 rounded-md border border-[color:var(--hairline)] px-2 py-1 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
           >
             <Plus size={12} />
             新建
@@ -103,7 +105,7 @@ export function CharactersPanel() {
       </div>
 
       {formOpen && (
-        <div className="mb-3 space-y-1.5 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] p-2.5">
+        <div className="mb-3 space-y-1.5 rounded-md border border-[color:var(--hairline)] bg-[var(--bg-panel)] p-2.5">
           <div className="flex items-center gap-2">
             <input
               value={name}
@@ -138,7 +140,7 @@ export function CharactersPanel() {
           {error && <div className="text-xs text-[color:var(--danger)]">{error}</div>}
           <button
             onClick={() => void save()}
-            className="rounded-md bg-[var(--accent)] px-3 py-1 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)]"
+            className="rounded-md bg-[var(--accent-solid)] px-3 py-1 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)]"
           >
             {editingId == null ? "创建" : "保存"}
           </button>
@@ -156,7 +158,7 @@ export function CharactersPanel() {
             return (
               <div
                 key={c.id}
-                className="group rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] px-3 py-2.5 transition-colors duration-[var(--dur-md)] hover:border-[color:var(--accent)]"
+                className="group rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-panel)] px-3 py-2.5 transition-colors duration-[var(--dur-md)] hover:border-[color:var(--accent)]"
               >
                 <div className="flex items-center gap-2">
                   <button
@@ -182,13 +184,14 @@ export function CharactersPanel() {
                       className={`shrink-0 text-[color:var(--text-faint)] transition-transform duration-[var(--dur-md)] ${expanded ? "rotate-180" : ""}`}
                     />
                   </button>
+                  <AiHiddenToggle kind="character" id={c.id} hidden={!!c.ai_hidden} />
                   <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity duration-[var(--dur-fast)] group-hover:opacity-100">
                     <button onClick={() => openEdit(c)} title="编辑" className={ICON_BTN}>
                       <Pencil size={14} />
                     </button>
                     <button
-                      onClick={() => {
-                        if (window.confirm(`删除人物卡「${c.name}」？`)) void remove(c.id);
+                      onClick={async () => {
+                        if (await confirmDialog({ title: `删除人物卡「${c.name}」？`, confirmLabel: "删除", danger: true })) void remove(c.id);
                       }}
                       title="删除"
                       className={ICON_BTN}
@@ -201,7 +204,7 @@ export function CharactersPanel() {
                   <div
                     className={
                       expanded
-                        ? "mt-2 space-y-1 border-t border-[color:var(--border-subtle)] pt-2"
+                        ? "mt-2 space-y-1 border-t border-[color:var(--hairline)] pt-2"
                         : "mt-1.5 space-y-1"
                     }
                   >
@@ -217,6 +220,7 @@ export function CharactersPanel() {
                     )}
                   </div>
                 )}
+                {expanded && <SecretNote id={c.id} initial={c.secret_note ?? ""} />}
               </div>
             );
           })}

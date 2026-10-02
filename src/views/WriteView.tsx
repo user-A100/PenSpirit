@@ -3,9 +3,11 @@ import { Group, Panel, Separator } from "react-resizable-panels";
 import { Sidebar } from "../components/layout/Sidebar";
 import { EditorPane } from "../components/editor/EditorPane";
 import { PanelDock } from "../components/layout/PanelDock";
+import { DockRail } from "../components/layout/DockRail";
 import { loadDockPct, loadSidebarPct, saveDockPct, saveSidebarPct, useUiNav } from "../lib/nav/uiStore";
 
-// 写作视图：三栏（侧栏/编辑器/右侧 dock）。原 AppShell 的 Group 迁入于此。
+// 写作视图（阶段 1 Zen 骨架）：侧栏贴背板 | 稿纸列（编辑卡 + AI 卡）| 右侧面板卡 | 面板竖条。
+// 卡与卡之间是 --sep 宽的透明缝（即拖拽分隔条，悬停 0.2s 后显 accent 细条）。
 // react-resizable-panels v4 用法约束（实测得出，必须保留）：
 // 1. 显式 defaultLayout（面板 id → 百分比）+ Panel 显式 id；
 // 2. 尺寸用无单位字符串（=百分比），不用像素约束；命令式 resize() 的裸数字
@@ -35,8 +37,10 @@ function clampDockPct(pct: number | null): number {
 }
 
 export function WriteView() {
-  const collapsed = useUiNav((s) => s.sidebarCollapsed);
-  const dockCollapsed = useUiNav((s) => s.dockCollapsed);
+  const focusMode = useUiNav((s) => s.focusMode);
+  // 专注模式复用折叠机制（CSS 摘除，拖定宽度原样保留），退出即还原
+  const collapsed = useUiNav((s) => s.sidebarCollapsed) || focusMode;
+  const dockCollapsed = useUiNav((s) => s.dockCollapsed) || focusMode;
 
   // 初始布局：恢复用户上次拖定的侧栏/dock 宽度，editor 吃剩余
   const initialLayout = useMemo(() => {
@@ -49,73 +53,75 @@ export function WriteView() {
     // 属性挂在自己的包裹层上——v4 Group 不保证转发 data-* props（其根节点只渲染
     // 自有属性），折叠开关必须由我们完全掌控的 DOM 承载
     <div
-      className="h-full"
+      className="flex h-full"
       data-sidebar-collapsed={collapsed ? "" : undefined}
       data-dock-collapsed={dockCollapsed ? "" : undefined}
     >
-      <Group
-        orientation="horizontal"
-        className="h-full bg-transparent"
-        defaultLayout={initialLayout}
-      >
-      <Panel
-        id="sidebar"
-        defaultSize={String(initialLayout.sidebar)}
-        minSize={String(SIDEBAR_MIN)}
-        maxSize={String(SIDEBAR_MAX)}
-        onResize={(size, _id, prev) => {
-          if (prev === undefined) return; // 首帧不记忆
-          const pct = size.asPercentage;
-          if (pct <= 1) {
-            // 拖过 minSize 被吸附折叠：单向同步 store（宽度 0 不记忆）
-            if (!useUiNav.getState().sidebarCollapsed) {
-              useUiNav.setState({ sidebarCollapsed: true });
-            }
-            return;
-          }
-          // 从折叠拖出：单向同步 store 为展开
-          if (useUiNav.getState().sidebarCollapsed) {
-            useUiNav.setState({ sidebarCollapsed: false });
-          }
-          saveSidebarPct(pct);
-        }}
-        className={`panel-sidebar${collapsed ? "" : " border-r border-[color:var(--border-subtle)]"}`}
-      >
-        {!collapsed && <Sidebar />}
-      </Panel>
-      {!collapsed && (
-        <Separator className="w-1 bg-transparent transition-colors duration-150 hover:bg-[var(--accent-dim)]" />
-      )}
-      <Panel id="editor" defaultSize={String(initialLayout.editor)} minSize="30">
-        <EditorPane />
-      </Panel>
-      {!dockCollapsed && (
-        <Separator className="w-1 bg-transparent transition-colors duration-150 hover:bg-[var(--accent-dim)]" />
-      )}
-      <Panel
-        id="dock"
-        defaultSize={String(initialLayout.dock)}
-        minSize={String(DOCK_MIN)}
-        maxSize={String(DOCK_MAX)}
-        onResize={(size, _id, prev) => {
-          if (prev === undefined) return; // 首帧不记忆
-          const pct = size.asPercentage;
-          if (pct <= 1) {
-            if (!useUiNav.getState().dockCollapsed) {
-              useUiNav.setState({ dockCollapsed: true });
-            }
-            return;
-          }
-          if (useUiNav.getState().dockCollapsed) {
-            useUiNav.setState({ dockCollapsed: false });
-          }
-          saveDockPct(pct);
-        }}
-        className={`panel-dock${dockCollapsed ? "" : " border-l border-[color:var(--border-subtle)]"}`}
-      >
-        {!dockCollapsed && <PanelDock />}
-      </Panel>
-      </Group>
+      <div className="h-full min-w-0 flex-1">
+        <Group orientation="horizontal" className="h-full bg-transparent" defaultLayout={initialLayout}>
+          <Panel
+            id="sidebar"
+            defaultSize={String(initialLayout.sidebar)}
+            minSize={String(SIDEBAR_MIN)}
+            maxSize={String(SIDEBAR_MAX)}
+            onResize={(size, _id, prev) => {
+              if (prev === undefined) return; // 首帧不记忆
+              // 专注模式用 CSS 摘除面板，库会报宽度 0——这不是用户拖拽折叠，不能写回 store
+              if (useUiNav.getState().focusMode) return;
+              const pct = size.asPercentage;
+              if (pct <= 1) {
+                // 拖过 minSize 被吸附折叠：单向同步 store（宽度 0 不记忆）
+                if (!useUiNav.getState().sidebarCollapsed) {
+                  useUiNav.setState({ sidebarCollapsed: true });
+                }
+                return;
+              }
+              // 从折叠拖出：单向同步 store 为展开
+              if (useUiNav.getState().sidebarCollapsed) {
+                useUiNav.setState({ sidebarCollapsed: false });
+              }
+              saveSidebarPct(pct);
+            }}
+            className="panel-sidebar"
+          >
+            {!collapsed && <Sidebar />}
+          </Panel>
+          {!collapsed && <Separator className="zen-splitter zen-splitter-x" />}
+          <Panel id="editor" defaultSize={String(initialLayout.editor)} minSize="30">
+            <EditorPane />
+          </Panel>
+          {!dockCollapsed && <Separator className="zen-splitter zen-splitter-x" />}
+          <Panel
+            id="dock"
+            defaultSize={String(initialLayout.dock)}
+            minSize={String(DOCK_MIN)}
+            maxSize={String(DOCK_MAX)}
+            onResize={(size, _id, prev) => {
+              if (prev === undefined) return; // 首帧不记忆
+              if (useUiNav.getState().focusMode) return; // 同上：专注模式的摘除不算折叠
+              const pct = size.asPercentage;
+              if (pct <= 1) {
+                if (!useUiNav.getState().dockCollapsed) {
+                  useUiNav.setState({ dockCollapsed: true });
+                }
+                return;
+              }
+              if (useUiNav.getState().dockCollapsed) {
+                useUiNav.setState({ dockCollapsed: false });
+              }
+              saveDockPct(pct);
+            }}
+            className="panel-dock"
+          >
+            {!dockCollapsed && (
+              <div className="zen-card h-full">
+                <PanelDock />
+              </div>
+            )}
+          </Panel>
+        </Group>
+      </div>
+      {!focusMode && <DockRail />}
     </div>
   );
 }

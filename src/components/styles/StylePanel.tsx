@@ -4,6 +4,7 @@ import { StyleCard } from "../../lib/tauri";
 import { parseTags, toTagsJson, useStyles } from "../../stores/styles";
 import { useWorkspace } from "../../stores/workspace";
 import { Modal } from "../ui/Modal";
+import { confirmDialog } from "../../stores/confirm";
 
 interface FormState {
   id: number; name: string; prompt_md: string; sample_md: string; tagsText: string;
@@ -12,7 +13,7 @@ interface FormState {
 const EMPTY: FormState = { id: 0, name: "", prompt_md: "", sample_md: "", tagsText: "" };
 
 const INPUT =
-  "w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]";
+  "w-full rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]";
 const TEXTAREA = `${INPUT} resize-y text-xs leading-relaxed`;
 
 export function StylePanel() {
@@ -56,7 +57,7 @@ export function StylePanel() {
   };
 
   const handleRemove = async () => {
-    if (!editing || !window.confirm(`确定删除文风「${form.name}」？`)) return;
+    if (!editing || !(await confirmDialog({ title: `删除文风「${form.name}」？`, confirmLabel: "删除", danger: true }))) return;
     setBusy(true);
     try {
       await remove(form.id);
@@ -84,7 +85,7 @@ export function StylePanel() {
   return (
     <div className="flex h-full flex-col">
       {/* 当前书激活位：下拉含「无文风」(0) */}
-      <div className="shrink-0 border-b border-[color:var(--border-subtle)] p-2.5">
+      <div className="shrink-0 border-b border-[color:var(--hairline)] p-2.5">
         <div className="mb-1 flex items-center justify-between text-xs text-[color:var(--text-secondary)]">
           <span>本书激活文风</span>
           {activeStyleId === 0 && <span className="text-[color:var(--text-faint)]">未启用</span>}
@@ -103,26 +104,29 @@ export function StylePanel() {
         </select>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2.5">
+      <div className="@container flex-1 overflow-y-auto p-2.5">
         {error && (
           <div className="mb-2 rounded-md border border-[color:var(--danger)] px-2.5 py-1.5 text-xs text-[color:var(--danger)]">
             {error}
           </div>
         )}
 
+        {/* 宽屏：左列表右表单；窄屏上下堆叠 */}
+        <div className="grid gap-6 @3xl:grid-cols-[minmax(15rem,20rem)_1fr]">
+        <div className="min-w-0">
         {/* 列表：名称 + 标签 chips + 激活标记，点击编辑 */}
         <div className="mb-1.5 flex items-center justify-between text-xs text-[color:var(--text-faint)]">
           <span>文风库（{styles.length}）</span>
           <button
             onClick={() => { setEditing(null); setForm(EMPTY); }}
-            className="flex items-center gap-1 rounded px-1 py-0.5 transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            className="flex items-center gap-1 rounded px-1 py-0.5 transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
           >
             <Plus size={12} /> 新建
           </button>
         </div>
 
         {styles.length === 0 ? (
-          <div className="mb-3 rounded-md border border-[color:var(--border-subtle)] px-2.5 py-3 text-center text-xs leading-relaxed text-[color:var(--text-faint)]">
+          <div className="mb-3 rounded-md border border-[color:var(--hairline)] px-2.5 py-3 text-center text-xs leading-relaxed text-[color:var(--text-faint)]">
             还没有文风卡
             <br />
             新建，或用「导入 md」引入文风 skill
@@ -135,12 +139,12 @@ export function StylePanel() {
                 <button
                   key={s.id}
                   onClick={() => setEditing(s.id)}
-                  className={`flex w-full flex-col rounded-[var(--radius-md)] border px-3 py-2.5 text-left transition-colors duration-[var(--dur-md)] ${
+                  className={`flex w-full flex-col rounded-[var(--r-control)] border px-3 py-2.5 text-left transition-colors duration-[var(--dur-md)] ${
                     s.id === activeStyleId
                       ? "border-[color:var(--accent)] bg-[var(--accent-dim)]"
                       : s.id === editingId
                         ? "border-[color:var(--border-strong)]"
-                        : "border-[color:var(--border-subtle)] hover:border-[color:var(--accent)]"
+                        : "border-[color:var(--hairline)] hover:border-[color:var(--accent)]"
                   }`}
                 >
                   <span className="flex min-w-0 items-center gap-1.5">
@@ -152,7 +156,7 @@ export function StylePanel() {
                   {tags.length > 0 && (
                     <span className="mt-1 flex flex-wrap gap-1">
                       {tags.map((t) => (
-                        <span key={t} className="rounded-full bg-[var(--bg-hover)] px-1.5 py-0.5 text-xs text-[color:var(--text-faint)]">
+                        <span key={t} className="rounded-full bg-[var(--fill-element)] px-1.5 py-0.5 text-xs text-[color:var(--text-faint)]">
                           {t}
                         </span>
                       ))}
@@ -164,6 +168,8 @@ export function StylePanel() {
           </div>
         )}
 
+        </div>
+        <div className="min-w-0">
         {/* 编辑表单 */}
         <div className="mb-1.5 text-xs text-[color:var(--text-faint)]">
           {editing ? `编辑「${form.name}」` : "新建文风"}
@@ -198,7 +204,7 @@ export function StylePanel() {
                 })}
                 disabled={!sample}
                 title={sample ? "查看该文风写出来的样子" : "该文风暂无样章，请先在样章框填写"}
-                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
               >
                 <Eye size={12} /> 预览样章
               </button>
@@ -211,14 +217,16 @@ export function StylePanel() {
             className={INPUT}
           />
         </div>
+        </div>
+        </div>
       </div>
 
       {/* 底部操作 */}
-      <div className="flex shrink-0 items-center gap-2 border-t border-[color:var(--border-subtle)] p-2.5">
+      <div className="flex shrink-0 items-center gap-2 border-t border-[color:var(--hairline)] p-2.5">
         <button
           onClick={handleSave}
           disabled={busy || !form.name.trim()}
-          className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md bg-[var(--accent-solid)] px-3 py-1.5 text-sm text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           保存
         </button>
@@ -226,7 +234,7 @@ export function StylePanel() {
         <button
           onClick={() => fileRef.current?.click()}
           title="导入文风 skill 的 markdown：正文进「风格指令」"
-          className="flex items-center gap-1.5 rounded-md border border-[color:var(--border-strong)] px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+          className="flex items-center gap-1.5 rounded-md border border-[color:var(--border-strong)] px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
         >
           <Upload size={13} /> 导入 md
         </button>
@@ -236,7 +244,7 @@ export function StylePanel() {
             onClick={handleRemove}
             disabled={busy}
             title="删除该文风"
-            className="rounded-md p-1.5 text-[color:var(--danger)] transition-colors duration-150 hover:bg-[var(--bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md p-1.5 text-[color:var(--danger)] transition-colors duration-150 hover:bg-[var(--fill-hover)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Trash2 size={14} />
           </button>

@@ -110,9 +110,22 @@ fn stream_event_serde_envelope_is_snake_case_tagged() {
         r#"{"type":"done","session_id":3,"content":"好"}"#
     );
     assert_eq!(
-        serde_json::to_string(&StreamEvent::Error { message: "x".into() }).unwrap(),
-        r#"{"type":"error","message":"x"}"#
+        serde_json::to_string(&StreamEvent::Error { message: "x".into(), kind: "auth".into(), partial: "半".into() }).unwrap(),
+        r#"{"type":"error","message":"x","kind":"auth","partial":"半"}"#
     );
+}
+
+#[test]
+fn classify_error_buckets() {
+    use bixian::llm::stream::classify_error;
+    assert_eq!(classify_error("Invalid status code: 429 Too Many Requests"), "rate_limit");
+    assert_eq!(classify_error("Incorrect API key provided: sk-***"), "auth");
+    assert_eq!(classify_error("Invalid status code: 401 Unauthorized"), "auth");
+    assert_eq!(classify_error("Insufficient Balance"), "quota");
+    assert_eq!(classify_error("This model's maximum context length is 8192 tokens"), "context_length");
+    assert_eq!(classify_error("error sending request for url (https://x/v1/chat/completions)"), "network");
+    assert_eq!(classify_error("Invalid status code: 503 Service Unavailable"), "server");
+    assert_eq!(classify_error("something odd"), "unknown");
 }
 
 // ---------- 活体测试（需环境变量，CI/常规跑自动跳过） ----------
@@ -156,7 +169,7 @@ async fn live_stream_smoke() {
                 text.push_str(&content);
                 break;
             }
-            StreamEvent::Error { message } => panic!("流式返回错误: {message}"),
+            StreamEvent::Error { message, .. } => panic!("流式返回错误: {message}"),
         }
     }
     assert!(!text.is_empty(), "流式输出为空");

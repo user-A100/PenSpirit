@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CharactersPanel } from "./CharactersPanel";
 import { useCharacters } from "../../stores/characters";
 import { useWorkspace } from "../../stores/workspace";
+import { confirmDialog } from "../../stores/confirm";
+
+vi.mock("../../stores/confirm", () => ({ confirmDialog: vi.fn() }));
 import { api, type Character } from "../../lib/tauri";
 
 vi.mock("../../lib/tauri", () => ({
@@ -25,7 +28,7 @@ describe("CharactersPanel", () => {
     vi.mocked(api.relationsList).mockResolvedValue([]);
     useWorkspace.setState({ books: [], chapters: [], currentBookId: 1, currentChapterId: null, chapterContent: null });
     useCharacters.setState({ bookId: null, list: [] });
-    (window as unknown as { confirm: unknown }).confirm = vi.fn(() => true);
+    vi.mocked(confirmDialog).mockResolvedValue(true);
   });
 
   it("挂载按当前书拉取人物卡并渲染", async () => {

@@ -51,22 +51,16 @@ export function BumpWorkspace() {
   };
 
   return (
-    <div className="flex h-full bg-transparent">
-      {/* 碰撞台 */}
+    <div className="flex h-full gap-4 bg-transparent">
+      {/* 碰撞台（标题由 ViewShell 统一给出） */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[color:var(--border-subtle)] px-4">
-          <Shuffle size={15} className="text-[color:var(--accent)]" />
-          <span className="text-sm font-semibold text-[color:var(--text-primary)]">碰碰车</span>
-          <span className="text-xs text-[color:var(--text-faint)]">把不相干的词撞在一起</span>
-        </div>
+        {error && <div className="pb-2 text-xs text-[color:var(--danger)]">{error}</div>}
 
-        {error && <div className="px-4 py-2 text-xs text-[color:var(--danger)]">{error}</div>}
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1 pt-1">
           {/* 词库 */}
           <div className="mb-1.5 flex items-center gap-2">
             <span className="text-xs text-[color:var(--text-secondary)]">词库</span>
-            <span className="text-[11px] text-[color:var(--text-faint)]">{words.length} 个</span>
+            <span className="text-2xs text-[color:var(--text-faint)]">{words.length} 个</span>
             {words.length > 0 &&
               (confirmClear ? (
                 <button
@@ -75,7 +69,7 @@ export function BumpWorkspace() {
                     setConfirmClear(false);
                   }}
                   title="确认清空词库"
-                  className="rounded px-1.5 py-0.5 text-[11px] text-[color:var(--danger)] transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+                  className="rounded px-1.5 py-0.5 text-2xs text-[color:var(--danger)] transition-colors duration-150 hover:bg-[var(--fill-hover)]"
                 >
                   确认清空
                 </button>
@@ -83,7 +77,7 @@ export function BumpWorkspace() {
                 <button
                   onClick={() => setConfirmClear(true)}
                   title="清空词库"
-                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--danger)]"
                 >
                   <Eraser size={11} />
                   清空
@@ -95,13 +89,13 @@ export function BumpWorkspace() {
             {words.map((w) => (
               <span
                 key={w.id}
-                className="group flex items-center gap-1 rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] py-1 pl-2.5 pr-1.5 text-xs text-[color:var(--text-secondary)]"
+                className="group flex items-center gap-1 rounded-full border border-[color:var(--hairline)] bg-[var(--bg-elevated)] py-1 pl-2.5 pr-1.5 text-xs text-[color:var(--text-secondary)]"
               >
                 {w.word}
                 <button
                   onClick={() => void removeWord(w.id)}
                   title={`删除「${w.word}」`}
-                  className="rounded-full p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
+                  className="rounded-full p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--danger)]"
                 >
                   <X size={10} />
                 </button>
@@ -136,7 +130,7 @@ export function BumpWorkspace() {
           {previewing && (
             <div
               data-testid="batch-preview"
-              className="mb-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] px-3 py-2.5"
+              className="mb-3 rounded-lg border border-[color:var(--hairline)] bg-[var(--bg-panel)] px-3 py-2.5"
             >
               <div className="mb-2 flex items-center gap-2">
                 <span className="text-xs font-medium text-[color:var(--text-secondary)]">
@@ -144,11 +138,11 @@ export function BumpWorkspace() {
                 </span>
                 <button
                   onClick={() => void addAll()}
-                  className="rounded-md bg-[var(--accent)] px-2.5 py-1 text-[11px] font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)]"
+                  className="rounded-md bg-[var(--accent-solid)] px-2.5 py-1 text-2xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)]"
                 >
                   全部添加
                 </button>
-                <span className="text-[11px] text-[color:var(--text-faint)]">Esc 取消</span>
+                <span className="text-2xs text-[color:var(--text-faint)]">Esc 取消</span>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {pending.map((w) => {
@@ -156,7 +150,7 @@ export function BumpWorkspace() {
                   return (
                     <span
                       key={w}
-                      className={`flex items-center gap-1 rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] py-1 pl-2.5 pr-1.5 text-xs ${
+                      className={`flex items-center gap-1 rounded-full border border-[color:var(--hairline)] bg-[var(--bg-elevated)] py-1 pl-2.5 pr-1.5 text-xs ${
                         exists
                           ? "text-[color:var(--text-faint)] line-through opacity-70"
                           : "text-[color:var(--text-secondary)]"
@@ -164,12 +158,12 @@ export function BumpWorkspace() {
                     >
                       {w}
                       {exists && (
-                        <span className="text-[10px] text-[color:var(--text-faint)]">已存在</span>
+                        <span className="text-2xs text-[color:var(--text-faint)]">已存在</span>
                       )}
                       <button
                         onClick={() => setPending(pending.filter((p) => p !== w))}
                         title={`移除「${w}」`}
-                        className="rounded-full p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
+                        className="rounded-full p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--danger)]"
                       >
                         <X size={10} />
                       </button>
@@ -195,13 +189,13 @@ export function BumpWorkspace() {
             <button
               onClick={() => void draw()}
               disabled={busy || words.length < count}
-              className="flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-md bg-[var(--accent-solid)] px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:opacity-40"
             >
               <Shuffle size={13} />
               {drawn.length > 0 ? "换一组" : "碰撞"}
             </button>
             {words.length < count && (
-              <span className="text-[11px] text-[color:var(--text-faint)]">词库至少需要 {count} 个词</span>
+              <span className="text-2xs text-[color:var(--text-faint)]">词库至少需要 {count} 个词</span>
             )}
           </div>
 
@@ -216,17 +210,17 @@ export function BumpWorkspace() {
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="备注（可选）"
-                  className="w-56 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
+                  className="w-56 rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
                 />
                 <input
                   value={tags}
                   onChange={(e) => setTags(e.target.value)}
                   placeholder="标签，空格分隔"
-                  className="w-40 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
+                  className="w-40 rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
                 />
                 <button
                   onClick={() => void saveIdea()}
-                  className="flex items-center gap-1.5 rounded-md border border-[color:var(--border-subtle)] px-3 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+                  className="flex items-center gap-1.5 rounded-md border border-[color:var(--hairline)] px-3 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
                 >
                   <Sparkles size={13} />
                   存为灵感卡
@@ -236,15 +230,15 @@ export function BumpWorkspace() {
           )}
 
           {drawn.length === 0 && words.length >= count && (
-            <div className="rounded-[var(--radius-lg)] border border-dashed border-[color:var(--border-subtle)] px-6 py-12 text-center text-xs text-[color:var(--text-faint)]">
+            <div className="rounded-[var(--radius-lg)] border border-dashed border-[color:var(--hairline)] px-6 py-12 text-center text-xs text-[color:var(--text-faint)]">
               点「碰撞」抽一组词
             </div>
           )}
         </div>
       </div>
 
-      {/* 灵感卡架 */}
-      <div className="w-[320px] shrink-0 border-l border-[color:var(--border-subtle)] bg-[var(--bg-panel)]">
+      {/* 灵感卡架：卡内一块微凸的面板（不画分割线） */}
+      <div className="w-80 shrink-0 overflow-hidden rounded-[var(--r-card)] bg-[var(--fill-element)]">
         <IdeaCardShelf />
       </div>
     </div>

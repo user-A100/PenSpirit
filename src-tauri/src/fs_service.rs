@@ -74,10 +74,44 @@ pub fn delete_rel(root: &Path, rel: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// 卷首语文件名（卷目录内；rescan 不把它当章）
+pub const VOLUME_BODY: &str = "_index.md";
+
+/// 扫描到的树节点（全书先序）：正文章 md 或卷目录；parent = 所属卷目录的相对路径
+pub struct ScannedNode {
+    pub rel: String,
+    pub folder: bool,
+    pub parent: Option<String>,
+}
+
 pub struct ScannedBook {
     pub slug: String,
     pub title: String,
+    /// 全部正文章 md（含卷内），全书先序
     pub files: Vec<String>,
+    /// 整棵树（卷 + 章），全书先序
+    pub nodes: Vec<ScannedNode>,
+}
+
+/// 目录内的条目（按名排序）：(名, 是否目录)；只收子目录与 .md，跳过隐藏项与卷首语
+fn list_entries(dir: &Path) -> Vec<(String, bool)> {
+    let mut out = Vec::new();
+    if let Ok(rd) = fs::read_dir(dir) {
+        for e in rd.flatten() {
+            let name = e.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') || name == VOLUME_BODY {
+                continue;
+            }
+            let p = e.path();
+            if p.is_dir() {
+                out.push((name, true));
+            } else if p.extension().map(|x| x == "md").unwrap_or(false) {
+                out.push((name, false));
+            }
+        }
+    }
+    out.sort();
+    out
 }
 
 pub fn scan_library(root: &Path) -> AppResult<Vec<ScannedBook>> {
@@ -98,16 +132,27 @@ pub fn scan_library(root: &Path) -> AppResult<Vec<ScannedBook>> {
             .and_then(|v| v["title"].as_str().map(String::from))
             .unwrap_or_else(|| slug.clone());
         let mut files = Vec::new();
-        if let Ok(rd) = fs::read_dir(dir.join("manuscript")) {
-            for f in rd.flatten() {
-                if f.path().extension().map(|e| e == "md").unwrap_or(false) {
-                    let name = f.file_name().to_string_lossy().to_string();
-                    files.push(format!("{slug}/manuscript/{name}"));
+        let mut nodes = Vec::new();
+        // manuscript/ 顶层：md = 章，子目录 = 卷（只读一层）；隐藏项（.renumber-tmp 等）与卷首语跳过
+        let ms = dir.join("manuscript");
+        for (name, is_dir) in list_entries(&ms) {
+            let rel = format!("{slug}/manuscript/{name}");
+            if is_dir {
+                nodes.push(ScannedNode { rel: rel.clone(), folder: true, parent: None });
+                for (child, child_is_dir) in list_entries(&ms.join(&name)) {
+                    if child_is_dir {
+                        continue;
+                    }
+                    let crel = format!("{rel}/{child}");
+                    files.push(crel.clone());
+                    nodes.push(ScannedNode { rel: crel, folder: false, parent: Some(rel.clone()) });
                 }
+            } else {
+                files.push(rel.clone());
+                nodes.push(ScannedNode { rel, folder: false, parent: None });
             }
         }
-        files.sort();
-        out.push(ScannedBook { slug, title, files });
+        out.push(ScannedBook { slug, title, files, nodes });
     }
     out.sort_by(|a, b| a.slug.cmp(&b.slug));
     Ok(out)

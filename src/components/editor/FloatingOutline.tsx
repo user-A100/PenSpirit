@@ -85,7 +85,7 @@ export function FloatingOutline(props: { markdown: string }) {
         <button
           onClick={() => useOutline.getState().toggle()}
           title="收起大纲"
-          className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+          className="rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
         >
           <X size={12} />
         </button>

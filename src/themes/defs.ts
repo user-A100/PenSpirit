@@ -27,6 +27,9 @@ export const THEME_VAR_KEYS = [
   "--warning",
   "--prose-fg",
   "--tab-selected-bg",
+  // 阶段 4：强调色 / 危险色实底（填充按钮的底，保证上面的白字达标）；由对比度修正统一派生，主题不手写
+  "--accent-solid",
+  "--danger-solid",
 ] as const;
 
 export type ThemeVarKey = (typeof THEME_VAR_KEYS)[number];
@@ -35,16 +38,22 @@ export interface ThemeDef {
   id: string;
   /** 展示名（中文） */
   name: string;
-  /** 明暗倾向：true=深色底浅色字。仅作展示角标与语义标注，与 mode（界面明暗）正交 */
+  /** 明暗倾向：true=深色底浅色字 */
   dark: boolean;
+  /** 明暗配对主题 id：界面明暗与本主题倾向相反时（如跟随系统转浅色）改用它 */
+  pair?: string;
   /** 完整覆盖 THEME_VAR_KEYS 的变量表 */
   vars: Record<ThemeVarKey, string>;
 }
 
-const bixianDark: ThemeDef = {
+/** 手写的主题：派生变量（--accent-solid / --danger-solid）由 accessible() 统一补上 */
+type AuthoredTheme = Omit<ThemeDef, "vars"> & { vars: Record<Exclude<ThemeVarKey, "--accent-solid" | "--danger-solid">, string> };
+
+const bixianDark: AuthoredTheme = {
   id: "bixian-dark",
   name: "暗夜（默认）",
   dark: true,
+  pair: "bixian-light",
   vars: {
     "--bg-base": "#17171a",
     "--bg-panel": "#1d1d21",
@@ -66,10 +75,11 @@ const bixianDark: ThemeDef = {
   },
 };
 
-const bixianLight: ThemeDef = {
+const bixianLight: AuthoredTheme = {
   id: "bixian-light",
   name: "晨光",
   dark: false,
+  pair: "bixian-dark",
   vars: {
     "--bg-base": "#f6f6f8",
     "--bg-panel": "#ffffff",
@@ -91,7 +101,7 @@ const bixianLight: ThemeDef = {
   },
 };
 
-const ink: ThemeDef = {
+const ink: AuthoredTheme = {
   id: "ink",
   name: "墨色",
   dark: true,
@@ -116,7 +126,7 @@ const ink: ThemeDef = {
   },
 };
 
-const parchment: ThemeDef = {
+const parchment: AuthoredTheme = {
   id: "parchment",
   name: "羊皮纸",
   dark: false,
@@ -142,7 +152,7 @@ const parchment: ThemeDef = {
   },
 };
 
-const matcha: ThemeDef = {
+const matcha: AuthoredTheme = {
   id: "matcha",
   name: "抹茶",
   dark: false,
@@ -167,7 +177,7 @@ const matcha: ThemeDef = {
   },
 };
 
-const midnightBlue: ThemeDef = {
+const midnightBlue: AuthoredTheme = {
   id: "midnightBlue",
   name: "午夜蓝",
   dark: true,
@@ -195,10 +205,11 @@ const midnightBlue: ThemeDef = {
 // 枫叶/枫夜：移植自 Obsidian Maple 主题默认色板（color-use-custom 出厂值）。
 // Maple 全部颜色由基础色相派生：浅色 h=35（暖枫）、深色 h=207（静蓝），
 // 这里按其出厂色相换算成定值。出处 D:\Mycraft\research\maple\theme.css。
-const maple: ThemeDef = {
+const maple: AuthoredTheme = {
   id: "maple",
   name: "枫叶",
   dark: false,
+  pair: "mapleNight",
   vars: {
     // bg = hsl(35,12%,97%) / alt(35,10%,95%) / secondary(h-18, 8%,93%)
     "--bg-base": "#f8f8f6",
@@ -222,10 +233,11 @@ const maple: ThemeDef = {
   },
 };
 
-const mapleNight: ThemeDef = {
+const mapleNight: AuthoredTheme = {
   id: "mapleNight",
   name: "枫夜",
   dark: true,
+  pair: "maple",
   vars: {
     // bg = hsl(207,5%,11%) / alt(207,10%,13%) / secondary(h-18, 6%,12%)
     "--bg-base": "#1b1c1d",
@@ -279,10 +291,11 @@ function rgba(h: string, alpha: number): string {
 }
 
 // Zen 深色：石墨底 + 主色微染；边框为主色压深后的两次混入
-const zenInk: ThemeDef = {
+const zenInk: AuthoredTheme = {
   id: "zenInk",
   name: "墨岩",
   dark: true,
+  pair: "zenPaper",
   vars: {
     "--bg-base": "#1b1b1b",
     "--bg-panel": "#1f1f1f",
@@ -306,10 +319,11 @@ const zenInk: ThemeDef = {
 
 // Zen 浅色：暖白纸面；浅色模式下主色先压暗再参与边框/悬浮配方
 const zenPrimaryLight = mix(ZEN_PRIMARY, "#101010", 0.4);
-const zenPaper: ThemeDef = {
+const zenPaper: AuthoredTheme = {
   id: "zenPaper",
   name: "纸白",
   dark: false,
+  pair: "zenInk",
   vars: {
     "--bg-base": mix(ZEN_PRIMARY, "#f4f4f4", 0.03),
     "--bg-panel": mix(ZEN_PRIMARY, "#ffffff", 0.02),
@@ -331,6 +345,109 @@ const zenPaper: ThemeDef = {
   },
 };
 
+// —— 对比度修正（阶段 4，WCAG 2.x AA）——
+// 手写的配色表达的是「感觉」（底色 + 前景的色相）。上线前统一过一遍对比度：前景色保持色相与彩度，
+// 只在 OKLab 里调明度（深色主题调亮、浅色主题调暗），刚好让它在文字会落到的每一层背景
+// （背板 / 底色 / 卡片 / 浮层）上达标——正文档 4.5:1，提示档（faint）3:1；
+// 另派生 --accent-solid：强调色压暗到白字达标为止，作填充按钮的底（--accent 本身留给文字与图标）。
+// 审计脚本：src/themes/contrast.test.ts。
+
+export const AA_TEXT = 4.5;
+export const AA_HINT = 3;
+/** 留一点余量，免得舍入后卡在线上 */
+const AA_MARGIN = 0.05;
+
+function relLum(hex: string): number {
+  const [r, g, b] = hexChannels(hex).map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** WCAG 对比度（两个 #rrggbb） */
+export function contrastRatio(a: string, b: string): number {
+  const [x, y] = [relLum(a), relLum(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+
+const toLinear = (v: number) => {
+  const c = v / 255;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+};
+const fromLinear = (c: number) => {
+  const v = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+  return Math.round(Math.min(1, Math.max(0, v)) * 255);
+};
+
+function toOklab(hex: string): [number, number, number] {
+  const [r, g, b] = hexChannels(hex).map(toLinear);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+function fromOklab([L, a, b]: [number, number, number]): string {
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  return channelsToHex([
+    fromLinear(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+    fromLinear(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+    fromLinear(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s),
+  ]);
+}
+
+/** 只调 OKLab 明度（保持色相与彩度） */
+function shiftLightness(hex: string, dL: number): string {
+  const [L, a, b] = toOklab(hex);
+  return fromOklab([Math.min(1, Math.max(0, L + dL)), a, b]);
+}
+
+/** 把前景色调到在所有背景上都达到 need：深色主题往亮调、浅色主题往暗调；本就达标的原样返回。
+ *  背景可以依赖前景本身（同色淡底的标签：底色随前景一起变） */
+function fitForeground(fg: string, surfaces: string[] | ((c: string) => string[]), need: number, lighten: boolean): string {
+  const of = typeof surfaces === "function" ? surfaces : () => surfaces;
+  let c = fg;
+  for (let i = 0; i < 200 && of(c).some((s) => contrastRatio(c, s) < need + AA_MARGIN); i++) c = shiftLightness(c, lighten ? 0.005 : -0.005);
+  return c;
+}
+
+/** 同色淡底（标签 / 胶囊：彩色字压在自身 15% 的淡底上） */
+export const TINT = 0.15;
+export function tintSurfaces(fg: string, cards: string[]): string[] {
+  return cards.map((s) => mix(fg, s, TINT));
+}
+
+/** 补上派生变量并做对比度修正 */
+export function accessible(t: AuthoredTheme): ThemeDef {
+  const v = { ...t.vars } as Record<ThemeVarKey, string>;
+  const surfaces = [backdropOf(t as ThemeDef), v["--bg-base"], v["--bg-panel"], v["--bg-elevated"]];
+  for (const k of ["--text-primary", "--text-secondary", "--prose-fg"] as const) {
+    v[k] = fitForeground(v[k], surfaces, AA_TEXT, t.dark);
+  }
+  // 彩色字还会压在自身的淡底标签上（卡片 / 浮层上的 15% 同色底）
+  for (const k of ["--accent", "--danger", "--success", "--warning"] as const) {
+    v[k] = fitForeground(v[k], (c) => [...surfaces, ...tintSurfaces(c, [v["--bg-panel"], v["--bg-elevated"]])], AA_TEXT, t.dark);
+  }
+  v["--text-faint"] = fitForeground(v["--text-faint"], surfaces, AA_HINT, t.dark);
+  if (v["--accent"] !== t.vars["--accent"]) {
+    // 强调色动过：悬停色与淡底随之重算（悬停沿同一方向再走一小步；淡底沿用原透明度）
+    v["--accent-hover"] = shiftLightness(v["--accent"], t.dark ? 0.04 : -0.04);
+    const alpha = /rgba\([^)]*,\s*([\d.]+)\)/.exec(t.vars["--accent-dim"])?.[1] ?? "0.15";
+    v["--accent-dim"] = rgba(v["--accent"], Number(alpha));
+  }
+  // 强调色 / 危险色实底：白字达标为止一路压暗
+  v["--accent-solid"] = fitForeground(v["--accent"], ["#ffffff"], AA_TEXT, false);
+  v["--danger-solid"] = fitForeground(v["--danger"], ["#ffffff"], AA_TEXT, false);
+  return { ...t, vars: v };
+}
+
 export const THEMES: ThemeDef[] = [
   bixianDark,
   bixianLight,
@@ -342,14 +459,25 @@ export const THEMES: ThemeDef[] = [
   mapleNight,
   zenInk,
   zenPaper,
-];
+].map(accessible);
 
 export function findTheme(id: string): ThemeDef | undefined {
   return THEMES.find((t) => t.id === id);
 }
 
-/** 背板色：bg-base 再压暗一档，内容浮卡与窗口边框之间要有可感知的落差
- *  （Zen 的 chrome backdrop 比内容深；比例经实机核验定档） */
-export function backdropOf(theme: ThemeDef): string {
-  return mix(theme.vars["--bg-base"], "#000000", theme.dark ? 0.45 : 0.9);
+/**
+ * 实际生效的主题：所选主题的明暗倾向与界面明暗相反、且有配对主题时换成配对主题；
+ * 无配对的单态主题（墨色/午夜蓝/羊皮纸/抹茶）保持自身。
+ */
+export function resolveThemeId(colorTheme: string, wantDark: boolean): string {
+  const t = findTheme(colorTheme);
+  if (!t) return colorTheme;
+  if (t.dark === wantDark || !t.pair || !findTheme(t.pair)) return t.id;
+  return t.pair;
+}
+
+/** 背板色：bg-base 再压一档。Zen 的窗口背板与内容卡差一档但不刺眼
+ *  （深色：卡 #202020 / 背板 ~#131313；浅色：卡 #fff / 背板 ~#ebebeb） */
+export function backdropOf(theme: Pick<ThemeDef, "vars" | "dark">): string {
+  return mix(theme.vars["--bg-base"], "#000000", theme.dark ? 0.7 : 0.94);
 }

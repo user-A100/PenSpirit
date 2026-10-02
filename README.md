@@ -2,6 +2,32 @@
 
 本地优先的 Rust 桌面 AI 长篇小说创作工具。人写为主、AI 辅助；人物图谱、伏笔追踪、灵感碰撞。
 
+## 体验层重建（2026-10）
+
+在不动数据层的前提下重做了体验层，涉及界面、AI 对话、侧栏三个方向。正文仍以 Markdown 文件为唯一真源，SQLite 可随时从磁盘重建，迁移只加不改。计划、调研与逐阶段实施记录见 `docs/specs/2026-10-01-experience-rebuild-plan.md`。
+
+- **界面（Zen 化）**
+  - 布局：背板上浮起三张卡片——稿纸、AI 和右侧面板，卡间缝隙即拖拽条；左 Ribbon 与右 Dock 竖条对称。
+  - 主题：主题成对，跟随系统明暗；十套主题全部通过对比度审计（WCAG AA，见 `docs/perf-baseline.md`）。
+  - 快捷操作：命令面板 Ctrl+K（拼音首字母）、专注模式 F11、快捷键速查 **Ctrl+/**（数据来自命令注册表）。
+  - 键盘：所有可交互控件都有键盘焦点环。
+- **AI 对话卡**
+  - 两种模式：写正文 / 讨论；多轮对话、光标感知、选区引用。
+  - 输入：`/` 斜杠命令（内置 + 自定义命令库，带变量对话框）、`@` 引用（章节 / 设定 / 素材 / 相关段落）。
+  - 会话与消息：重新生成保留各版本、编辑重发、分叉、收藏、会话置顶 / 归档 / 搜索。
+  - 采纳：逐段对照，可只采纳部分段落；AI 文字着色，检查点可回滚。
+  - 编辑器内：就地改写 Alt+K、此处续写 Alt+Enter；幽灵补全（默认关，Tab 接受）、换个说法、朗读、侧聊。
+  - Agent：工具调用卡，本轮改动一键撤销 / 重做。
+  - 上下文：附件、上下文包、词语偏置（AI 腔禁用词）、正文内 `[待写指令]` / `{作者批注}`。
+  - 其他：生成中排队或插话、👍👎 评分、导出 Markdown、会话内查找 Ctrl+F。
+- **侧栏（Binder）**
+  - 卷 / 章两级，卷即 `manuscript/` 下的子目录。
+  - 选择：单击 / Ctrl / Shift 多选，多选进组视图（串烧 / 卡片墙 / 大纲列）。
+  - 键盘：Ctrl+↑↓ 移位，Ctrl+←→ 升降级。
+  - 拖放：Pointer 事件实现，带插入线与「放入」高亮。
+  - 过滤（含拼音首字母，保留所属卷）、聚焦单卷、集合标签页。
+  - 拆分 / 合并章节（可撤销）。重排同步重编磁盘文件序号，删库重建后顺序与层级不丢。
+
 ## M3 功能
 
 - **阅读模式**：Ribbon 切「阅读」进入全书沉浸阅读——TipTap 只读渲染，排版默认值取自作家助手读者视角（19px/行高 1.9/段距 1em/页宽 800），字号/行距（连续 1.4-3.0）/字距/段距/页宽/页边/字体/两端对齐/底部留白逐项可调；七套底色预设（白纸/暗夜/米黄/护眼绿/深灰/藏青/暖褐）+ 自定义背景图；视口伪分页页码（顶栏与底部进度条均显「N/M 页」）；进度记忆（每本书记住读到哪章哪个位置）；Ctrl+←/→ 换章、Ctrl+↑/↓ 章首尾、长按 Esc 1500ms 退出（防误退）。
@@ -51,13 +77,15 @@
     cd src-tauri && cargo test   # Rust 测试
     pnpm tauri build    # 打包
 
+实机核验（需先 `node scripts/verify/app.mjs start` 带调试端口启动应用）：`node scripts/verify/p0.mjs` … `p4.mjs`，每阶段一个脚本。脚本只在自建的测试书里操作，结束后删除；localStorage、服务商、agent 登记与全局设置都会先快照、后逐项还原。AI 部分用本地假服务（`scripts/verify/mock-llm.mjs` / `mock-acp.mjs`），不需要真 Key。对比度审计：`npx vitest run src/themes/contrast.test.ts`；性能基线与复跑方法：`docs/perf-baseline.md`。
+
 ## 数据位置
 
 - 正文 markdown：`%APPDATA%/com.bixian.app/library/<书>/manuscript/*.md`（唯一真源，可随时用侧栏「重建索引」恢复数据库）。
 - 库内隐藏目录（均不参与扫描/搜索/导出）：`<书>/.trash/`（章节回收站）、`<书>/.history/`（版本快照）、`.trash_books/`（书籍回收站）。
 - 数据库（书 / 章节索引 / 服务商 / 文风卡 / 会话与消息 / 词库 / 灵感卡 / 写作统计 / 伏笔 / 通用设置）：`%APPDATA%/com.bixian.app/bixian.db`；阅读背景图：`%APPDATA%/com.bixian.app/background/`。
 
-设计文档：`docs/specs/2026-09-19-bixian-spec.md`；当前里程碑计划：`docs/superpowers/plans/`。
+设计文档：`docs/specs/2026-09-19-bixian-spec.md`；体验层重建计划与实施记录：`docs/specs/2026-10-01-experience-rebuild-plan.md`；性能基线：`docs/perf-baseline.md`；更早的里程碑计划：`docs/superpowers/plans/`。
 
 ## 许可
 

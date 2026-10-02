@@ -80,7 +80,7 @@ export function Heatmap({ data }: { data: HeatCell[] }) {
                 width={CELL}
                 height={CELL}
                 rx={2}
-                fill={lvl === 0 ? "var(--bg-hover)" : "var(--accent)"}
+                fill={lvl === 0 ? "var(--fill-active)" : "var(--accent)"}
                 fillOpacity={lvl === 0 ? 1 : OPACITY[lvl - 1]}
               >
                 <title>{`${c.date} · ${c.words.toLocaleString("en-US")} 字 · ${c.minutes} 分钟`}</title>

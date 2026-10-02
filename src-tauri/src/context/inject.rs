@@ -5,8 +5,110 @@ use rusqlite::Connection;
 
 use crate::context::assembler::InjectionInput;
 use crate::error::{AppError, AppResult};
-use crate::models::{default_context_config, ContextConfig, Foreshadow};
+use crate::models::{default_context_config, ContextConfig, Foreshadow, Mention};
 use crate::repo;
+
+/// @ 引用资料单章摘录上限（字符数，取章尾——离当前情节最近的部分）。
+pub const MENTION_CHAPTER_CHARS: usize = 1500;
+
+/// 阶段 2A：把 @ 引用渲染成一个「引用资料」注入槽位。
+/// 章节：标题 + 梗概 + 章尾摘录（读盘）；人物 / 伏笔 / 情节块 / 大纲：结构化一行或一段。
+/// 已删除 / 跨书的条目静默跳过（引用可能在发送前被删）。
+pub fn render_mentions(
+    conn: &Connection,
+    root: &std::path::Path,
+    book_id: i64,
+    mentions: &[Mention],
+) -> AppResult<Option<InjectionInput>> {
+    if mentions.is_empty() {
+        return Ok(None);
+    }
+    let mut parts: Vec<String> = Vec::new();
+    let mut labels: Vec<String> = Vec::new();
+    for m in mentions {
+        match m.kind.as_str() {
+            "chapter" => {
+                let Ok(ch) = repo::chapters::get(conn, m.id) else { continue };
+                if ch.book_id != book_id || ch.deleted_at.is_some() {
+                    continue;
+                }
+                labels.push(format!("《{}》", ch.title));
+                let mut s = format!("◆ 章节《{}》", ch.title);
+                if !ch.synopsis.is_empty() {
+                    s.push_str(&format!("\n梗概：{}", ch.synopsis));
+                }
+                // 阶段 2C：相关检索带来的段落优先（比章尾更对题）
+                if let Some(p) = m.passage.as_deref().filter(|p| !p.trim().is_empty()) {
+                    let p: String = p.chars().take(crate::context::related::PASSAGE_MAX_CHARS).collect();
+                    s.push_str(&format!("\n相关段落：\n{p}"));
+                } else {
+                    let text = crate::fs_service::read_chapter(root, &ch.file_path).unwrap_or_default();
+                    let total = text.chars().count();
+                    let tail: String = if total > MENTION_CHAPTER_CHARS {
+                        text.chars().skip(total - MENTION_CHAPTER_CHARS).collect()
+                    } else {
+                        text
+                    };
+                    if !tail.trim().is_empty() {
+                        s.push_str(&format!("\n章尾摘录：\n{tail}"));
+                    }
+                }
+                parts.push(s);
+            }
+            // 阶段 2C：素材（全局素材库）
+            "material" => {
+                let Some(mat) = repo::materials::list(conn)?.into_iter().find(|x| x.id == m.id) else { continue };
+                labels.push(format!("素材「{}」", mat.title));
+                let body: String = m
+                    .passage
+                    .clone()
+                    .filter(|p| !p.trim().is_empty())
+                    .unwrap_or(mat.content)
+                    .chars()
+                    .take(crate::context::related::PASSAGE_MAX_CHARS)
+                    .collect();
+                let cat = if mat.category.is_empty() { String::new() } else { format!("（{}）", mat.category) };
+                parts.push(format!("◆ 素材「{}」{cat}\n{body}", mat.title));
+            }
+            "character" => {
+                let Some(c) = repo::characters::list_by_book(conn, book_id)?.into_iter().find(|c| c.id == m.id) else { continue };
+                labels.push(format!("人物 {}", c.name));
+                parts.push(format!(
+                    "◆ 人物 {}",
+                    character_line(&c.name, &c.role, &split_aliases(&c.aliases), &c.description).trim_start_matches("- ")
+                ));
+            }
+            "foreshadow" => {
+                let Some(f) = repo::foreshadows::list_by_book(conn, book_id)?.into_iter().find(|f| f.id == m.id) else { continue };
+                labels.push(format!("伏笔「{}」", f.title));
+                let note = if f.override_note.is_empty() { &f.note } else { &f.override_note };
+                let state = if f.status == "active" { "未回收" } else { "已回收" };
+                parts.push(format!("◆ 伏笔「{}」（{state}）{}", f.title, if note.is_empty() { String::new() } else { format!("：{note}") }));
+            }
+            "plot" => {
+                let Some(b) = repo::plot_blocks::list_by_book(conn, book_id)?.into_iter().find(|b| b.id == m.id) else { continue };
+                labels.push("情节块".into());
+                parts.push(format!("◆ 情节块：{}", b.content));
+            }
+            "outline" => {
+                let Some(o) = repo::outlines::list_by_book(conn, book_id)?.into_iter().find(|o| o.id == m.id) else { continue };
+                labels.push(format!("大纲「{}」", o.title));
+                parts.push(format!("◆ 大纲「{}」\n{}", o.title, o.content));
+            }
+            _ => {}
+        }
+    }
+    if parts.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(InjectionInput {
+        name: "引用资料".into(),
+        source: format!("@ 引用 {} 项", parts.len()),
+        text: parts.join("\n\n"),
+        budget: 0,
+        reason: format!("你在输入框 @ 了：{}", labels.join("、")),
+    }))
+}
 
 const CONFIG_KEY_PREFIX: &str = "context:book:";
 
@@ -86,18 +188,23 @@ pub fn collect(
     let cfg = load_config(conn, book_id)?;
     let mut out = Vec::new();
 
-    // ---- 角色卡：关键词命中（名/别名出现在当前章正文），all=true 全量 ----
+    // ---- 角色卡：关键词命中（名/别名出现在当前章正文），all=true 全量；对 AI 隐藏的跳过 ----
     if cfg.characters.enabled {
         let chars = repo::characters::list_by_book(conn, book_id)?;
         let low = chapter_text.to_lowercase();
-        let hits: Vec<_> = chars
+        let hidden = chars.iter().filter(|c| c.ai_hidden).count();
+        // (人物, 命中的词)：全量注入时无命中词
+        let hits: Vec<(&crate::models::Character, Option<String>)> = chars
             .iter()
-            .filter(|c| {
-                cfg.characters.all
-                    || (!c.name.is_empty() && low.contains(&c.name.to_lowercase()))
-                    || split_aliases(&c.aliases)
-                        .iter()
-                        .any(|a| low.contains(&a.to_lowercase()))
+            .filter(|c| !c.ai_hidden)
+            .filter_map(|c| {
+                if !c.name.is_empty() && low.contains(&c.name.to_lowercase()) {
+                    return Some((c, Some(c.name.clone())));
+                }
+                if let Some(a) = split_aliases(&c.aliases).into_iter().find(|a| low.contains(&a.to_lowercase())) {
+                    return Some((c, Some(format!("{a}→{}", c.name))));
+                }
+                cfg.characters.all.then_some((c, None))
             })
             .collect();
         if !hits.is_empty() {
@@ -106,9 +213,18 @@ pub fn collect(
             } else {
                 format!("关键词命中 {} 人", hits.len())
             };
+            let terms: Vec<String> = hits.iter().filter_map(|(_, t)| t.clone()).collect();
+            let mut reason = if cfg.characters.all {
+                "注入设置开了「全部人物」".to_string()
+            } else {
+                format!("正文提到：{}", terms.join("、"))
+            };
+            if hidden > 0 {
+                reason.push_str(&format!("；另有 {hidden} 张人物卡设为对 AI 隐藏"));
+            }
             let text = hits
                 .iter()
-                .map(|c| character_line(&c.name, &c.role, &split_aliases(&c.aliases), &c.description))
+                .map(|(c, _)| character_line(&c.name, &c.role, &split_aliases(&c.aliases), &c.description))
                 .collect::<Vec<_>>()
                 .join("\n");
             out.push(InjectionInput {
@@ -116,6 +232,7 @@ pub fn collect(
                 source,
                 text,
                 budget: cfg.characters.budget.max(0) as usize,
+                reason,
             });
         }
     }
@@ -131,9 +248,10 @@ pub fn collect(
         };
         let cur_ord = current_chapter_id.and_then(&ord_of);
         let all_fs = repo::foreshadows::list_by_book(conn, book_id)?;
+        let hidden = all_fs.iter().filter(|f| f.status == "active" && f.ai_hidden).count();
         let actives: Vec<_> = all_fs
             .iter()
-            .filter(|f| f.status == "active")
+            .filter(|f| f.status == "active" && !f.ai_hidden)
             .filter(|f| cfg.foreshadows.ids.as_ref().map_or(true, |ids| ids.contains(&f.id)))
             .collect();
         if !actives.is_empty() {
@@ -151,11 +269,20 @@ pub fn collect(
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
+            let mut reason = if cfg.foreshadows.ids.is_some() {
+                "注入设置圈定的未回收伏笔".to_string()
+            } else {
+                "未回收的伏笔自动提醒（防遗忘）".to_string()
+            };
+            if hidden > 0 {
+                reason.push_str(&format!("；另有 {hidden} 条设为对 AI 隐藏"));
+            }
             out.push(InjectionInput {
                 name: "伏笔提醒".into(),
                 source: format!("未回收 {} 条", actives.len()),
                 text,
                 budget: cfg.foreshadows.budget.max(0) as usize,
+                reason,
             });
         }
     }
@@ -165,6 +292,7 @@ pub fn collect(
         let blocks = repo::plot_blocks::list_by_book(conn, book_id)?;
         let picked: Vec<_> = blocks
             .iter()
+            .filter(|b| !b.ai_hidden)
             .filter(|b| cfg.plots.ids.as_ref().map_or(true, |ids| ids.contains(&b.id)))
             .collect();
         if !picked.is_empty() {
@@ -183,6 +311,7 @@ pub fn collect(
                 source,
                 text,
                 budget: cfg.plots.budget.max(0) as usize,
+                reason: if cfg.plots.ids.is_some() { "注入设置里勾选的情节块".into() } else { "注入设置开了「全部情节块」".into() },
             });
         }
     }
@@ -221,6 +350,7 @@ pub fn collect(
                 source,
                 text,
                 budget: cfg.ideas.budget.max(0) as usize,
+                reason: if cfg.ideas.ids.is_some() { "注入设置里勾选的灵感卡".into() } else { "注入设置开了「全部灵感卡」".into() },
             });
         }
     }

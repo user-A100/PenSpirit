@@ -3,6 +3,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { FileDown } from "lucide-react";
 import { api, type ChapterMeta } from "../../lib/tauri";
 import { Modal } from "../ui/Modal";
+import { errMsg } from "../../lib/errors";
 
 // M2-T8 导出对话框：勾选章节 → 选格式 → 选保存路径。
 // 默认全选（导出整本是最常见诉求）；输出顺序由 Rust 侧按书内章节序决定，
@@ -48,7 +49,7 @@ export function ExportDialog(props: {
       setDone(`已导出到 ${dest}`);
       setError(null);
     } catch (e) {
-      setError(String(e));
+      setError(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -66,7 +67,7 @@ export function ExportDialog(props: {
       testId="export-backdrop"
     >
         {/* 格式与选项 */}
-        <div className="flex shrink-0 flex-wrap items-center gap-4 border-b border-[color:var(--border-subtle)] px-4 py-3">
+        <div className="flex shrink-0 flex-wrap items-center gap-4 border-b border-[color:var(--hairline)] px-4 py-3">
           <div className="flex items-center gap-1">
             {(["txt", "docx"] as const).map((f) => (
               <button
@@ -75,7 +76,7 @@ export function ExportDialog(props: {
                 className={`rounded-md px-2.5 py-1 text-xs transition-colors duration-150 ${
                   format === f
                     ? "bg-[var(--accent-dim)] text-[color:var(--text-primary)]"
-                    : "text-[color:var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                    : "text-[color:var(--text-secondary)] hover:bg-[var(--fill-hover)]"
                 }`}
               >
                 {f.toUpperCase()}
@@ -107,7 +108,7 @@ export function ExportDialog(props: {
             props.chapters.map((c) => (
               <label
                 key={c.id}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-[var(--fill-hover)]"
               >
                 <input
                   type="checkbox"
@@ -118,7 +119,7 @@ export function ExportDialog(props: {
                 <span className="min-w-0 flex-1 truncate text-xs text-[color:var(--text-primary)]">
                   {c.title}
                 </span>
-                <span className="shrink-0 text-[11px] text-[color:var(--text-faint)]">
+                <span className="shrink-0 text-2xs text-[color:var(--text-faint)]">
                   {c.word_count.toLocaleString()} 字
                 </span>
               </label>
@@ -126,7 +127,7 @@ export function ExportDialog(props: {
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[color:var(--border-subtle)] px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[color:var(--hairline)] px-4 py-3">
           <button
             onClick={() =>
               setPicked(allPicked ? new Set() : new Set(props.chapters.map((c) => c.id)))
@@ -137,13 +138,13 @@ export function ExportDialog(props: {
             {allPicked ? "全不选" : "全选"}
           </button>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-[color:var(--text-faint)]">
+            <span className="text-2xs text-[color:var(--text-faint)]">
               {totalWords > 0 && `约 ${totalWords.toLocaleString()} 字`}
             </span>
             <button
               onClick={() => void run()}
               disabled={busy || picked.size === 0}
-              className="flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-md bg-[var(--accent-solid)] px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:opacity-40"
             >
               <FileDown size={13} />
               {busy ? "导出中…" : "导出"}

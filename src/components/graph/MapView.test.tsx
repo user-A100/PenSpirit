@@ -1,5 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { confirmDialog } from "../../stores/confirm";
+
+vi.mock("../../stores/confirm", () => ({ confirmDialog: vi.fn() }));
 
 const state = vi.hoisted(() => ({
   maps: [] as Array<{ id: number; book_id: number; name: string; path: string; created_at: string; updated_at: string }>,
@@ -147,7 +150,7 @@ describe("MapView", () => {
     fireEvent.click(screen.getByTestId("map-rename-save"));
     await waitFor(() => expect(state.rename).toHaveBeenCalledWith(7, "九洲全图"));
 
-    (window as unknown as { confirm: unknown }).confirm = vi.fn(() => true);
+    vi.mocked(confirmDialog).mockResolvedValue(true);
     fireEvent.click(screen.getByTestId("map-delete-7"));
     await waitFor(() => expect(state.removeMap).toHaveBeenCalledWith(7));
   });

@@ -45,7 +45,7 @@ export function NavPanel({ bookTitle, chapters, currentChapterId, onSelectChapte
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="过滤章节…"
-          className="w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-base)] px-2 py-1 text-xs outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--border-strong)]"
+          className="w-full rounded-md border border-[color:var(--hairline)] bg-[var(--bg-base)] px-2 py-1 text-xs outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--border-strong)]"
         />
       </div>
       <ul ref={listRef} className="read-nav-list min-h-0 flex-1 overflow-y-auto px-2 py-1">
@@ -64,7 +64,7 @@ export function NavPanel({ bookTitle, chapters, currentChapterId, onSelectChapte
           <li className="px-2 py-3 text-center text-xs text-[var(--text-faint)]">无匹配章节</li>
         )}
       </ul>
-      <div className="border-t border-[var(--border-subtle)] px-4 py-2 text-[11px] text-[var(--text-faint)]">
+      <div className="border-t border-[color:var(--hairline)] px-4 py-2 text-2xs text-[var(--text-faint)]">
         本书 {chapters.length} 章
       </div>
     </div>

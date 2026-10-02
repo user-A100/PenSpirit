@@ -22,6 +22,19 @@ fn book_chapter_full_roundtrip() {
 }
 
 #[test]
+fn rename_book_changes_title_only() {
+    let (_tmp, s) = setup();
+    let book = cmd::create_book_inner(&s, "旧名").unwrap();
+    let ch = cmd::create_chapter_inner(&s, book.id, "一章").unwrap();
+    let renamed = cmd::rename_book_inner(&s, book.id, "  新名  ").unwrap();
+    assert_eq!(renamed.title, "新名");
+    assert_eq!(renamed.slug, book.slug, "slug 是目录身份，不随书名改");
+    assert!(s.root.join(&ch.file_path).exists(), "章节文件原地不动");
+    assert!(cmd::rename_book_inner(&s, book.id, "   ").is_err());
+    assert!(cmd::rename_book_inner(&s, 9999, "x").is_err());
+}
+
+#[test]
 fn rename_moves_file() {
     let (tmp, s) = setup();
     let book = cmd::create_book_inner(&s, "书").unwrap();

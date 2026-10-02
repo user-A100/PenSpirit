@@ -1,0 +1,4 @@
+-- 阶段 2B 会话管理：置顶 / 归档会话，收藏回答（同时存进素材库）。只加列。
+ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sessions ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE messages ADD COLUMN starred INTEGER NOT NULL DEFAULT 0;

@@ -48,7 +48,7 @@ function StructureWorkspace() {
     <div className="flex h-full flex-col gap-3">
       {/* 工具条：三模式切换 + 模板管理入口 */}
       <div className="flex shrink-0 items-center gap-1">
-        <div className="flex items-center gap-0.5 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] p-0.5">
+        <div className="flex items-center gap-0.5 rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] p-0.5">
           {MODES.map((m) => {
             const Icon = m.icon;
             const active = mode === m.id;
@@ -78,7 +78,7 @@ function StructureWorkspace() {
         <button
           onClick={() => setTemplatesOpen(true)}
           title="章节模板管理"
-          className="flex shrink-0 items-center gap-1 rounded-md border border-[color:var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:border-[color:var(--accent)] hover:text-[color:var(--text-primary)]"
+          className="flex shrink-0 items-center gap-1 rounded-md border border-[color:var(--hairline)] px-2 py-1 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:border-[color:var(--accent)] hover:text-[color:var(--text-primary)]"
         >
           <NotebookText size={13} />
           模板{templateCount > 0 ? ` (${templateCount})` : ""}
@@ -86,7 +86,7 @@ function StructureWorkspace() {
       </div>
 
       {/* 内容区：卡片墙/大纲列自滚动，串烧居中排版 */}
-      <div className={`min-h-0 flex-1 ${mode === "scrivenings" ? "overflow-y-auto rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] p-5" : ""}`}>
+      <div className={`min-h-0 flex-1 ${mode === "scrivenings" ? "overflow-y-auto rounded-md border border-[color:var(--hairline)] bg-[var(--bg-panel)] p-5" : ""}`}>
         {mode === "corkboard" && <Corkboard />}
         {mode === "outliner" && <OutlinerTable />}
         {mode === "scrivenings" && <Scrivenings />}

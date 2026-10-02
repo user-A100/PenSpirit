@@ -6,6 +6,7 @@ import { ImagePlus, Search, X } from "lucide-react";
 import { api } from "../../lib/tauri";
 import type { BgImage } from "../../lib/tauri";
 import { READING_BG_PRESETS, useReadingPrefs } from "./readingPrefs";
+import { confirmDialog } from "../../stores/confirm";
 
 // 右侧阅读设置面板（M3-T6，books-reader SettingPanel 简化移植）：
 // 分区带 data-search-key，顶部搜索框按标题打分（整词 1000 / 前缀 900 / 子序列 100），
@@ -64,7 +65,7 @@ function bestSection(query: string): string | null {
 function Section({ searchKey, title, children }: { searchKey: string; title: string; children: ReactNode }) {
   return (
     <section data-search-key={searchKey} className="rounded-lg px-1 py-3">
-      <h3 className="pb-2 text-[11px] font-medium tracking-wider text-[var(--text-faint)]">{title}</h3>
+      <h3 className="pb-2 text-2xs font-medium tracking-wider text-[var(--text-faint)]">{title}</h3>
       <div className="flex flex-col gap-2.5">{children}</div>
     </section>
   );
@@ -82,7 +83,7 @@ function SliderRow(props: {
   const { label, min, max, step, value, onChange, fmt } = props;
   return (
     <div className="flex items-center gap-2">
-      <span className="w-8 shrink-0 text-[11px] text-[var(--text-secondary)]">{label}</span>
+      <span className="w-8 shrink-0 text-2xs text-[var(--text-secondary)]">{label}</span>
       <input
         type="range"
         min={min}
@@ -93,7 +94,7 @@ function SliderRow(props: {
         onChange={(e) => onChange(Number(e.target.value))}
         className="min-w-0 flex-1 accent-[var(--accent)]"
       />
-      <span className="w-12 shrink-0 text-right text-[11px] tabular-nums text-[var(--text-secondary)]">
+      <span className="w-12 shrink-0 text-right text-2xs tabular-nums text-[var(--text-secondary)]">
         {fmt ? fmt(value) : value}
       </span>
     </div>
@@ -155,7 +156,7 @@ export function SettingPanel() {
   };
 
   const onDelete = async (img: BgImage) => {
-    if (!window.confirm(`删除背景图「${img.name}」？`)) return;
+    if (!(await confirmDialog({ title: `删除背景图「${img.name}」？`, confirmLabel: "删除", danger: true }))) return;
     try {
       await api.readingBgDelete(img.id);
     } catch (e) {
@@ -172,7 +173,7 @@ export function SettingPanel() {
 
   const segBtn = (active: boolean) =>
     `px-2.5 py-1 transition-colors ${
-      active ? "bg-[var(--accent-dim)] text-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+      active ? "bg-[var(--accent-dim)] text-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--fill-hover)]"
     }`;
 
   return (
@@ -185,7 +186,7 @@ export function SettingPanel() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="搜索设置…"
-          className="w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-base)] px-2 py-1 text-xs outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--border-strong)]"
+          className="w-full rounded-md border border-[color:var(--hairline)] bg-[var(--bg-base)] px-2 py-1 text-xs outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--border-strong)]"
         />
       </div>
 
@@ -211,7 +212,7 @@ export function SettingPanel() {
               );
             })}
           </div>
-          <div className="flex items-center gap-4 text-[11px] text-[var(--text-secondary)]">
+          <div className="flex items-center gap-4 text-2xs text-[var(--text-secondary)]">
             <label className="flex items-center gap-1.5">
               底色
               <input
@@ -219,7 +220,7 @@ export function SettingPanel() {
                 aria-label="自定义底色"
                 value={prefs.bgColor}
                 onChange={(e) => prefs.set({ bgColor: e.target.value })}
-                className="h-6 w-8 cursor-pointer rounded border border-[var(--border-subtle)] bg-transparent p-0"
+                className="h-6 w-8 cursor-pointer rounded border border-[color:var(--hairline)] bg-transparent p-0"
               />
             </label>
             <label className="flex items-center gap-1.5">
@@ -229,11 +230,11 @@ export function SettingPanel() {
                 aria-label="自定义文字色"
                 value={prefs.textColor}
                 onChange={(e) => prefs.set({ textColor: e.target.value })}
-                className="h-6 w-8 cursor-pointer rounded border border-[var(--border-subtle)] bg-transparent p-0"
+                className="h-6 w-8 cursor-pointer rounded border border-[color:var(--hairline)] bg-transparent p-0"
               />
             </label>
           </div>
-          <p className="text-[10px] text-[var(--text-faint)]">深色底建议搭配浅色文字</p>
+          <p className="text-2xs text-[var(--text-faint)]">深色底建议搭配浅色文字</p>
         </Section>
 
         {/* 背景图 */}
@@ -246,7 +247,7 @@ export function SettingPanel() {
             导入图片（png/jpg/webp/gif，≤10MB）
           </button>
           {images.length === 0 && (
-            <p className="text-[10px] text-[var(--text-faint)]">还没有背景图，导入一张试试</p>
+            <p className="text-2xs text-[var(--text-faint)]">还没有背景图，导入一张试试</p>
           )}
           {images.length > 0 && (
             <div className="grid grid-cols-3 gap-2">
@@ -261,7 +262,7 @@ export function SettingPanel() {
                       className={`block aspect-[4/3] w-full rounded-md border bg-cover bg-center ${
                         active
                           ? "border-[var(--accent)] ring-2 ring-[var(--accent)]"
-                          : "border-[var(--border-subtle)]"
+                          : "border-[color:var(--hairline)]"
                       }`}
                       style={{ backgroundImage: `url(${convertFileSrc(img.path)})` }}
                     />
@@ -279,7 +280,7 @@ export function SettingPanel() {
             </div>
           )}
           {prefs.bgImage != null && (
-            <div className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+            <div className="flex items-center gap-2 text-2xs text-[var(--text-secondary)]">
               <span className="w-12 shrink-0">不透明度</span>
               <input
                 type="range"
@@ -343,13 +344,13 @@ export function SettingPanel() {
 
         {/* 字体与对齐 */}
         <Section searchKey="font" title="字体与对齐">
-          <label className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+          <label className="flex items-center gap-2 text-2xs text-[var(--text-secondary)]">
             <span className="w-8 shrink-0">字体</span>
             <select
               aria-label="字体"
               value={prefs.fontFamily}
               onChange={(e) => prefs.set({ fontFamily: e.target.value })}
-              className="min-w-0 flex-1 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-base)] px-1.5 py-1 text-[11px] outline-none"
+              className="min-w-0 flex-1 rounded-md border border-[color:var(--hairline)] bg-[var(--bg-base)] px-1.5 py-1 text-2xs outline-none"
             >
               {FONT_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -358,9 +359,9 @@ export function SettingPanel() {
               ))}
             </select>
           </label>
-          <div className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+          <div className="flex items-center gap-2 text-2xs text-[var(--text-secondary)]">
             <span className="w-8 shrink-0">对齐</span>
-            <div className="flex overflow-hidden rounded-md border border-[var(--border-subtle)]">
+            <div className="flex overflow-hidden rounded-md border border-[color:var(--hairline)]">
               <button aria-label="左对齐" onClick={() => prefs.set({ textAlign: "left" })} className={segBtn(prefs.textAlign === "left")}>
                 左
               </button>
@@ -373,7 +374,7 @@ export function SettingPanel() {
               </button>
             </div>
           </div>
-          <label className="flex cursor-pointer items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+          <label className="flex cursor-pointer items-center gap-2 text-2xs text-[var(--text-secondary)]">
             <input
               type="checkbox"
               aria-label="首行缩进"

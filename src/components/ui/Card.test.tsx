@@ -8,8 +8,8 @@ describe("Card", () => {
     const c = screen.getByTestId("c");
     expect(c.className).toContain("bg-[var(--bg-elevated)]");
     expect(c.className).toContain("p-4");
-    expect(c.className).toContain("rounded-[var(--radius-md)]");
-    expect(c.className).toContain("border-[color:var(--border-subtle)]");
+    expect(c.className).toContain("rounded-[var(--r-card)]");
+    expect(c.className).toContain("border-[color:var(--hairline)]");
   });
 
   it("flat + sm：无底色、窄内边距", () => {

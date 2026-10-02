@@ -3,7 +3,7 @@ use rusqlite::{params, Connection};
 use crate::error::{AppError, AppResult};
 use crate::models::{Character, CharacterInput};
 
-const COLS: &str = "id, book_id, name, role, aliases, description, created_at, updated_at";
+const COLS: &str = "id, book_id, name, role, aliases, description, created_at, updated_at, ai_hidden, secret_note";
 
 fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Character> {
     Ok(Character {
@@ -15,6 +15,8 @@ fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Character> {
         description: row.get(5)?,
         created_at: row.get(6)?,
         updated_at: row.get(7)?,
+        ai_hidden: row.get::<_, i64>(8)? != 0,
+        secret_note: row.get(9)?,
     })
 }
 

@@ -15,7 +15,30 @@ use crate::error::{AppError, AppResult};
 pub enum StreamEvent {
     Delta { text: String },
     Done { session_id: i64, content: String },
-    Error { message: String },
+    /// kind：auth / rate_limit / quota / context_length / network / server / unknown；
+    /// partial：出错前已收到的内容（命令层会把它作为截断回答落库）
+    Error { message: String, kind: String, partial: String },
+}
+
+/// 错误分类（阶段 2A）：按服务商回显的错误文本归类，前端据此给出处理建议与重试。
+pub fn classify_error(message: &str) -> &'static str {
+    let m = message.to_lowercase();
+    let has = |needles: &[&str]| needles.iter().any(|n| m.contains(n));
+    if has(&["401", "403", "unauthorized", "invalid api key", "incorrect api key", "authentication", "api key", "forbidden"]) {
+        "auth"
+    } else if has(&["insufficient", "balance", "余额", "quota", "billing", "payment"]) {
+        "quota"
+    } else if has(&["429", "rate limit", "rate_limit", "too many requests", "限流"]) {
+        "rate_limit"
+    } else if has(&["context length", "context_length", "maximum context", "too long", "max_tokens", "token limit", "超出"]) {
+        "context_length"
+    } else if has(&["timed out", "timeout", "error sending request", "connection", "dns", "network", "connect", "eof", "transport", "decoding response", "closed"]) {
+        "network"
+    } else if has(&["500", "502", "503", "504", "overloaded", "internal server error", "bad gateway", "service unavailable"]) {
+        "server"
+    } else {
+        "unknown"
+    }
 }
 
 /// 一次流式续写的请求参数（从 ProviderProfile + 组装结果构造）。
@@ -67,6 +90,42 @@ fn to_message(role: &str, content: &str) -> ChatCompletionRequestMessage {
     }
 }
 
+/// 阶段 2C：此处下一个词的备选与概率（NovelAI 式 token 概率）。
+/// 用流式请求带 `logprobs` / `top_logprobs`，读到第一个带概率的分片就收手；
+/// 服务商不回概率时返回 Ok(None)（前端退回到 AI 给的近义词）。
+pub async fn next_token_alternatives(req: StreamReq, top: u8) -> AppResult<Option<Vec<(String, f32)>>> {
+    let messages = vec![to_message("system", &req.system), to_message("user", &req.user)];
+    let request = CreateChatCompletionRequestArgs::default()
+        .model(req.model.clone())
+        .messages(messages)
+        .temperature(req.temperature as f32)
+        .max_tokens(req.max_tokens.clamp(1, 16) as u32)
+        .logprobs(true)
+        .top_logprobs(top.clamp(1, 20))
+        .build()
+        .map_err(|e| AppError::Invalid(sanitize(&format!("AI 请求构建失败: {e}"), &req.api_key)))?;
+    let client = async_openai::Client::with_config(OpenAIConfig::new().with_api_base(req.base_url.clone()).with_api_key(req.api_key.clone()));
+    let mut stream = client
+        .chat()
+        .create_stream(request)
+        .await
+        .map_err(|e| AppError::Invalid(sanitize(&e.to_string(), &req.api_key)))?;
+    while let Some(item) = stream.next().await {
+        let chunk = item.map_err(|e| AppError::Invalid(sanitize(&e.to_string(), &req.api_key)))?;
+        for choice in chunk.choices {
+            let Some(first) = choice.logprobs.and_then(|l| l.content).and_then(|c| c.into_iter().next()) else { continue };
+            let mut out: Vec<(String, f32)> = first.top_logprobs.into_iter().map(|t| (t.token, t.logprob.exp())).collect();
+            if !out.iter().any(|(t, _)| *t == first.token) {
+                out.push((first.token, first.logprob.exp()));
+            }
+            out.retain(|(t, _)| !t.trim().is_empty());
+            out.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            return Ok(Some(out));
+        }
+    }
+    Ok(None)
+}
+
 /// 发起流式对话：立即返回事件接收端，后台任务把增量经 mpsc 转发；
 /// watch 通道变 true 时取消（已收到的增量保留在 Done 里）；任何请求失败发一次
 /// `StreamEvent::Error` 后结束（错误文本保留原始信息但绝不包含 api_key）。
@@ -103,7 +162,8 @@ pub async fn chat_stream(
         Ok(s) => s,
         Err(e) => {
             let message = sanitize(&e.to_string(), &req.api_key);
-            let _ = tx.send(StreamEvent::Error { message }).await;
+            let kind = classify_error(&message).to_string();
+            let _ = tx.send(StreamEvent::Error { message, kind, partial: String::new() }).await;
             return Ok(rx);
         }
     };
@@ -149,7 +209,8 @@ pub async fn chat_stream(
                 }
                 Some(Err(e)) => {
                     let message = sanitize(&e.to_string(), &api_key);
-                    let _ = tx.send(StreamEvent::Error { message }).await;
+                    let kind = classify_error(&message).to_string();
+                    let _ = tx.send(StreamEvent::Error { message, kind, partial: full }).await;
                     return;
                 }
                 None => break, // 正常流结束

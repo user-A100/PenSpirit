@@ -15,6 +15,7 @@ vi.mock("../../lib/tauri_trash", () => ({
 vi.mock("../../lib/tauri", () => ({
   api: {
     listChapters: vi.fn().mockResolvedValue([]),
+    listNodes: vi.fn().mockResolvedValue([]),
   },
 }));
 

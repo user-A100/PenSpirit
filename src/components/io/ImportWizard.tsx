@@ -4,6 +4,7 @@ import { FolderOpen, FileUp } from "lucide-react";
 import { api, type ParsedChapter } from "../../lib/tauri";
 import { Badge } from "../ui/Badge";
 import { Modal } from "../ui/Modal";
+import { errMsg } from "../../lib/errors";
 
 // M2-T8 导入向导：选文件 → Rust 侧编码检测 + 分章 → 勾选 → 批量落库。
 // 卷信息（volume）只用于这里的分组展示——chapters 表没有卷字段，不落库。
@@ -67,7 +68,7 @@ export function ImportWizard(props: {
     } catch (e) {
       setItems([]);
       setPicked(new Set());
-      setError(String(e));
+      setError(errMsg(e));
     }
   };
 
@@ -81,7 +82,7 @@ export function ImportWizard(props: {
     } catch (e) {
       setItems([]);
       setPicked(new Set());
-      setError(String(e));
+      setError(errMsg(e));
     }
   };
 
@@ -115,7 +116,7 @@ export function ImportWizard(props: {
       setError(null);
       props.onImported(bookId);
     } catch (e) {
-      setError(String(e));
+      setError(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -136,17 +137,17 @@ export function ImportWizard(props: {
       widthClass="max-w-lg"
       testId="import-backdrop"
     >
-        <div className="flex shrink-0 items-center gap-2 border-b border-[color:var(--border-subtle)] px-4 py-3">
+        <div className="flex shrink-0 items-center gap-2 border-b border-[color:var(--hairline)] px-4 py-3">
           <button
             onClick={() => void choose()}
-            className="flex items-center gap-1.5 rounded-md border border-[color:var(--border-subtle)] px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            className="flex items-center gap-1.5 rounded-md border border-[color:var(--hairline)] px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
           >
             <FileUp size={13} />
             选择文件
           </button>
           <button
             onClick={() => void chooseDir()}
-            className="flex items-center gap-1.5 rounded-md border border-[color:var(--border-subtle)] px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            className="flex items-center gap-1.5 rounded-md border border-[color:var(--hairline)] px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
           >
             <FolderOpen size={13} />
             选文件夹
@@ -165,7 +166,7 @@ export function ImportWizard(props: {
         {report && <div className="px-4 py-2 text-xs text-[color:var(--success)]">{report}</div>}
 
         {props.bookId != null && items.length > 0 && (
-          <label className="flex shrink-0 cursor-pointer items-center gap-2 border-b border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-secondary)]">
+          <label className="flex shrink-0 cursor-pointer items-center gap-2 border-b border-[color:var(--hairline)] px-4 py-2 text-xs text-[color:var(--text-secondary)]">
             <input
               type="checkbox"
               checked={intoCurrent}
@@ -186,13 +187,13 @@ export function ImportWizard(props: {
             volumes.map((vol, vi) => (
               <div key={vi}>
                 {vol != null && (
-                  <div className="px-2 pb-1 pt-2 text-[11px] text-[color:var(--text-faint)]">{vol}</div>
+                  <div className="px-2 pb-1 pt-2 text-2xs text-[color:var(--text-faint)]">{vol}</div>
                 )}
                 {items.map((c, i) =>
                   c.volume !== vol ? null : (
                     <label
                       key={i}
-                      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+                      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-[var(--fill-hover)]"
                     >
                       <input
                         type="checkbox"
@@ -203,7 +204,7 @@ export function ImportWizard(props: {
                       <span className="min-w-0 flex-1 truncate text-xs text-[color:var(--text-primary)]">
                         {c.title}
                       </span>
-                      <span className="shrink-0 text-[11px] text-[color:var(--text-faint)]">
+                      <span className="shrink-0 text-2xs text-[color:var(--text-faint)]">
                         {c.content.replace(/\s/g, "").length} 字
                       </span>
                       {dups.has(i) && (
@@ -219,7 +220,7 @@ export function ImportWizard(props: {
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[color:var(--border-subtle)] px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[color:var(--hairline)] px-4 py-3">
           <button
             onClick={() =>
               setPicked(picked.size === items.length ? new Set() : new Set(items.map((_, i) => i)))
@@ -230,13 +231,13 @@ export function ImportWizard(props: {
             {picked.size === items.length && items.length > 0 ? "全不选" : "全选"}
           </button>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-[color:var(--text-faint)]">
+            <span className="text-2xs text-[color:var(--text-faint)]">
               {totalWords > 0 && `约 ${totalWords.toLocaleString()} 字`}
             </span>
             <button
               onClick={() => void run()}
               disabled={busy || picked.size === 0}
-              className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:opacity-40"
+              className="rounded-md bg-[var(--accent-solid)] px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:opacity-40"
             >
               {busy ? "导入中…" : `导入 ${picked.size} 章`}
             </button>

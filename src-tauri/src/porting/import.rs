@@ -28,7 +28,7 @@ const SENTENCE_END: [char; 7] = ['。', '！', '？', '，', '、', '；', '：'
 pub struct ParsedChapter {
     pub title: String,
     pub content: String,
-    /// 所属卷标题（仅用于导入预览分组——chapters 表无卷字段，不落库）
+    /// 所属卷标题（阶段 3B 起导入时落成卷目录；连续同名卷归入同一卷）
     #[serde(default)]
     pub volume: Option<String>,
 }
@@ -335,7 +335,7 @@ pub fn split_txt_with(text: &str, custom: &[Regex]) -> Vec<ParsedChapter> {
 }
 
 /// docx 读段落 → 拼成纯文本（分章由调用方决定用哪套规则）
-fn docx_to_text(bytes: &[u8]) -> AppResult<String> {
+pub(crate) fn docx_to_text(bytes: &[u8]) -> AppResult<String> {
     let docx = docx_rs::read_docx(bytes).map_err(|e| AppError::Invalid(format!("docx 解析失败: {e}")))?;
     let mut text = String::new();
     for child in &docx.document.children {
@@ -491,8 +491,26 @@ pub fn import_chapters_inner(
     chapters: &[ParsedChapter],
 ) -> AppResult<ImportReport> {
     let mut report = ImportReport { chapters: 0, words: 0 };
+    // 阶段 3B：识别出的卷落成卷目录（连续同名卷归入同一卷；卷之后无卷的章回到顶层）
+    let mut volume: Option<(String, i64)> = None;
     for p in chapters {
-        let ChapterMeta { id, .. } = commands::create_chapter_inner(s, book_id, &p.title)?;
+        let parent = match &p.volume {
+            Some(v) => {
+                if volume.as_ref().map(|(t, _)| t != v).unwrap_or(true) {
+                    let f = commands::volume_create_inner(s, book_id, v, None, &[])?;
+                    volume = Some((v.clone(), f.id));
+                }
+                volume.as_ref().map(|x| x.1)
+            }
+            None => {
+                volume = None;
+                None
+            }
+        };
+        let ChapterMeta { id, .. } = match parent {
+            Some(pid) => commands::create_chapter_at_inner(s, book_id, &p.title, None, Some(pid))?,
+            None => commands::create_chapter_inner(s, book_id, &p.title)?,
+        };
         crate::fs_service::write_chapter(&s.root, &chapter_rel(s, id)?, &p.content)?;
         let wc = count_words(&p.content);
         let hash = content_md5(&p.content);

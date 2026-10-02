@@ -3,7 +3,7 @@ use rusqlite::{params, Connection};
 use crate::error::{AppError, AppResult};
 use crate::models::{Outline, OutlineInput};
 
-const COLS: &str = "id, book_id, kind, chapter_id, title, content, sort_key, created_at, updated_at";
+const COLS: &str = "id, book_id, kind, chapter_id, title, content, sort_key, created_at, updated_at, ai_hidden";
 
 fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Outline> {
     Ok(Outline {
@@ -16,6 +16,7 @@ fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Outline> {
         sort_key: row.get(6)?,
         created_at: row.get(7)?,
         updated_at: row.get(8)?,
+        ai_hidden: row.get::<_, i64>(9)? != 0,
     })
 }
 

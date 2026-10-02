@@ -57,6 +57,9 @@ pub fn soft_delete_chapter_inner(s: &AppState, id: i64) -> AppResult<()> {
     if book.deleted_at.is_some() {
         return Err(AppError::Invalid("书籍已在回收站中，请先恢复书籍".into()));
     }
+    if ch.kind == "folder" {
+        return soft_delete_folder(s, &ch, &book);
+    }
     let file_name = ch.file_path.rsplit('/').next().unwrap_or(&ch.file_path).to_string();
     let trash_rel = unique_rel(&s.root, &format!("{}/{}/{}", book.slug, CHAPTER_TRASH_DIR, file_name));
     let from = s.root.join(&ch.file_path);
@@ -71,45 +74,97 @@ pub fn soft_delete_chapter_inner(s: &AppState, id: i64) -> AppResult<()> {
     lock(s).and_then(|conn| repo::chapters::soft_delete(&*conn, id, &trash_rel, &ch.file_path))
 }
 
+/// 删除卷（阶段 3B）：卷内在世的章逐一移入回收站（各自可单独恢复，恢复后回到原卷），
+/// 再把卷目录（含卷首语与目录里的其他文件）整体移入 {book}/.trash/
+fn soft_delete_folder(s: &AppState, ch: &ChapterMeta, book: &Book) -> AppResult<()> {
+    let kids: Vec<i64> = lock(s)
+        .and_then(|conn| repo::chapters::children(&*conn, ch.id))?
+        .into_iter()
+        .map(|c| c.id)
+        .collect();
+    for k in kids {
+        soft_delete_chapter_inner(s, k)?;
+    }
+    let dir_name = ch.file_path.rsplit('/').next().unwrap_or(&ch.file_path).to_string();
+    let trash_rel = unique_rel(&s.root, &format!("{}/{}/{}", book.slug, CHAPTER_TRASH_DIR, dir_name));
+    let from = s.root.join(&ch.file_path);
+    let to = s.root.join(&trash_rel);
+    if let Some(p) = to.parent() {
+        fs::create_dir_all(p)?;
+    }
+    if from.is_dir() {
+        fs::rename(&from, &to)?;
+    } else {
+        fs::create_dir_all(&to)?;
+    }
+    lock(s).and_then(|conn| repo::chapters::soft_delete(&*conn, ch.id, &trash_rel, &ch.file_path))
+}
+
 /// 当前书回收站列表（删除时间倒序）
 pub fn list_trash_inner(s: &AppState, book_id: i64) -> AppResult<Vec<ChapterMeta>> {
     repo::chapters::list_deleted_by_book(&*lock(s)?, book_id)
 }
 
-/// 恢复章：文件移回 orig_file_path（父目录确保存在），清软删标记。
-/// 目标位已有同名文件时报错（不静默覆盖）。
+//// 恢复（阶段 3B 起含卷）：章回到所属卷的当前目录（卷已不在则回到顶层）；卷回到 manuscript/ 顶层，
+/// 其中的章仍在回收站，逐一恢复后回到这个卷。目标位撞名时加 -N 后缀（不覆盖），随后按目录序重编序号。
 pub fn restore_chapter_inner(s: &AppState, id: i64) -> AppResult<()> {
-    let ch = lock(s).and_then(|conn| repo::chapters::get(&*conn, id))?;
+    let (ch, book, alive_parent) = {
+        let conn = lock(s)?;
+        let ch = repo::chapters::get(&*conn, id)?;
+        let book = repo::books::get(&*conn, ch.book_id)?;
+        let parent = match ch.parent_id {
+            Some(p) if ch.kind == "text" => repo::chapters::get(&*conn, p)
+                .ok()
+                .filter(|p| p.deleted_at.is_none() && p.kind == "folder"),
+            _ => None,
+        };
+        (ch, book, parent)
+    };
     let orig = ch
         .orig_file_path
         .clone()
         .ok_or_else(|| AppError::Invalid("章节不在回收站中".into()))?;
+    let name = orig.rsplit('/').next().unwrap_or(&orig).to_string();
+    let target = match &alive_parent {
+        Some(p) => format!("{}/{name}", p.file_path),
+        None => format!("{}/manuscript/{name}", book.slug),
+    };
+    let target = unique_rel(&s.root, &target);
     let from = s.root.join(&ch.file_path);
-    let to = s.root.join(&orig);
+    let to = s.root.join(&target);
     if !from.exists() {
         return Err(AppError::NotFound("回收站文件不存在".into()));
-    }
-    if to.exists() {
-        return Err(AppError::Invalid(format!("目标位置已有同名文件: {orig}")));
     }
     if let Some(p) = to.parent() {
         fs::create_dir_all(p)?;
     }
     fs::rename(&from, &to)?;
-    lock(s).and_then(|conn| repo::chapters::restore(&*conn, id, &orig))
+    lock(s).and_then(|conn| {
+        repo::chapters::restore(&*conn, id, &target)?;
+        repo::chapters::set_parent(&*conn, id, alive_parent.as_ref().map(|p| p.id))
+    })?;
+    // 恢复后的旧序号可能与期间重排过的章撞号：按目录序重编一次（尽力而为）
+    if let Err(e) = crate::commands::renumber_book(s, ch.book_id) {
+        eprintln!("恢复后重编序号失败（不影响恢复）：{e}");
+    }
+    Ok(())
 }
 
-/// 彻底删除章：删 .trash 文件 + 删行
+// 彻底删除章：删 .trash 文件 + 删行
 pub fn purge_chapter_inner(s: &AppState, id: i64) -> AppResult<()> {
     let ch = lock(s).and_then(|conn| repo::chapters::get(&*conn, id))?;
     if ch.orig_file_path.is_none() {
         return Err(AppError::Invalid("章节不在回收站中".into()));
     }
     let p = s.root.join(&ch.file_path);
-    if p.exists() {
+    if p.is_dir() {
+        fs::remove_dir_all(&p)?;
+    } else if p.exists() {
         fs::remove_file(&p)?;
     }
-    lock(s).and_then(|conn| repo::chapters::delete(&*conn, id))
+    let conn = lock(s)?;
+    repo::settings::purge_chapter_keys(&*conn, id)?;
+    repo::chapters::delete(&*conn, id)
 }
 
 /// 清空当前书回收站：逐章彻底删除
@@ -192,5 +247,7 @@ pub fn purge_book_inner(s: &AppState, id: i64) -> AppResult<()> {
     if p.exists() {
         fs::remove_dir_all(&p)?;
     }
-    lock(s).and_then(|conn| repo::books::delete(&*conn, id))
+    let conn = lock(s)?;
+    repo::settings::purge_book_keys(&*conn, id)?;
+    repo::books::delete(&*conn, id)
 }

@@ -98,6 +98,24 @@ fn delete_provider_removes_entry() {
     assert_eq!(p3.id, 3);
 }
 
+#[test]
+fn deleting_active_provider_clears_active_slot() {
+    let conn = test_conn();
+    let p1 = repo::settings::save_provider(&conn, &provider(0, "甲")).unwrap();
+    let p2 = repo::settings::save_provider(&conn, &provider(0, "乙")).unwrap();
+    repo::settings::set_active_provider(&conn, p1.id).unwrap();
+    // 删非激活的：激活位不动
+    repo::settings::delete_provider(&conn, p2.id).unwrap();
+    assert_eq!(repo::settings::active_provider_id(&conn).unwrap(), Some(p1.id));
+    // 删激活的：激活位清空（不留悬空 id）
+    repo::settings::delete_provider(&conn, p1.id).unwrap();
+    assert_eq!(repo::settings::active_provider_id(&conn).unwrap(), None);
+    // 之后新建的同号服务商不会被误当成「使用中」
+    let again = repo::settings::save_provider(&conn, &provider(0, "丙")).unwrap();
+    assert_eq!(again.id, p1.id);
+    assert_eq!(repo::settings::active_provider_id(&conn).unwrap(), None);
+}
+
 // ---------- active_provider / active_style ----------
 
 #[test]

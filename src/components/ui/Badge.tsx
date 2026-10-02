@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 export type BadgeTone = "neutral" | "blue" | "green" | "amber" | "red" | "purple";
 
 const TONES: Record<BadgeTone, { fg: string; bg: string }> = {
-  neutral: { fg: "var(--text-secondary)", bg: "var(--bg-hover)" },
+  neutral: { fg: "var(--text-secondary)", bg: "var(--fill-element)" },
   blue: {
     fg: "color-mix(in srgb, #60a5fa 45%, var(--text-primary))",
     bg: "color-mix(in srgb, #3b82f6 16%, transparent)",

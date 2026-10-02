@@ -19,17 +19,75 @@ fn from_row(row: &rusqlite::Row) -> rusqlite::Result<ChapterMeta> {
         label_id: row.get(11)?,
         status_id: row.get(12)?,
         target_words: row.get(13)?,
+        kind: row.get(14)?,
+        parent_id: row.get(15)?,
     })
 }
 
-const COLS: &str = "id, book_id, file_path, title, sort_key, word_count, created_at, updated_at, deleted_at, orig_file_path, synopsis, label_id, status_id, target_words";
+const COLS: &str = "id, book_id, file_path, title, sort_key, word_count, created_at, updated_at, deleted_at, orig_file_path, synopsis, label_id, status_id, target_words, kind, parent_id";
 
+/// 全书正文章（不含卷），按全书先序——搜索 / 反链 / AI 前情 / 伏笔距离 / 导出等调用方的既有语义
 pub fn list_by_book(conn: &Connection, book_id: i64) -> AppResult<Vec<ChapterMeta>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {COLS} FROM chapters WHERE book_id = ?1 AND deleted_at IS NULL AND kind = 'text' ORDER BY sort_key, id"
+    ))?;
+    let rows = stmt.query_map([book_id], from_row)?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+/// 整棵树（卷 + 章，在世节点），按 sort_key（全书先序）
+pub fn list_nodes(conn: &Connection, book_id: i64) -> AppResult<Vec<ChapterMeta>> {
     let mut stmt = conn.prepare(&format!(
         "SELECT {COLS} FROM chapters WHERE book_id = ?1 AND deleted_at IS NULL ORDER BY sort_key, id"
     ))?;
     let rows = stmt.query_map([book_id], from_row)?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+/// 卷内在世的章（按 sort_key）
+pub fn children(conn: &Connection, folder_id: i64) -> AppResult<Vec<ChapterMeta>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {COLS} FROM chapters WHERE parent_id = ?1 AND deleted_at IS NULL ORDER BY sort_key, id"
+    ))?;
+    let rows = stmt.query_map([folder_id], from_row)?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+/// 新建卷行（目录已由调用方建好）；位置先放末尾，由调用方 set_tree 排定
+pub fn create_folder(conn: &Connection, book_id: i64, dir_rel: &str, title: &str) -> AppResult<ChapterMeta> {
+    let sort_key = conn.query_row(
+        "SELECT COALESCE(MAX(sort_key), 0.0) + 1.0 FROM chapters WHERE book_id = ?1",
+        [book_id],
+        |r| r.get::<_, f64>(0),
+    )?;
+    conn.execute(
+        "INSERT INTO chapters (book_id, file_path, title, sort_key, kind) VALUES (?1, ?2, ?3, ?4, 'folder')",
+        params![book_id, dir_rel, title, sort_key],
+    )?;
+    get(conn, conn.last_insert_rowid())
+}
+
+/// 按先序清单写 sort_key（= 位置）与 parent_id；不碰 updated_at（结构不是内容变更）
+pub fn set_tree(conn: &Connection, items: &[(i64, Option<i64>)]) -> AppResult<()> {
+    for (i, (id, parent)) in items.iter().enumerate() {
+        conn.execute(
+            "UPDATE chapters SET sort_key = ?2, parent_id = ?3 WHERE id = ?1",
+            params![id, i as f64, parent],
+        )?;
+    }
+    Ok(())
+}
+
+/// 只改所属卷（回收站恢复时原卷已不在 → 回到顶层）
+pub fn set_parent(conn: &Connection, id: i64, parent: Option<i64>) -> AppResult<()> {
+    conn.execute("UPDATE chapters SET parent_id = ?2 WHERE id = ?1", params![id, parent])?;
+    Ok(())
+}
+
+/// 只改标题（改名时文件 / 目录名由重编序号统一处理）
+pub fn set_title(conn: &Connection, id: i64, title: &str) -> AppResult<()> {
+    conn.execute("UPDATE chapters SET title = ?2, updated_at = datetime('now') WHERE id = ?1", params![id, title])?;
+    Ok(())
 }
 
 /// 不含软删过滤的全量列表（书目录改名重写路径用）
@@ -65,6 +123,12 @@ pub fn rename(conn: &Connection, id: i64, new_title: &str, new_file_path: &str) 
         params![id, new_title, new_file_path],
     )?;
     get(conn, id)
+}
+
+/// 只改文件路径（重排重编序号时用）：不碰标题与 updated_at（排序不是内容变更）
+pub fn set_file_path(conn: &Connection, id: i64, file_path: &str) -> AppResult<()> {
+    conn.execute("UPDATE chapters SET file_path = ?2 WHERE id = ?1", params![id, file_path])?;
+    Ok(())
 }
 
 pub fn touch_content(conn: &Connection, id: i64, word_count: i64) -> AppResult<ChapterMeta> {

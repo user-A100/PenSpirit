@@ -3,7 +3,7 @@ use rusqlite::{params, Connection};
 use crate::error::{AppError, AppResult};
 use crate::models::{Foreshadow, ForeshadowInput};
 
-const COLS: &str = "id, book_id, title, planted_chapter_id, target_chapter_id, status, note, created_at, resolved_chapter_id, override_note, repay_chapter_id";
+const COLS: &str = "id, book_id, title, planted_chapter_id, target_chapter_id, status, note, created_at, resolved_chapter_id, override_note, repay_chapter_id, ai_hidden";
 
 fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Foreshadow> {
     Ok(Foreshadow {
@@ -18,6 +18,7 @@ fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Foreshadow> {
         resolved_chapter_id: row.get(8)?,
         override_note: row.get(9)?,
         repay_chapter_id: row.get(10)?,
+        ai_hidden: row.get::<_, i64>(11)? != 0,
     })
 }
 

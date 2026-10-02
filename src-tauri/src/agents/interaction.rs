@@ -63,6 +63,7 @@ pub async fn handle_permission_request(
         .title
         .clone()
         .unwrap_or_else(|| "未知工具请求".into());
+    let tool_kind = req.tool_call.fields.kind.as_ref().map(crate::agents::tools::kind_str).unwrap_or("other").to_string();
     let options: Vec<PermOption> = req
         .options
         .iter()
@@ -93,6 +94,7 @@ pub async fn handle_permission_request(
             request_id: request_id.clone(),
             title,
             options,
+            tool_kind,
         },
     );
 

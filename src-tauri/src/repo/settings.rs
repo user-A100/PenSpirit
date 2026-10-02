@@ -62,10 +62,52 @@ pub fn save_provider(conn: &Connection, p: &ProviderProfile) -> AppResult<Provid
     Ok(saved)
 }
 
+/// 删除某个 KV 键（不存在则无操作）
+pub fn remove(conn: &Connection, key: &str) -> AppResult<()> {
+    conn.execute("DELETE FROM settings WHERE key = ?1", [key])?;
+    Ok(())
+}
+
+/// 阶段 2B：挂在书 / 卷 / 章 id 上的 AI 键前缀（本书记忆、卷记忆、本章作者注、AI 写入着色片段）
+pub const MEMORY_BOOK: &str = "memory:book:";
+pub const MEMORY_VOLUME: &str = "memory:volume:";
+pub const AUTHOR_NOTE: &str = "authornote:chapter:";
+pub const AI_TINT: &str = "ai_tint:";
+/// 阶段 2C：上下文包（每书）
+pub const CTX_PRESETS: &str = "ctx_presets:";
+
+/// 章（或卷）被彻底删除：清掉挂在它 id 上的 AI 键，不留孤儿
+pub fn purge_chapter_keys(conn: &Connection, chapter_id: i64) -> AppResult<()> {
+    for prefix in [MEMORY_VOLUME, AUTHOR_NOTE, AI_TINT] {
+        remove(conn, &format!("{prefix}{chapter_id}"))?;
+    }
+    Ok(())
+}
+
+/// 书被彻底删除：本书记忆 + 书内全部章 / 卷的 AI 键（须在删章行之前调用）
+pub fn purge_book_keys(conn: &Connection, book_id: i64) -> AppResult<()> {
+    remove(conn, &format!("{MEMORY_BOOK}{book_id}"))?;
+    remove(conn, &format!("{CTX_PRESETS}{book_id}"))?;
+    let ids: Vec<i64> = conn
+        .prepare("SELECT id FROM chapters WHERE book_id = ?1")?
+        .query_map([book_id], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    for id in ids {
+        purge_chapter_keys(conn, id)?;
+    }
+    Ok(())
+}
+
 pub fn delete_provider(conn: &Connection, id: i64) -> AppResult<()> {
     let mut list = providers(conn)?;
     list.retain(|x| x.id != id);
-    write_providers(conn, &list)
+    write_providers(conn, &list)?;
+    // 删的是「使用中」的服务商：一并清掉激活位。否则留下悬空 id——
+    // 服务商 id 取「现有最大 + 1」，删光后新建的那个会复用这个 id，被悄悄当成「使用中」。
+    if active_provider_id(conn)? == Some(id) {
+        remove(conn, ACTIVE_PROVIDER_KEY)?;
+    }
+    Ok(())
 }
 
 fn get_i64(conn: &Connection, key: &str) -> AppResult<Option<i64>> {

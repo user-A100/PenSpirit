@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/* Tailwind 字号阶梯补齐（替代散落的 text-[10px]/[11px]/[13px]/[15px]） */
+@theme {
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-ui: 0.8125rem;
+  --text-ui--line-height: 1.25rem;
+  --text-md: 0.9375rem;
+  --text-md--line-height: 1.375rem;
+}
+
 /* :root 变量 = 默认主题 bixian-dark 的值（与 src/themes/defs.ts 保持一致）。
    其余主题由 ThemeProvider 注入 <style id="bixian-theme"> 覆盖；
    UI 缩放通过改写 html font-size（rem 基准）实现。 */
@@ -15,19 +25,23 @@
   /* 文字 */
   --text-primary: #e8e8ea;
   --text-secondary: #a0a0a8;
-  --text-faint: #6b6b74;
+  --text-faint: #6e6e77;
   /* 编辑器正文（衬线区，随主题） */
   --prose-fg: #e4e4e8;
   /* 选中标签页浮卡底色（Zen 选中项浮纸卡手法） */
   --tab-selected-bg: rgba(255, 255, 255, 0.2);
-  /* 背板：窗口底色比内容浮卡再深一档（默认主题的 backdropOf 派生值，mix(#17171a,#000,0.45)） */
-  --bg-backdrop: #0a0a0c;
+  /* 背板：窗口底色比内容浮卡再深一档（默认主题的 backdropOf 派生值，mix(#17171a,#000,0.7)） */
+  --bg-backdrop: #101012;
   /* 强调与状态 */
-  --accent: #7c6ff0;
-  --accent-hover: #8f83f5;
-  --accent-dim: rgba(124, 111, 240, 0.15);
+  /* 已过对比度修正（src/themes/defs.ts accessible()；审计 src/themes/contrast.test.ts） */
+  --accent: #9097ff;
+  --accent-hover: #9ca4ff;
+  --accent-dim: rgba(144, 151, 255, 0.15);
+  /* 强调色 / 危险色实底：填充按钮的底，白字达标 */
+  --accent-solid: #7765cd;
+  --danger-solid: #cc455b;
   --success: #4ade80;
-  --danger: #f87171;
+  --danger: #fc7573;
   --warning: #fbbf24;
 }
 
@@ -39,12 +53,73 @@
   --shadow-pop: 0 3px 8px rgba(0, 0, 0, 0.24);
   --dur-fast: 0.1s;
   --dur-md: 0.15s;
+  --dur-slow: 0.25s;
   /* 背板缝隙：内容浮卡与窗口边框/导航条之间的留白
      （Zen --zen-element-separation，zen-split-view.css:99） */
   --sep: 8px;
   /* 卡片/按钮焦点环（M6，kindling 手法：交互色 30% 洗色，从 accent 派生，主题免维护） */
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+
+  /* ---- Token v2（阶段 1）：派生层，主题只定义基色，层级/填充/阴影由此推出 ---- */
+  /* 同心圆角：内圆角 = 外圆角 − 缝隙/2（Zen --zen-native-inner-radius） */
+  --r-outer: 12px;
+  --r-card: max(5px, calc(var(--r-outer) - var(--sep) / 2));
+  --r-control: 6px;
+  /* alpha 填充阶梯：从前景色派生（Zen：hover 7% / active 10% / 元素底 8–15%） */
+  --fill-hover: color-mix(in srgb, var(--text-primary) 7%, transparent);
+  --fill-active: color-mix(in srgb, var(--text-primary) 11%, transparent);
+  --fill-element: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  --hairline: color-mix(in srgb, var(--text-primary) 9%, transparent);
+  /* 滚动条 thumb：同样从前景色派生（部分主题的 --bg-hover 与卡片色几乎相同，滚动条会看不见） */
+  --fill-thumb: color-mix(in srgb, var(--text-primary) 16%, transparent);
+  /* 选中项 = 一小片稿纸（Zen 选中标签：近卡片色 + 极薄阴影） */
+  --fill-selected: var(--bg-panel);
+  /* 阴影：深色档（浅色档见 html[data-tone="light"]） */
+  --shadow-chip: 0 0.8px 1.5px rgba(0, 0, 0, 0.28), 0 0 0 0.5px color-mix(in srgb, var(--text-primary) 7%, transparent);
+  --shadow-card: 0 3px 8px rgba(0, 0, 0, 0.24), 0 0 0 0.5px color-mix(in srgb, var(--text-primary) 5%, transparent);
+  --shadow-overlay: 0 24px 64px -12px rgba(0, 0, 0, 0.6), 0 0 0 0.5px color-mix(in srgb, var(--text-primary) 14%, transparent);
+  /* 动效曲线：常规无过冲；弹簧只给低频事件（toast/落位） */
+  --ease-out: cubic-bezier(0.22, 0.8, 0.3, 1);
+  --ease-spring: cubic-bezier(0.2, 1.25, 0.4, 1);
 }
+
+html[data-tone="light"] {
+  --shadow-chip: 0 0.8px 1.5px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 16px rgba(0, 0, 0, 0.07), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
+  --shadow-overlay: 0 24px 64px -12px rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(0, 0, 0, 0.1);
+}
+
+/* 全局减少动效：系统开启「减少动画」时所有过渡/动画近乎瞬时 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 轻提示进出（Zen toast：弹簧 bounce≈0.2 入场，缩小淡出 0.16s） */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes toast-out {
+  to { opacity: 0; transform: scale(0.9); }
+}
+.toast-in { animation: toast-in 0.32s cubic-bezier(0.2, 1.25, 0.4, 1); }
+.toast-out { animation: toast-out 0.16s ease-in forwards; }
+
+/* 菜单弹出：极短缩放淡入，不过冲（高频操作） */
+@keyframes menu-pop {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.menu-pop { animation: menu-pop 0.1s ease-out; transform-origin: top left; }
+/* 可横向滚动但不显示滚动条（窄输入框底栏）。必须是不分层的普通类：上面全局 * 的 scrollbar-width 也不分层，
+   Tailwind 工具类在 layer 里压不过它 */
+.no-scrollbar { scrollbar-width: none; }
+
 
 /* 弹窗/浮卡入场：Zen zen-dialog-fade-in（下移 10px 淡入，0.15s ease） */
 @keyframes zen-pop-in {
@@ -59,18 +134,112 @@ body {
   font-family: "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
 }
 
-/* 滚动条：6px 细条，thumb 常态 bg-hover、hover 变 border-strong */
-* { scrollbar-width: thin; scrollbar-color: var(--bg-hover) transparent; }
+/* 滚动条：6px 细条，thumb 常态 --fill-thumb、hover 变 border-strong */
+* { scrollbar-width: thin; scrollbar-color: var(--fill-thumb) transparent; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--fill-thumb); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
-/* 键盘焦点环（kindling app.css 同款）：鼠标点击不出环，Tab 导航可见 */
-:where(button, [role="button"]):focus-visible {
+/* 键盘焦点环（kindling app.css 同款）：鼠标点击不出环，Tab 导航可见。
+   阶段 4：覆盖到所有可聚焦的交互元素（零特异性 :where——组件自带的焦点样式照常优先） */
+:where(
+    button,
+    [role="button"],
+    a[href],
+    /* 排除可编辑区：TipTap 给正文编辑器加了 tabindex="0"，可编辑元素聚焦时总是 :focus-visible，
+       不排除的话写作时正文四周会一直套着焦点环 */
+    [tabindex]:not([tabindex="-1"]):not([contenteditable="true"]),
+    [role="menuitem"],
+    [role="menuitemcheckbox"],
+    [role="option"],
+    [role="tab"],
+    [role="switch"],
+    [role="radio"],
+    summary,
+    select,
+    input[type="checkbox"],
+    input[type="radio"],
+    input[type="range"]
+  ):focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
 }
+
+/* ---------- Zen 卡片与分隔缝（阶段 1） ---------- */
+/* 内容卡：唯一不透明、带阴影的层；内部方角背景由 overflow 裁成圆角 */
+.zen-card {
+  overflow: hidden;
+  border-radius: var(--r-card);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-card);
+}
+/* 分屏时活动窗格：卡片外描一圈极淡 accent（替代原先顶边 2px 线） */
+.zen-card-active {
+  box-shadow: var(--shadow-card), 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+/* 卡与卡之间的透明缝即拖拽条：平时不可见，悬停 0.2s 后中线浮出 accent 细条（Zen splitter） */
+.zen-splitter {
+  position: relative;
+  flex: none;
+  background: transparent;
+  outline: none;
+}
+.zen-splitter-x { width: var(--sep); cursor: col-resize; }
+.zen-splitter-y { height: var(--sep); cursor: row-resize; }
+.zen-splitter::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity var(--dur-md) ease 0s;
+}
+.zen-splitter-x::after { top: 20%; bottom: 20%; left: calc(50% - 1.5px); width: 3px; }
+.zen-splitter-y::after { left: 20%; right: 20%; top: calc(50% - 1.5px); height: 3px; }
+.zen-splitter:hover::after,
+.zen-splitter:focus-visible::after,
+.zen-splitter[data-separator-state="drag"]::after,
+.zen-splitter:active::after {
+  opacity: 0.8;
+  transition-delay: 0.2s;
+}
+.zen-splitter:active::after { transition-delay: 0s; }
+
+/* AI 写正文回答：与稿纸同一套衬线排版（段首缩进、行高），一眼区分「可采纳的正文」与讨论 */
+.ai-prose {
+  font-family: Georgia, "Noto Serif SC", "Source Han Serif SC", serif;
+  font-size: 0.9375rem;
+  line-height: 1.85;
+  color: var(--prose-fg);
+}
+.ai-prose p { margin: 0 0 0.45em; text-indent: 2em; }
+.ai-caret { color: var(--accent); animation: ai-caret 1s steps(2, start) infinite; margin-left: 1px; }
+@keyframes ai-caret { to { visibility: hidden; } }
+
+/* 视图切换：卡片极轻的淡入上浮（0.18s，无过冲） */
+@keyframes view-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.view-enter { animation: view-enter 0.18s var(--ease-out); }
+/* dock 面板切换：内容淡入 */
+@keyframes panel-swap {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.panel-swap { animation: panel-swap var(--dur-md) ease-out; }
+/* 命令面板：Zen urlbar-grow（scaleX .99 / scaleY .98 → 1，150ms） */
+@keyframes palette-in {
+  from { opacity: 0; transform: scale(0.99, 0.98); }
+  to { opacity: 1; transform: none; }
+}
+.palette-in { animation: palette-in 0.15s var(--ease-out); transform-origin: top center; }
+@keyframes tooltip-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+.tooltip-in { animation: tooltip-in 0.1s ease-out; }
 
 /* 写作视图三栏折叠（v4.12.4 实测：panel 级 collapse()/resize() 与 group 级
    setLayout() 在该布局下均静默无效——命令式 API 不可依赖；且 v4 在 Group 与
@@ -78,7 +247,8 @@ body {
    折叠=CSS 摘除该 wrapper（:has 命中 panel 的直接父级）：display:none 不占
    布局，编辑区自然填充；面板内联样式保持原值，展开即还原用户拖定宽度。 */
 [data-sidebar-collapsed] div:has(> .panel-sidebar),
-[data-dock-collapsed] div:has(> .panel-dock) {
+[data-dock-collapsed] div:has(> .panel-dock),
+[data-ai-hidden] div:has(> .panel-aidock) {
   display: none !important;
 }
 
@@ -200,7 +370,7 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
 }
 .outline-list li:hover {
   color: var(--text-primary);
-  background: var(--bg-hover);
+  background: var(--fill-hover);
   border-left-color: var(--border-strong);
   border-bottom-color: var(--border-strong);
 }
@@ -356,7 +526,7 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
 
 /* 目录列表（NavPanel）：hover 反馈 + 当前章 accent */
 .read-nav-list li { color: var(--text-secondary); }
-.read-nav-list li:hover { background: var(--bg-hover); color: var(--text-primary); }
+.read-nav-list li:hover { background: var(--fill-hover); color: var(--text-primary); }
 .read-nav-list li[data-current="true"] { color: var(--accent); background: var(--accent-dim); }
 
 /* 底栏进度滑条 */
@@ -382,6 +552,61 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
   cursor: pointer;
 }
 
+/* ---------- AI 写入着色 / 就地改写待改区（阶段 2B） ---------- */
+/* 采纳进正文、尚未改过的段落淡淡打底；改一个字即不再匹配、底色消失。纯装饰，不落盘 */
+.ai-text {
+  background-color: color-mix(in srgb, var(--accent) 7%, transparent);
+  border-radius: 2px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.ai-pending {
+  background-color: color-mix(in srgb, var(--accent) 20%, transparent);
+  border-radius: 2px;
+}
+.ai-pending-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin: 0 1px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: ai-pending-blink 1s steps(2) infinite;
+}
+@keyframes ai-pending-blink {
+  50% { opacity: 0; }
+}
+
+/* ---------- 正文里的 AI 指令（阶段 2C）：[待写指令] / {作者批注}——纯装饰 ---------- */
+.ai-directive-todo {
+  color: var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 3px;
+  text-decoration: underline dashed color-mix(in srgb, var(--accent) 50%, transparent);
+  text-underline-offset: 4px;
+}
+.ai-directive-note {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* ---------- 幽灵文本补全（阶段 2C）：灰字建议，Tab 接受 ---------- */
+.ai-ghost {
+  color: var(--text-faint);
+  opacity: 0.75;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---------- 会话内查找（阶段 2C）：CSS 自定义高亮，不改消息 DOM ---------- */
+::highlight(chat-find) {
+  background-color: color-mix(in srgb, var(--warning) 30%, transparent);
+}
+::highlight(chat-find-current) {
+  background-color: color-mix(in srgb, var(--warning) 75%, transparent);
+  color: var(--text-primary);
+}
+
 /* ---------- 长按 Esc 退出阅读（ReadView，作家助手同款 1500ms） ---------- */
 /* 按下 Esc 出现提示胶囊，内嵌进度条 1500ms 线性填满即退出；松开即取消 */
 .esc-hold-bar {
@@ -396,4 +621,17 @@ html[data-prose-indent] .ProseMirror p { text-indent: 2em; }
 @keyframes esc-hold-fill {
   from { width: 0; }
   to { width: 100%; }
+}
+
+/* Binder 拖放（阶段 3A）：拖动中全局抓手光标；定位当前章时闪一下 */
+body[data-binder-dragging],
+body[data-binder-dragging] * {
+  cursor: grabbing !important;
+}
+@keyframes binder-flash {
+  0%, 40% { box-shadow: 0 0 0 2px var(--accent); }
+  100% { box-shadow: 0 0 0 2px transparent; }
+}
+.binder-flash {
+  animation: binder-flash 0.9s ease-out;
 }

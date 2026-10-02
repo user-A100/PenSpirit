@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { BarChart3, Blocks, BookOpen, CircleDot, Dices, Flag, FolderOpen, LayoutGrid, Library, Link2, ListTree, Network, PenLine, Sparkles, Tag, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, Blocks, BookOpen, CircleDot, Dices, Flag, LayoutGrid, Library, Link2, ListTree, Network, PenLine, Sparkles, Tag, Users, type LucideIcon } from "lucide-react";
 import { BumpView } from "../../views/BumpView";
 import { WriteView } from "../../views/WriteView";
 import { ReadView } from "../../views/read/ReadView";
@@ -14,8 +14,10 @@ import { useUiNav } from "./uiStore";
 // 新增一级视图 = registerView 一次，无需改动导航组件。
 export type DockPanelDef = {
   id: string; // 面板唯一 id（PanelDock 内容映射的键）
-  label: string; // tab 文案
-  icon: LucideIcon; // tab 图标
+  label: string; // 面板标题 / 竖条提示
+  icon: LucideIcon; // 竖条图标
+  /** 竖条分组（组间画细分隔）：本章 / 设定 / 工具 */
+  group?: string;
 };
 
 export type NavView = {
@@ -49,16 +51,17 @@ registerView({
   label: "写作",
   icon: PenLine,
   Component: WriteView,
+  // 阶段 1：tab 栏改为右侧竖条，按组排列（本章 → 设定 → 工具）
   dockPanels: [
-    { id: "meta", label: "元数据", icon: Tag },
-    { id: "links", label: "链接", icon: Link2 },
-    { id: "collections", label: "集合", icon: FolderOpen },
-    { id: "reference", label: "参考", icon: BookOpen },
-    { id: "outline", label: "大纲", icon: ListTree },
-    { id: "characters", label: "人物", icon: Users },
-    { id: "foreshadow", label: "伏笔", icon: Flag },
-    { id: "plot", label: "情节块", icon: Blocks },
-    { id: "names", label: "取名", icon: Dices },
+    { id: "meta", label: "元数据", icon: Tag, group: "本章" },
+    { id: "links", label: "链接", icon: Link2, group: "本章" },
+    { id: "reference", label: "参考", icon: BookOpen, group: "本章" },
+    { id: "characters", label: "人物", icon: Users, group: "设定" },
+    { id: "foreshadow", label: "伏笔", icon: Flag, group: "设定" },
+    { id: "plot", label: "情节块", icon: Blocks, group: "设定" },
+    { id: "outline", label: "大纲", icon: ListTree, group: "设定" },
+
+    { id: "names", label: "取名", icon: Dices, group: "工具" },
   ],
 });
 

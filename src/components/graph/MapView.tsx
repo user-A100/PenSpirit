@@ -10,6 +10,7 @@ import { usePanZoom } from "../../hooks/usePanZoom";
 import { Button } from "../ui/Button";
 import { Input, inputClass } from "../ui/Input";
 import { Modal } from "../ui/Modal";
+import { confirmDialog } from "../../stores/confirm";
 
 // 世界地图（M5-T6）：左列地图清单 + 右侧 pan/zoom 底图画布。
 // pin 用百分比坐标直接叠在图上（换图/缩放不失效）；双击图面落新 pin，
@@ -72,7 +73,7 @@ function PlaceModal(props: {
       widthClass="max-w-md"
       testId="place-modal"
       footer={
-        <div className="flex items-center justify-between border-t border-[color:var(--border-subtle)] px-4 py-3">
+        <div className="flex items-center justify-between border-t border-[color:var(--hairline)] px-4 py-3">
           {props.initial ? (
             <Button
               variant="danger"
@@ -137,7 +138,7 @@ function PlaceModal(props: {
                     className={`rounded-full border px-2.5 py-1 text-xs transition-colors duration-[var(--dur-md)] ${
                       on
                         ? "border-[color:var(--accent)] bg-[var(--accent-dim)] text-[color:var(--accent)]"
-                        : "border-[color:var(--border-subtle)] text-[color:var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                        : "border-[color:var(--hairline)] text-[color:var(--text-secondary)] hover:bg-[var(--fill-hover)]"
                     }`}
                   >
                     {c.name}
@@ -213,14 +214,14 @@ export function MapView() {
   return (
     <div className="flex h-full gap-3">
       {/* 地图清单 */}
-      <div className="flex w-44 shrink-0 flex-col rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-panel)]">
+      <div className="flex w-44 shrink-0 flex-col rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-panel)]">
         <div className="flex items-center justify-between px-3 py-2.5">
           <span className="text-xs font-semibold text-[color:var(--text-secondary)]">地图</span>
           <button
             data-testid="map-import"
             title="导入地图"
             onClick={() => void pickImage()}
-            className="rounded-[var(--radius-md)] p-1 text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            className="rounded-[var(--r-control)] p-1 text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
           >
             <Plus size={15} />
           </button>
@@ -230,10 +231,10 @@ export function MapView() {
             <div
               key={m.id}
               data-testid={`map-item-${m.id}`}
-              className={`group flex items-center gap-1 rounded-[var(--radius-md)] px-2 py-1.5 text-sm transition-colors duration-[var(--dur-md)] ${
+              className={`group flex items-center gap-1 rounded-[var(--r-control)] px-2 py-1.5 text-sm transition-colors duration-[var(--dur-md)] ${
                 m.id === activeMapId
-                  ? "bg-[var(--bg-hover)] text-[color:var(--text-primary)]"
-                  : "text-[color:var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                  ? "bg-[var(--fill-element)] text-[color:var(--text-primary)]"
+                  : "text-[color:var(--text-secondary)] hover:bg-[var(--fill-hover)]"
               }`}
             >
               <button className="min-w-0 flex-1 truncate text-left" onClick={() => void select(m.id)} title={m.name}>
@@ -250,8 +251,8 @@ export function MapView() {
               <button
                 data-testid={`map-delete-${m.id}`}
                 title="删除地图"
-                onClick={() => {
-                  if (window.confirm(`删除地图「${m.name}」及其全部地点？`)) void removeMap(m.id);
+                onClick={async () => {
+                  if (await confirmDialog({ title: `删除地图「${m.name}」？`, message: "地图上的全部地点会一并删除。", confirmLabel: "删除", danger: true })) void removeMap(m.id);
                 }}
                 className="hidden shrink-0 rounded p-0.5 text-[color:var(--text-faint)] transition-colors duration-[var(--dur-md)] hover:text-[color:var(--danger)] group-hover:block"
               >
@@ -267,7 +268,7 @@ export function MapView() {
         <div
           ref={pz.ref}
           data-testid="map-canvas"
-          className="h-full cursor-grab overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)]"
+          className="h-full cursor-grab overflow-hidden rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)]"
           onPointerDown={pz.onPointerDown}
           onPointerMove={pz.onPointerMove}
           onPointerUp={pz.onPointerUp}
@@ -335,7 +336,7 @@ export function MapView() {
                       <MapPin size={13} />
                     </span>
                     <span
-                      className="mt-0.5 max-w-24 truncate rounded px-1 text-[11px] text-[color:var(--text-primary)]"
+                      className="mt-0.5 max-w-24 truncate rounded px-1 text-2xs text-[color:var(--text-primary)]"
                       style={{ background: "color-mix(in srgb, var(--bg-panel) 78%, transparent)" }}
                     >
                       {p.name}
@@ -375,7 +376,7 @@ export function MapView() {
         widthClass="max-w-sm"
         testId="map-rename-modal"
         footer={
-          <div className="flex justify-end gap-2 border-t border-[color:var(--border-subtle)] px-4 py-3">
+          <div className="flex justify-end gap-2 border-t border-[color:var(--hairline)] px-4 py-3">
             <Button variant="ghost" onClick={() => setRenaming(null)}>
               取消
             </Button>

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Bot, Check, ChevronDown, ChevronRight, Copy, Loader2, Plus, RotateCcw, Star, Trash2 } from "lucide-react";
 import { AgentDescriptor } from "../../lib/tauri";
 import { useAgents } from "../../stores/agents";
+import { errMsg } from "../../lib/errors";
+import { confirmDialog } from "../../stores/confirm";
 
 // 与 Rust registry::builtin_templates 对齐（列表删光后可一键恢复）
 const BUILTIN_AGENTS: AgentDescriptor[] = [
@@ -37,7 +39,7 @@ function EnableToggle(props: { on: boolean; onToggle: () => void }) {
     <button
       onClick={props.onToggle}
       title={props.on ? "停用（保留配置）" : "启用"}
-      className={`relative h-4 w-7 shrink-0 rounded-full transition-colors duration-150 ${props.on ? "bg-[var(--accent)]" : "bg-[var(--border-strong)]"}`}
+      className={`relative h-4 w-7 shrink-0 rounded-full transition-colors duration-150 ${props.on ? "bg-[var(--accent-solid)]" : "bg-[var(--border-strong)]"}`}
     >
       <span
         className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all duration-150 ${props.on ? "left-3.5" : "left-0.5"}`}
@@ -61,13 +63,13 @@ function InstallHint(props: { agentId: string }) {
     }
   };
   return (
-    <div className="mt-1.5 flex items-center gap-1.5 rounded border border-[color:var(--border-subtle)] bg-[var(--bg-panel)] px-2 py-1">
-      <span className="shrink-0 text-[10px] text-[color:var(--text-faint)]">未检测到命令，可安装：</span>
-      <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-[color:var(--text-secondary)]">{cmd}</code>
+    <div className="mt-1.5 flex items-center gap-1.5 rounded border border-[color:var(--hairline)] bg-[var(--bg-panel)] px-2 py-1">
+      <span className="shrink-0 text-2xs text-[color:var(--text-faint)]">未检测到命令，可安装：</span>
+      <code className="min-w-0 flex-1 truncate font-mono text-2xs text-[color:var(--text-secondary)]">{cmd}</code>
       <button
         onClick={() => void copy()}
         title="复制安装命令"
-        className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+        className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-2xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
       >
         {copied ? <Check size={11} className="text-[color:var(--success)]" /> : <Copy size={11} />}
         {copied ? "已复制" : "复制"}
@@ -89,7 +91,7 @@ function AddCustomForm(props: { onAdd: (desc: AgentDescriptor) => Promise<void> 
     return (
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+        className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
       >
         <Plus size={14} />
         添加自定义 agent
@@ -120,17 +122,17 @@ function AddCustomForm(props: { onAdd: (desc: AgentDescriptor) => Promise<void> 
       setCommand("");
       setArgs("");
     } catch (e) {
-      setErr(String(e));
+      setErr(errMsg(e));
     } finally {
       setBusy(false);
     }
   };
 
   const inputCls =
-    "w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]";
+    "w-full rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]";
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-[color:var(--border-subtle)] p-2.5">
+    <div className="flex flex-col gap-2 rounded-md border border-[color:var(--hairline)] p-2.5">
       <div className="flex items-center gap-1 text-xs font-medium text-[color:var(--text-primary)]">
         <Bot size={13} />
         自定义 agent
@@ -138,7 +140,7 @@ function AddCustomForm(props: { onAdd: (desc: AgentDescriptor) => Promise<void> 
         <button
           onClick={() => setOpen(false)}
           title="收起"
-          className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+          className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
         >
           <ChevronDown size={13} />
         </button>
@@ -150,7 +152,7 @@ function AddCustomForm(props: { onAdd: (desc: AgentDescriptor) => Promise<void> 
       <button
         onClick={() => void submit()}
         disabled={busy}
-        className="self-start rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+        className="self-start rounded-md bg-[var(--accent-solid)] px-3 py-1.5 text-sm text-white transition-colors duration-150 hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
       >
         添加
       </button>
@@ -170,7 +172,7 @@ export function AgentsPane() {
   }, [load]);
 
   const handleRemove = async (a: AgentDescriptor) => {
-    if (!window.confirm(`确定删除 agent「${a.name}」？`)) return;
+    if (!(await confirmDialog({ title: `删除 agent「${a.name}」？`, confirmLabel: "删除", danger: true }))) return;
     await remove(a.id);
   };
 
@@ -188,11 +190,11 @@ export function AgentsPane() {
       )}
 
       {agents.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-md border border-[color:var(--border-subtle)] px-2.5 py-4">
+        <div className="flex flex-col items-center gap-2 rounded-md border border-[color:var(--hairline)] px-2.5 py-4">
           <div className="text-xs text-[color:var(--text-faint)]">列表已空，可恢复内置模板或添加自定义 agent</div>
           <button
             onClick={() => void restoreBuiltins()}
-            className="flex items-center gap-1.5 rounded-md border border-[color:var(--border-strong)] px-3 py-1.5 text-sm text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            className="flex items-center gap-1.5 rounded-md border border-[color:var(--border-strong)] px-3 py-1.5 text-sm text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
           >
             <RotateCcw size={13} />
             恢复内置
@@ -201,7 +203,7 @@ export function AgentsPane() {
       ) : (
         <div className="flex flex-col gap-2">
           {agents.map((a) => (
-            <div key={a.id} className="rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] px-3 py-2.5 transition-colors duration-[var(--dur-md)] hover:border-[color:var(--accent)]">
+            <div key={a.id} className="rounded-[var(--r-control)] border border-[color:var(--hairline)] px-3 py-2.5 transition-colors duration-[var(--dur-md)] hover:border-[color:var(--accent)]">
               <div className="flex items-center gap-2">
                 <StatusDot probe={a.last_probe} />
                 <div className="min-w-0 flex-1">
@@ -211,7 +213,7 @@ export function AgentsPane() {
                       <span className="shrink-0 rounded-full bg-[var(--accent-dim)] px-2 py-0.5 text-xs text-[color:var(--accent)]">默认</span>
                     )}
                   </div>
-                  <div className="truncate font-mono text-[11px] text-[color:var(--text-faint)]">
+                  <div className="truncate font-mono text-2xs text-[color:var(--text-faint)]">
                     {a.command}
                     {a.args.length > 0 ? ` ${a.args.join(" ")}` : ""}
                   </div>
@@ -220,7 +222,7 @@ export function AgentsPane() {
                   <button
                     onClick={() => void setDefault(a.id)}
                     title="设为默认（agent 后端按默认位发车）"
-                    className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+                    className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
                   >
                     <Star size={12} />
                     设为默认
@@ -230,7 +232,7 @@ export function AgentsPane() {
                   onClick={() => void probe(a.id)}
                   disabled={probing.has(a.id)}
                   title="短连接探测（spawn → initialize → 退出）"
-                  className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {probing.has(a.id) ? <Loader2 size={12} className="animate-spin" /> : <ChevronRight size={12} />}
                   {probing.has(a.id) ? "探测中" : "探测"}
@@ -238,7 +240,7 @@ export function AgentsPane() {
                 <button
                   onClick={() => void handleRemove(a)}
                   title="删除该 agent"
-                  className="shrink-0 rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
+                  className="shrink-0 rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--danger)]"
                 >
                   <Trash2 size={13} />
                 </button>
@@ -247,7 +249,7 @@ export function AgentsPane() {
 
               {/* 探测结果行内展示 */}
               {a.last_probe && (
-                <div className={`mt-1 text-[11px] ${a.last_probe.ok ? "text-[color:var(--success)]" : "text-[color:var(--danger)]"}`}>
+                <div className={`mt-1 text-2xs ${a.last_probe.ok ? "text-[color:var(--success)]" : "text-[color:var(--danger)]"}`}>
                   {a.last_probe.ok
                     ? `已连接 ${a.last_probe.agent_name ?? a.name}${a.last_probe.protocol_version ? ` · 协议 ${a.last_probe.protocol_version}` : ""}${a.last_probe.can_resume ? " · 支持恢复会话" : ""}`
                     : `探测失败：${a.last_probe.detail ?? "未知原因"}`}

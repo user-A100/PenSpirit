@@ -2,21 +2,28 @@ import { useEffect, useRef } from "react";
 import { Ribbon } from "./components/layout/Ribbon";
 import { SettingsModal } from "./components/settings/SettingsModal";
 import { SearchPanel } from "./components/search/SearchPanel";
+import { Toaster } from "./components/ui/Toaster";
+import { ConfirmHost } from "./components/ui/ConfirmHost";
+import { MenuHost } from "./components/ui/MenuHost";
+import { TooltipHost } from "./components/ui/TooltipHost";
+import { CommandPalette } from "./components/ui/CommandPalette";
+import { DiffReview } from "./components/chat/DiffReview";
+import { VarsDialog } from "./components/chat/VarsDialog";
+import { SpeechChip } from "./components/ui/SpeechChip";
+import { ShortcutSheet } from "./components/ui/ShortcutSheet";
 import { WriteView } from "./views/WriteView";
+import { FocusEdge } from "./components/layout/FocusEdge";
 import { getView, getViews } from "./lib/nav/registry";
 import { useUiNav } from "./lib/nav/uiStore";
-import { useOutline } from "./stores/outline";
-import { useSearch } from "./stores/search";
-import { useWorkspace } from "./stores/workspace";
+import { installKeyDispatcher } from "./lib/commands";
+import { registerBuiltinCommands } from "./lib/builtinCommands";
 import { ThemeProvider, useAppearance } from "./themes/ThemeProvider";
 import { findTexture, TEXTURE_TILE_PX } from "./themes/textures";
 
 export default function App() {
   const activeView = useUiNav((s) => s.activeView);
-  const toggleSidebar = useUiNav((s) => s.toggleSidebar);
-  const toggleDock = useUiNav((s) => s.toggleDock);
+  const focusMode = useUiNav((s) => s.focusMode);
   const setReadReturn = useUiNav((s) => s.setReadReturn);
-  const openSearch = useSearch((s) => s.openPanel);
   const texture = useAppearance((s) => s.texture);
 
   // 双保险：registry 加载时已自愈无效视图 id，这里防御运行期脏值
@@ -31,102 +38,44 @@ export default function App() {
     prevViewRef.current = activeView;
   }, [activeView, setReadReturn]);
 
-  // Ctrl+B 折叠/展开侧栏
+  // 全局快捷键统一走命令中枢（lib/commands）：内置命令注册 + 捕获阶段分发。
+  // Ctrl+B 侧栏 / Ctrl+\ dock / Alt+O 悬浮大纲 / Ctrl+Shift+F 搜索 / Alt+←→ 历史 /
+  // Alt+S 分屏 / Ctrl+N 新建章节 / Ctrl+, 设置
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        toggleSidebar();
-      }
+    const offCommands = registerBuiltinCommands();
+    const offKeys = installKeyDispatcher();
+    return () => {
+      offKeys();
+      offCommands();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [toggleSidebar]);
-
-  // Ctrl+\ 折叠/展开右侧 dock（与 Ctrl+B 侧栏并排）
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key === "\\") {
-        e.preventDefault();
-        toggleDock();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [toggleDock]);
-
-  // Alt+O 悬浮大纲（写作模式下的章节导航浮窗）
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === "o") {
-        e.preventDefault();
-        useOutline.getState().toggle();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  // Ctrl+Shift+F 全书搜索（与 Ribbon 无关的全局快捷键）
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === "f") {
-        e.preventDefault();
-        openSearch();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [openSearch]);
-
-  // Alt+← / Alt+→ 章节导航后退/前进（M7 批次5）
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        void useWorkspace.getState().goBack();
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        void useWorkspace.getState().goForward();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  // Alt+S 分屏循环：无 → 左右 → 上下 → 无（M7 批次5）
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        useWorkspace.getState().cycleSplit();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   return (
     <ThemeProvider>
-      <div className="flex h-full w-full bg-[var(--bg-backdrop)]">
-        <Ribbon />
-        <main className="min-w-0 flex-1 p-[var(--sep)]">
-          {/* Zen 浮卡骨架：全部视图整体浮在 --bg-base 背板上，四周留 --sep 缝隙。
-              overflow-hidden 负责把各视图自带的方角背景裁成卡片圆角；弹窗/浮窗走
-              fixed 定位（不受裁切影响），回收站浮层横跨三栏、远在卡片内部。 */}
-          <div className="h-full overflow-hidden rounded-[var(--radius-md)] bg-[var(--bg-panel)]">
+      <div
+        data-focus-mode={focusMode ? "" : undefined}
+        className="flex h-full w-full bg-[var(--bg-backdrop)] text-[color:var(--text-primary)]"
+      >
+        {!focusMode && <Ribbon />}
+        {/* Zen 骨架（阶段 1）：导航与侧栏贴在背板上、无描边；只有内容是浮起的卡片。
+            写作视图自己排三张卡（稿纸 / AI / 右侧面板）；其余视图整体一张卡。
+            卡片 overflow-hidden 负责把内部方角背景裁成圆角；弹窗/浮窗走 fixed 定位不受裁切。 */}
+        <main className={`min-w-0 flex-1 py-[var(--sep)] ${focusMode ? "px-[var(--sep)]" : ""}`}>
           {/* WriteView 常挂（hidden 而非卸载）保住编辑器/dock/侧栏的内部状态 */}
           <div className={current === "write" ? "h-full" : "hidden"}>
             <WriteView />
           </div>
           {/* 其余视图按注册表渲染；read 全屏覆盖（不常挂：进入时重建以重置进度恢复/计时） */}
-          {current !== "write" && (() => {
-            const Active = getView(current)?.Component;
-            return Active ? <Active /> : null;
-          })()}
-          </div>
+          {current !== "write" && (
+            <div className="zen-card view-enter mr-[var(--sep)] h-full">
+              {(() => {
+                const Active = getView(current)?.Component;
+                return Active ? <Active /> : null;
+              })()}
+            </div>
+          )}
         </main>
+        {focusMode && current === "write" && <FocusEdge />}
         {/* 纸张纹理覆盖层（M3-T3）：z-200 高于全部面板/弹窗，均匀铺满整页（Maple 整页纸感）；
             preset="none" 时不渲染。定位样式见 styles.css #texture-layer 分区 */}
         {texture.preset !== "none" && (
@@ -145,6 +94,15 @@ export default function App() {
       </div>
       <SettingsModal />
       <SearchPanel />
+      <ConfirmHost />
+      <MenuHost />
+      <Toaster />
+      <TooltipHost />
+      <CommandPalette />
+      <DiffReview />
+      <VarsDialog />
+      <SpeechChip />
+      <ShortcutSheet />
     </ThemeProvider>
   );
 }

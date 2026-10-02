@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api, type Outline, type OutlineInput } from "../lib/tauri";
+import { errMsg } from "../lib/errors";
 
 // M4 大纲体系 store（与 characters/foreshadow 同款）：bookId 由面板从 workspace 取了传入，
 // 随当前书切换重载。写操作成功后整表重取；写失败返回 false，冲突类错误（总纲已存在/
@@ -33,7 +34,7 @@ export const useOutlinesStore = create<OutlinesStore>((set, get) => ({
     try {
       await api.outlineUpsert(input);
     } catch (e) {
-      return { ok: false, error: String(e).replace(/^.*?:\s*/, "") }; // 剥 "Error: " 前缀留中文 message
+      return { ok: false, error: errMsg(e) }; // 剥 "Error: " 前缀留中文 message
     }
     if (get().bookId === input.book_id) await get().load(input.book_id);
     return { ok: true };

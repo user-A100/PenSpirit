@@ -7,7 +7,7 @@
 // 上层（store / ThemeProvider / AppearancePane）无需改动。
 import { useEffect } from "react";
 import { create } from "zustand";
-import { backdropOf, DEFAULT_THEME_ID, findTheme, THEME_STYLE_ID, THEME_VAR_KEYS, ThemeDef } from "./defs";
+import { backdropOf, DEFAULT_THEME_ID, findTheme, resolveThemeId, THEME_STYLE_ID, THEME_VAR_KEYS, ThemeDef } from "./defs";
 import { findTexture, TexturePresetId, TEXTURE_TILE_PX } from "./textures";
 
 export type AppearanceMode = "system" | "light" | "dark";
@@ -147,11 +147,48 @@ export function applyProse(p: ProseSettings): void {
   else document.documentElement.removeAttribute("data-prose-indent");
 }
 
-/** 界面明暗：切 html class "dark"/"light"。与配色主题正交 */
+/** 界面明暗：切 html class "dark"/"light"（配色由 applyAppearanceTheme 按配对主题解析） */
 export function applyMode(mode: AppearanceMode, systemDark: boolean): void {
   const dark = effectiveDark(mode, systemDark);
   document.documentElement.classList.toggle("dark", dark);
   document.documentElement.classList.toggle("light", !dark);
+}
+
+/** 当前实际生效的主题 id（考虑明暗配对） */
+export function effectiveThemeId(colorTheme: string, mode: AppearanceMode, systemDark: boolean): string {
+  return resolveThemeId(colorTheme, effectiveDark(mode, systemDark));
+}
+
+let lastNativeTone: string | null = null;
+
+/**
+ * 原生标题栏跟随实际明暗（保留系统标题栏时与界面一体）；非 Tauri 环境静默跳过。
+ * 跟随系统时传 null 让窗口回到「随系统」：Tauri 会把窗口主题同步给 WebView2 的
+ * prefers-color-scheme，若此时写死明暗，系统明暗变化就再也探测不到。
+ */
+function applyNativeTone(mode: AppearanceMode, tone: "dark" | "light"): void {
+  const want = mode === "system" ? "system" : tone;
+  if (lastNativeTone === want) return;
+  lastNativeTone = want;
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
+  void import("@tauri-apps/api/window")
+    .then(({ getCurrentWindow }) => getCurrentWindow().setTheme(want === "system" ? null : tone))
+    .catch(() => {
+      // 权限缺失/旧运行时：标题栏保持配置值
+    });
+}
+
+/**
+ * 应用「配色 × 明暗」：解析配对主题 → 注入主题变量；html 挂 data-tone（阴影等
+ * 明暗相关 token 据此切换）与 dark/light class；原生标题栏跟随。
+ */
+export function applyAppearanceTheme(colorTheme: string, mode: AppearanceMode, systemDark: boolean): void {
+  const id = effectiveThemeId(colorTheme, mode, systemDark);
+  applyColorTheme(id);
+  applyMode(mode, systemDark);
+  const tone = findTheme(id)?.dark ?? true ? "dark" : "light";
+  document.documentElement.setAttribute("data-tone", tone);
+  applyNativeTone(mode, tone);
 }
 
 /** 纹理覆盖层节点 id（App 根部渲染，React 内联 style 为主；此处作补写） */
@@ -293,6 +330,9 @@ export function saveAppearance(a: AppearanceSettings): void {
 // ---------- store ----------
 
 interface AppearanceState extends AppearanceSettings {
+  /** 系统当前是否深色（ThemeProvider 监听更新；跟随系统时据此解析配对主题） */
+  systemDark: boolean;
+  /** 选主题卡：所见即所得——卡片倾向与当前界面明暗相反时，明暗随之固定为卡片倾向 */
   setColorTheme: (id: string) => void;
   setMode: (mode: AppearanceMode) => void;
   /** 立即应用到 DOM，落盘按 150ms 防抖合并 */
@@ -326,14 +366,18 @@ function snapshot(s: AppearanceState): AppearanceSettings {
 
 export const useAppearance = create<AppearanceState>((set, get) => ({
   ...loadAppearance(),
+  systemDark: systemPrefersDark(),
   setColorTheme: (id) => {
-    if (!findTheme(id)) return;
-    applyColorTheme(id);
-    set({ colorTheme: id });
+    const t = findTheme(id);
+    if (!t) return;
+    const { mode, systemDark } = get();
+    const nextMode: AppearanceMode = effectiveDark(mode, systemDark) === t.dark ? mode : t.dark ? "dark" : "light";
+    applyAppearanceTheme(id, nextMode, systemDark);
+    set({ colorTheme: id, mode: nextMode });
     saveAppearance(snapshot(get()));
   },
   setMode: (mode) => {
-    applyMode(mode, systemPrefersDark());
+    applyAppearanceTheme(get().colorTheme, mode, get().systemDark);
     set({ mode });
     saveAppearance(snapshot(get()));
   },
@@ -360,8 +404,7 @@ export const useAppearance = create<AppearanceState>((set, get) => ({
 /** 启动防闪烁：在 React 渲染前同步应用一次外观（main.tsx 调用） */
 export function initAppearanceSync(): AppearanceSettings {
   const a = loadAppearance();
-  applyColorTheme(a.colorTheme);
-  applyMode(a.mode, systemPrefersDark());
+  applyAppearanceTheme(a.colorTheme, a.mode, systemPrefersDark());
   applyUiScale(a.uiScale);
   applyProse(a.prose);
   applyTexture(a.texture);
@@ -377,13 +420,12 @@ export function initAppearanceSync(): AppearanceSettings {
 export function ThemeProvider({ children }: { children?: React.ReactNode }) {
   const colorTheme = useAppearance((s) => s.colorTheme);
   const mode = useAppearance((s) => s.mode);
+  const systemDark = useAppearance((s) => s.systemDark);
   const uiScale = useAppearance((s) => s.uiScale);
   const prose = useAppearance((s) => s.prose);
   const texture = useAppearance((s) => s.texture);
 
-  useEffect(() => { applyColorTheme(colorTheme); }, [colorTheme]);
-
-  useEffect(() => { applyMode(mode, systemPrefersDark()); }, [mode]);
+  useEffect(() => { applyAppearanceTheme(colorTheme, mode, systemDark); }, [colorTheme, mode, systemDark]);
 
   useEffect(() => { applyUiScale(uiScale); }, [uiScale]);
 
@@ -394,7 +436,12 @@ export function ThemeProvider({ children }: { children?: React.ReactNode }) {
   useEffect(() => {
     if (mode !== "system" || typeof window.matchMedia !== "function") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = (e: MediaQueryListEvent) => applyMode("system", e.matches);
+    // 挂载时先对齐一次（启动后系统明暗可能已变）
+    if (useAppearance.getState().systemDark !== mq.matches) useAppearance.setState({ systemDark: mq.matches });
+    const onChange = (e: MediaQueryListEvent) => {
+      applyMode("system", e.matches);
+      useAppearance.setState({ systemDark: e.matches });
+    };
     if (typeof mq.addEventListener === "function") {
       mq.addEventListener("change", onChange);
       return () => mq.removeEventListener("change", onChange);

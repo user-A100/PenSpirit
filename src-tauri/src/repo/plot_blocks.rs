@@ -3,7 +3,7 @@ use rusqlite::{params, Connection};
 use crate::error::{AppError, AppResult};
 use crate::models::{PlotBlock, PlotBlockInput};
 
-const COLS: &str = "id, book_id, content, status, chapter_id, sort_key, created_at";
+const COLS: &str = "id, book_id, content, status, chapter_id, sort_key, created_at, ai_hidden";
 
 fn from_row(row: &rusqlite::Row) -> rusqlite::Result<PlotBlock> {
     Ok(PlotBlock {
@@ -14,6 +14,7 @@ fn from_row(row: &rusqlite::Row) -> rusqlite::Result<PlotBlock> {
         chapter_id: row.get(4)?,
         sort_key: row.get(5)?,
         created_at: row.get(6)?,
+        ai_hidden: row.get::<_, i64>(7)? != 0,
     })
 }
 

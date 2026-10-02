@@ -1,7 +1,9 @@
 pub mod assembler;
+pub mod directives;
+pub mod related;
 pub mod inject;
 
 pub use assembler::{
-    assemble, AssembleInput, Assembled, AssemblyLog, InjectionInput, SlotLog,
-    CHAPTER_WINDOW_CHARS, PREV_WINDOW_CHARS,
+    assemble, trim_history, AssembleInput, Assembled, AssemblyLog, InjectionInput, Mode, SlotLog,
+    AFTER_WINDOW_CHARS, CHAPTER_WINDOW_CHARS, PREV_WINDOW_CHARS, SELECTION_MAX_CHARS,
 };

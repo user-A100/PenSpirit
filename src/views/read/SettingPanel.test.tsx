@@ -2,6 +2,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { api, type BgImage } from "../../lib/tauri";
+import { confirmDialog } from "../../stores/confirm";
+
+vi.mock("../../stores/confirm", () => ({ confirmDialog: vi.fn() }));
 import { defaultReadingPrefs, useReadingPrefs } from "./readingPrefs";
 import { SettingPanel } from "./SettingPanel";
 
@@ -35,8 +38,8 @@ describe("SettingPanel", () => {
   beforeEach(() => {
     localStorage.clear();
     resetPrefs();
-    confirmMock = vi.fn(() => true);
-    (window as unknown as { confirm: unknown }).confirm = confirmMock;
+    confirmMock = vi.mocked(confirmDialog) as unknown as Mock;
+    confirmMock.mockResolvedValue(true);
     scrollIntoViewMock = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoViewMock as unknown as Element["scrollIntoView"];
     vi.mocked(api.readingBgList).mockResolvedValue(IMAGES);
@@ -90,11 +93,11 @@ describe("SettingPanel", () => {
 
     await waitFor(() => expect(api.readingBgDelete).toHaveBeenCalledWith("aaa"));
     await waitFor(() => expect(useReadingPrefs.getState().bgImage).toBeNull());
-    expect(confirmMock).toHaveBeenCalledWith(expect.stringContaining("山间晨雾"));
+    expect(confirmMock).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("山间晨雾") }));
   });
 
   it("confirm 取消时不删除", async () => {
-    confirmMock.mockReturnValue(false);
+    confirmMock.mockResolvedValue(false);
     render(<SettingPanel />);
     await waitFor(() => screen.getByLabelText("删除背景图 夜航船"));
     fireEvent.click(screen.getByLabelText("删除背景图 夜航船"));

@@ -75,7 +75,7 @@ export function RelationEditModal({
       widthClass="max-w-md"
       testId="relation-modal"
       footer={
-        <div className="flex items-center gap-2 border-t border-[color:var(--border-subtle)] px-4 py-3">
+        <div className="flex items-center gap-2 border-t border-[color:var(--hairline)] px-4 py-3">
           {editing && (
             <button
               data-testid="rel-delete"
@@ -90,14 +90,14 @@ export function RelationEditModal({
           <span className="flex-1" />
           <button
             onClick={onClose}
-            className="rounded-[var(--radius-md)] px-3 py-1.5 text-sm text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+            className="rounded-[var(--r-control)] px-3 py-1.5 text-sm text-[color:var(--text-secondary)] transition-colors duration-[var(--dur-md)] hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
           >
             取消
           </button>
           <button
             data-testid="rel-save"
             onClick={() => void save()}
-            className="rounded-[var(--radius-md)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white transition-colors duration-[var(--dur-md)] hover:bg-[var(--accent-hover)]"
+            className="rounded-[var(--r-control)] bg-[var(--accent-solid)] px-3 py-1.5 text-sm font-medium text-white transition-colors duration-[var(--dur-md)] hover:bg-[var(--accent-hover)]"
           >
             保存
           </button>
@@ -116,7 +116,7 @@ export function RelationEditModal({
           data-testid="rel-target"
           value={targetId ?? ""}
           onChange={(e) => setTargetId(e.target.value ? Number(e.target.value) : null)}
-          className="w-full rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-[var(--dur-md)] focus:border-[color:var(--accent)]"
+          className="w-full rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-[var(--dur-md)] focus:border-[color:var(--accent)]"
         >
           <option value="">对方角色…</option>
           {others.map((c) => (
@@ -137,7 +137,7 @@ export function RelationEditModal({
                 className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors duration-[var(--dur-md)] ${
                   type === p
                     ? "border-[color:var(--accent)] bg-[var(--accent-dim)] text-[color:var(--accent)]"
-                    : "border-[color:var(--border-subtle)] text-[color:var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                    : "border-[color:var(--hairline)] text-[color:var(--text-secondary)] hover:bg-[var(--fill-hover)]"
                 }`}
               >
                 {p}
@@ -149,7 +149,7 @@ export function RelationEditModal({
             value={type}
             onChange={(e) => setType(e.target.value)}
             placeholder="关系类型：可点上方预设，也可自由填写"
-            className="w-full rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-[var(--dur-md)] placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
+            className="w-full rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-[var(--dur-md)] placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
           />
         </div>
 
@@ -159,7 +159,7 @@ export function RelationEditModal({
           onChange={(e) => setNote(e.target.value)}
           placeholder="备注（可选）：认识缘由、当前状态…"
           rows={2}
-          className="w-full resize-none rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-[var(--dur-md)] placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
+          className="w-full resize-none rounded-[var(--r-control)] border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-[var(--dur-md)] placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]"
         />
 
         {error && <div className="text-xs text-[color:var(--danger)]">{error}</div>}

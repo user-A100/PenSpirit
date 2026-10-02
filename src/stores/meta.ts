@@ -53,9 +53,8 @@ export const useMeta = create<MetaState>((set, get) => ({
     const chapterId = useWorkspace.getState().currentChapterId;
     if (chapterId == null) return;
     const meta = await api.chapterUpdateMeta(chapterId, update);
-    useWorkspace.setState((s) => ({
-      chapters: s.chapters.map((c) => (c.id === meta.id ? meta : c)),
-    }));
+    // 章或卷（卷首语打开时当前项是卷）都合进对应列表
+    useWorkspace.getState().patchNodes([meta]);
   },
   toggleChapterKeyword: async (keywordId) => {
     const chapterId = useWorkspace.getState().currentChapterId;

@@ -1,3 +1,7 @@
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+
+use rusqlite::Connection;
 use tauri::State;
 
 use crate::error::{AppError, AppResult};
@@ -5,7 +9,7 @@ use crate::bump;
 use crate::fs_service;
 use crate::history;
 use crate::links;
-use crate::models::{Backlink, BgImage, Book, BumpWord, ChapterContent, ChapterMeta, ChapterMetaUpdate, ChapterTemplate, ChapterTemplateInput, Character, CharacterInput, CharacterMention, CharacterRelation, CharacterRelationInput, Collection, CollectionInput, CustomFieldDef, CustomFieldDefInput, DailyStat, Foreshadow, ForeshadowInput, FreeformPos, Idea, Keyword, Label, LabelInput, Map, Material, MaterialInput, Outline, OutlineInput, Place, PlaceInput, PlotBlock, PlotBlockInput, Status, StatusInput, WikiLink};
+use crate::models::{Backlink, BgImage, Book, BumpWord, ChapterContent, ChapterMeta, ChapterMetaUpdate, ChapterTemplate, ChapterTemplateInput, MergeResult, TreeItem, Character, CharacterInput, CharacterMention, CharacterRelation, CharacterRelationInput, Collection, CollectionInput, CustomFieldDef, CustomFieldDefInput, DailyStat, Foreshadow, ForeshadowInput, FreeformPos, Idea, Keyword, Label, LabelInput, Map, Material, MaterialInput, Outline, OutlineInput, Place, PlaceInput, PlotBlock, PlotBlockInput, Status, StatusInput, WikiLink};
 use crate::porting;
 use crate::repo;
 use crate::search;
@@ -48,6 +52,15 @@ pub fn delete_book_inner(s: &AppState, id: i64) -> AppResult<()> {
     trash::soft_delete_book_inner(s, id)
 }
 
+/// 改书名：只改标题，目录名（slug）不动——磁盘布局与既有引用全部保持
+pub fn rename_book_inner(s: &AppState, id: i64, title: &str) -> AppResult<Book> {
+    let title = title.trim();
+    if title.is_empty() {
+        return Err(AppError::Invalid("书名不能为空".into()));
+    }
+    repo::books::rename(&*lock(s)?, id, title)
+}
+
 pub fn list_chapters_inner(s: &AppState, book_id: i64) -> AppResult<Vec<ChapterMeta>> {
     repo::chapters::list_by_book(&*lock(s)?, book_id)
 }
@@ -73,6 +86,8 @@ pub fn create_chapter_inner(s: &AppState, book_id: i64, title: &str) -> AppResul
 }
 
 /// 批量重排章节（侧栏/卡片墙拖拽后调用）；清单必须同书，否则整批拒绝。
+/// 阶段 3B 起按「位置」理解：给定的章依次填回它们在全书先序中占据的位置，并继承该位置所属的卷
+/// （平铺书与旧语义完全一致）；卷的移动走 tree_apply。顺序同时写进文件序号，DB 事务与改名同进退。
 pub fn reorder_chapters_inner(s: &AppState, ids: &[i64]) -> AppResult<()> {
     if ids.is_empty() {
         return Ok(());
@@ -87,59 +102,441 @@ pub fn reorder_chapters_inner(s: &AppState, ids: &[i64]) -> AppResult<()> {
     if distinct > 1 {
         return Err(AppError::Invalid("章节清单跨书，拒绝重排".into()));
     }
-    repo::chapters::reorder(&*conn, ids)
+    let book_id = repo::chapters::get(&*conn, ids[0])?.book_id;
+    let nodes = repo::chapters::list_nodes(&*conn, book_id)?;
+    if nodes.iter().any(|n| n.kind == "folder" && ids.contains(&n.id)) {
+        return Err(AppError::Invalid("卷的移动请用树操作".into()));
+    }
+    let wanted: HashSet<i64> = ids.iter().copied().collect();
+    let order = normalized_order(&nodes);
+    if wanted.len() != ids.len() || order.iter().filter(|(id, _)| wanted.contains(id)).count() != ids.len() {
+        return Err(AppError::Invalid("重排清单有重复，或含已删除 / 不存在的章".into()));
+    }
+    let mut next = ids.iter();
+    let items: Vec<(i64, Option<i64>)> = order
+        .iter()
+        .map(|&(id, p)| if wanted.contains(&id) { (*next.next().expect("数量已校验"), p) } else { (id, p) })
+        .collect();
+    commit_tree(&conn, &s.root, book_id, &items, None)
 }
 
+/// 树操作统一入口（阶段 3B：拖放 / 放入卷 / 升降级 / 移位）：前端给出全书先序 + 所属卷，
+/// 后端校验后同事务写 sort_key / parent_id 并重编文件、搬目录；任何一步失败整体撤回。
+pub fn tree_apply_inner(s: &AppState, book_id: i64, items: &[TreeItem]) -> AppResult<()> {
+    let conn = lock(s)?;
+    let nodes = repo::chapters::list_nodes(&*conn, book_id)?;
+    let order = validate_tree(&nodes, items)?;
+    commit_tree(&conn, &s.root, book_id, &order, None)
+}
+
+/// 在树中指定位置新建章：after_id 为章 → 其后同级；after_id 为卷 → 该卷之后（顶层）；
+/// 只给 parent_id → 该卷末尾；都不给 → 全书末尾
+pub fn create_chapter_at_inner(
+    s: &AppState,
+    book_id: i64,
+    title: &str,
+    after_id: Option<i64>,
+    parent_id: Option<i64>,
+) -> AppResult<ChapterMeta> {
+    let created = create_chapter_inner(s, book_id, title)?;
+    if after_id.is_some() || parent_id.is_some() {
+        let conn = lock(s)?;
+        place_node(&conn, &s.root, book_id, created.id, after_id, parent_id, &[])?;
+    }
+    lock(s).and_then(|c| repo::chapters::get(&*c, created.id))
+}
+
+/// 新建卷（磁盘子目录）：child_ids 非空 = 「放入新卷」（新卷占据第一个被收编章所在的位置）；
+/// 否则放在 after_id 所在顶层块之后，都没有则放末尾
+pub fn volume_create_inner(
+    s: &AppState,
+    book_id: i64,
+    title: &str,
+    after_id: Option<i64>,
+    child_ids: &[i64],
+) -> AppResult<ChapterMeta> {
+    let title = title.trim();
+    if title.is_empty() {
+        return Err(AppError::Invalid("卷名不能为空".into()));
+    }
+    let conn = lock(s)?;
+    let book = repo::books::get(&*conn, book_id)?;
+    let index = repo::chapters::next_index(&*conn, book_id)?;
+    let rel = format!("{}/manuscript/{:04}-{}", book.slug, index, fs_service::slugify(title));
+    std::fs::create_dir_all(s.root.join(&rel))?;
+    let folder = repo::chapters::create_folder(&*conn, book_id, &rel, title)?;
+    if let Err(e) = place_node(&conn, &s.root, book_id, folder.id, after_id, None, child_ids) {
+        // 落位失败：撤掉空卷，不留半截
+        let _ = repo::chapters::delete(&*conn, folder.id);
+        let _ = std::fs::remove_dir(s.root.join(&rel));
+        return Err(e);
+    }
+    repo::chapters::get(&*conn, folder.id)
+}
+
+/// 文件名主干拆分：`book/manuscript/0003-初见.md` → (`0003-初见`, Some(3), `初见`)；
+/// 卷目录同理（`0002-第一卷-风雪` → 序号 2、标题部分 `第一卷-风雪`）；无数字序号的主干整体视为标题部分。
+fn split_stem(rel: &str) -> (&str, Option<i64>, &str) {
+    let name = rel.rsplit('/').next().unwrap_or(rel);
+    let stem = name.strip_suffix(".md").unwrap_or(name);
+    match stem.split_once('-') {
+        Some((n, rest)) => match n.parse::<i64>() {
+            Ok(i) => (stem, Some(i), rest),
+            Err(_) => (stem, None, stem),
+        },
+        None => match stem.parse::<i64>() {
+            Ok(i) => (stem, Some(i), ""),
+            Err(_) => (stem, None, stem),
+        },
+    }
+}
+
+/// 一次改名：md 文件、卷目录或快照目录。tmp 为第一阶段的落脚点
+struct Move {
+    from: PathBuf,
+    tmp: PathBuf,
+    to: PathBuf,
+}
+
+fn suffixed(p: &Path, suffix: &str) -> PathBuf {
+    let mut s = p.as_os_str().to_os_string();
+    s.push(suffix);
+    PathBuf::from(s)
+}
+
+/// 两阶段执行一组改名：phase1 按序把 from 挪到 tmp，phase2 按序把 tmp 落到 to——互换位置、
+/// 同名标题、跨卷搬动都不会撞。phase2 若目标是残留的旧快照目录，先挪到 `.orphan-N`（不合并不覆盖）。
+/// 任一步失败把已完成的步骤逆序撤回；成功返回已执行的步骤（供上层 DB 失败时撤回）。
+fn apply_moves(phase1: &[&Move], phase2: &[&Move]) -> AppResult<Vec<(PathBuf, PathBuf)>> {
+    let mut done: Vec<(PathBuf, PathBuf)> = Vec::new();
+    let run = |done: &mut Vec<(PathBuf, PathBuf)>| -> AppResult<()> {
+        for m in phase1 {
+            if let Some(p) = m.tmp.parent() {
+                std::fs::create_dir_all(p)?;
+            }
+            std::fs::rename(&m.from, &m.tmp)?;
+            done.push((m.from.clone(), m.tmp.clone()));
+        }
+        for m in phase2 {
+            if m.to.exists() {
+                if !m.to.is_dir() {
+                    return Err(AppError::Invalid(format!("目标文件已存在：{}", m.to.display())));
+                }
+                let aside = (1..)
+                    .map(|n| suffixed(&m.to, &format!(".orphan-{n}")))
+                    .find(|c| !c.exists())
+                    .expect("总能找到空位");
+                std::fs::rename(&m.to, &aside)?;
+                done.push((m.to.clone(), aside));
+            }
+            if let Some(p) = m.to.parent() {
+                std::fs::create_dir_all(p)?;
+            }
+            std::fs::rename(&m.tmp, &m.to)?;
+            done.push((m.tmp.clone(), m.to.clone()));
+        }
+        Ok(())
+    };
+    match run(&mut done) {
+        Ok(()) => Ok(done),
+        Err(e) => {
+            revert_moves(&done);
+            Err(e)
+        }
+    }
+}
+
+/// 尽力撤回 apply_moves 已执行的步骤（逆序）
+fn revert_moves(done: &[(PathBuf, PathBuf)]) {
+    for (from, to) in done.iter().rev() {
+        let _ = std::fs::rename(to, from);
+    }
+}
+
+/// 由 (parent_id, sort_key) 推出合法的全书先序：顶层节点按 sort_key，卷后紧跟其子章。
+/// 指向已删 / 不存在的卷的章视为顶层；卷不能有父节点。nodes 须已按 sort_key 排好。
+fn normalized_order(nodes: &[ChapterMeta]) -> Vec<(i64, Option<i64>)> {
+    let folders: HashSet<i64> = nodes.iter().filter(|n| n.kind == "folder").map(|n| n.id).collect();
+    let parent_of = |n: &ChapterMeta| if n.kind == "folder" { None } else { n.parent_id.filter(|p| folders.contains(p)) };
+    let mut out = Vec::with_capacity(nodes.len());
+    for n in nodes.iter().filter(|n| parent_of(n).is_none()) {
+        out.push((n.id, None));
+        if n.kind == "folder" {
+            for c in nodes.iter().filter(|c| parent_of(c) == Some(n.id)) {
+                out.push((c.id, Some(n.id)));
+            }
+        }
+    }
+    out
+}
+
+/// 校验前端给的先序清单：恰好覆盖书内全部在世节点、无重复；卷只在顶层；卷内的章紧跟所属卷
+fn validate_tree(nodes: &[ChapterMeta], items: &[TreeItem]) -> AppResult<Vec<(i64, Option<i64>)>> {
+    let is_folder: HashMap<i64, bool> = nodes.iter().map(|n| (n.id, n.kind == "folder")).collect();
+    if items.len() != nodes.len() {
+        return Err(AppError::Invalid("树清单与书内节点不一致".into()));
+    }
+    let mut seen = HashSet::new();
+    let mut open: Option<i64> = None;
+    let mut out = Vec::with_capacity(items.len());
+    for it in items {
+        let folder = *is_folder
+            .get(&it.id)
+            .ok_or_else(|| AppError::Invalid("树清单含本书之外或已删除的节点".into()))?;
+        if !seen.insert(it.id) {
+            return Err(AppError::Invalid("树清单有重复节点".into()));
+        }
+        match it.parent_id {
+            None => open = if folder { Some(it.id) } else { None },
+            Some(p) => {
+                if folder {
+                    return Err(AppError::Invalid("卷不能放进卷".into()));
+                }
+                if open != Some(p) {
+                    return Err(AppError::Invalid("卷内的章必须紧跟在所属卷之后".into()));
+                }
+            }
+        }
+        out.push((it.id, it.parent_id));
+    }
+    Ok(out)
+}
+
+/// 顶层块（卷 + 其子章，或单个顶层章）在 order 中的终点（不含）
+fn block_end(order: &[(i64, Option<i64>)], start: usize) -> usize {
+    let id = order[start].0;
+    let mut j = start + 1;
+    while j < order.len() && order[j].1 == Some(id) {
+        j += 1;
+    }
+    j
+}
+
+/// 把（刚建的）节点放进树里并落盘。gather = 新卷要收编的章（「放入新卷」）
+fn place_node(
+    conn: &Connection,
+    root: &Path,
+    book_id: i64,
+    id: i64,
+    after_id: Option<i64>,
+    parent_id: Option<i64>,
+    gather: &[i64],
+) -> AppResult<()> {
+    let nodes = repo::chapters::list_nodes(conn, book_id)?;
+    let folders: HashSet<i64> = nodes.iter().filter(|n| n.kind == "folder").map(|n| n.id).collect();
+    let is_folder = folders.contains(&id);
+    let full = normalized_order(&nodes);
+    let index_of = |x: i64| full.iter().position(|p| p.0 == x);
+    let top_start = |i: usize| match full[i].1 {
+        None => i,
+        Some(p) => index_of(p).unwrap_or(i),
+    };
+    // 收编的章（只收正文章），按当前先序
+    let gather: Vec<i64> = if is_folder {
+        full.iter().map(|p| p.0).filter(|x| *x != id && gather.contains(x) && !folders.contains(x)).collect()
+    } else {
+        Vec::new()
+    };
+    // K = 新节点插在 full 中下标 K 之前（K 总落在合法的块边界上）
+    let (k, parent) = if let Some(first) = gather.first().and_then(|g| index_of(*g)) {
+        let t = top_start(first);
+        (if full[t].1.is_none() && folders.contains(&full[t].0) { block_end(&full, t) } else { t }, None)
+    } else if let Some(ai) = after_id.and_then(index_of) {
+        if is_folder {
+            (block_end(&full, top_start(ai)), None)
+        } else if folders.contains(&full[ai].0) {
+            (block_end(&full, ai), None)
+        } else {
+            (ai + 1, full[ai].1)
+        }
+    } else if let Some(pi) = parent_id.filter(|p| folders.contains(p) && !is_folder).and_then(index_of) {
+        (block_end(&full, pi), parent_id)
+    } else {
+        (full.len(), None)
+    };
+    let removed: HashSet<i64> = gather.iter().copied().chain([id]).collect();
+    let pos = full[..k.min(full.len())].iter().filter(|p| !removed.contains(&p.0)).count();
+    let mut order: Vec<(i64, Option<i64>)> = full.into_iter().filter(|p| !removed.contains(&p.0)).collect();
+    let mut insert = vec![(id, parent)];
+    insert.extend(gather.iter().map(|g| (*g, Some(id))));
+    order.splice(pos..pos, insert);
+    commit_tree(conn, root, book_id, &order, None)
+}
+
+/// 同事务写树结构（先序 + 所属卷）并重编文件；提交失败撤回已做的改名
+fn commit_tree(
+    conn: &Connection,
+    root: &Path,
+    book_id: i64,
+    items: &[(i64, Option<i64>)],
+    rename: Option<(i64, &str)>,
+) -> AppResult<()> {
+    let tx = conn.unchecked_transaction()?;
+    repo::chapters::set_tree(&tx, items)?;
+    let done = renumber_manuscript(&tx, root, book_id, rename)?;
+    if let Err(e) = tx.commit() {
+        revert_moves(&done);
+        return Err(e.into());
+    }
+    Ok(())
+}
+
+/// 让 manuscript 文件序号跟随全书先序（阶段 3A 起；3B 起含卷）：卷与章共用一条序号，
+/// 章落在所属卷目录里——删库后「重建索引」按文件名排序即得原顺序与层级。
+/// 先把要动的章挪进 `.renumber-tmp/`，再改卷目录名，最后把章落到新位置；快照目录随主干迁移。
+/// 目标被本批以外的文件占用时整批拒绝（不覆盖用户文件；空的残留目录直接清掉）。磁盘上找不到的节点跳过。
+/// 调用方须持有连接锁并在事务内调用：返回已执行的改名，事务提交失败时交给 revert_moves 撤回。
+fn renumber_manuscript(
+    conn: &Connection,
+    root: &Path,
+    book_id: i64,
+    rename: Option<(i64, &str)>,
+) -> AppResult<Vec<(PathBuf, PathBuf)>> {
+    let book = repo::books::get(conn, book_id)?;
+    let book_dir = root.join(&book.slug);
+    let ms = format!("{}/manuscript", book.slug);
+    let nodes = repo::chapters::list_nodes(conn, book_id)?;
+    let order = normalized_order(&nodes);
+    let by_id: HashMap<i64, &ChapterMeta> = nodes.iter().map(|n| (n.id, n)).collect();
+    let tmp_dir = root.join(&ms).join(".renumber-tmp");
+    let mut dir_of: HashMap<i64, String> = HashMap::new();
+    let (mut files, mut dirs, mut hists, mut updates) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for (i, &(id, parent)) in order.iter().enumerate() {
+        let n = by_id[&id];
+        let part = match rename {
+            Some((rid, t)) if rid == id => t.to_string(),
+            _ => split_stem(&n.file_path).2.to_string(),
+        };
+        let stem = if part.is_empty() { format!("{:04}", i + 1) } else { format!("{:04}-{part}", i + 1) };
+        let folder = n.kind == "folder";
+        let new_rel = if folder {
+            format!("{ms}/{stem}")
+        } else {
+            match parent.and_then(|p| dir_of.get(&p)) {
+                Some(d) => format!("{d}/{stem}.md"),
+                None => format!("{ms}/{stem}.md"),
+            }
+        };
+        let from = root.join(&n.file_path);
+        let movable = if folder { from.is_dir() } else { from.is_file() };
+        if folder {
+            // 目录不在就不改它的路径，子章也按它现有目录算
+            dir_of.insert(id, if movable { new_rel.clone() } else { n.file_path.clone() });
+        }
+        if new_rel == n.file_path || !movable {
+            continue;
+        }
+        let to = root.join(&new_rel);
+        if folder {
+            dirs.push(Move { tmp: suffixed(&from, ".renumber-tmp"), from, to });
+        } else {
+            files.push(Move { tmp: tmp_dir.join(format!("{id}.md")), from, to });
+        }
+        let old_stem = split_stem(&n.file_path).0;
+        if let (Some(oh), Some(nh)) = (history::history_dir(&book_dir, old_stem), history::history_dir(&book_dir, &stem)) {
+            if old_stem != stem && oh.is_dir() {
+                hists.push(Move { tmp: suffixed(&oh, ".renumber-tmp"), from: oh, to: nh });
+            }
+        }
+        updates.push((id, new_rel));
+    }
+    if updates.is_empty() {
+        return Ok(Vec::new());
+    }
+    let leaving: HashSet<PathBuf> = files.iter().chain(&dirs).map(|m| m.from.clone()).collect();
+    for m in files.iter().chain(&dirs) {
+        if m.to.exists() && !leaving.contains(&m.to) {
+            if m.to.is_dir() && std::fs::remove_dir(&m.to).is_ok() {
+                continue;
+            }
+            return Err(AppError::Invalid(format!("重排需要的文件名已被占用：{}", m.to.display())));
+        }
+    }
+    let phase1: Vec<&Move> = files.iter().chain(&dirs).chain(&hists).collect();
+    let phase2: Vec<&Move> = dirs.iter().chain(&files).chain(&hists).collect();
+    let done = apply_moves(&phase1, &phase2);
+    let _ = std::fs::remove_dir(&tmp_dir);
+    let done = done?;
+    // DB 路径同样两阶段：(book_id, file_path) 唯一，互换时直接写终值会撞约束
+    let write_paths = || -> AppResult<()> {
+        for (id, rel) in &updates {
+            repo::chapters::set_file_path(conn, *id, &format!("{rel}.renumber-tmp-{id}"))?;
+        }
+        for (id, rel) in &updates {
+            repo::chapters::set_file_path(conn, *id, rel)?;
+        }
+        Ok(())
+    };
+    if let Err(e) = write_paths() {
+        revert_moves(&done);
+        return Err(e);
+    }
+    Ok(done)
+}
+
+/// 整本书按当前结构规整先序并重编文件序号（回收站恢复后用）
+pub(crate) fn renumber_book(s: &AppState, book_id: i64) -> AppResult<()> {
+    let conn = lock(s)?;
+    let order = normalized_order(&repo::chapters::list_nodes(&*conn, book_id)?);
+    commit_tree(&conn, &s.root, book_id, &order, None)
+}
+
+/// 改名（章或卷）：标题写库，文件 / 目录名经重编序号同步（序号不变；卷改名时卷内章一起搬到新目录）；
+/// 快照历史随主干迁移，不断档。全程持锁，自动保存不会在途中写到旧路径。
 pub fn rename_chapter_inner(s: &AppState, id: i64, new_title: &str) -> AppResult<ChapterMeta> {
     let new_title = new_title.trim();
     if new_title.is_empty() {
         return Err(AppError::Invalid("章节标题不能为空".into()));
     }
-    let (old_rel, new_rel) = {
-        let conn = lock(s)?;
-        let ch = repo::chapters::get(&*conn, id)?;
-        let book = repo::books::get(&*conn, ch.book_id)?;
-        let index = ch
-            .file_path
-            .rsplit('/')
-            .next()
-            .unwrap()
-            .split('-')
-            .next()
-            .unwrap()
-            .parse::<i64>()
-            .unwrap_or(1);
-        (ch.file_path.clone(), fs_service::chapter_rel_path(&book.slug, index, new_title))
-    };
-    let old_abs = s.root.join(&old_rel);
-    let new_abs = s.root.join(&new_rel);
-    if old_abs != new_abs && new_abs.exists() {
-        return Err(AppError::Invalid("目标文件名已存在".into()));
+    let conn = lock(s)?;
+    let ch = repo::chapters::get(&*conn, id)?;
+    let order = normalized_order(&repo::chapters::list_nodes(&*conn, ch.book_id)?);
+    let part = fs_service::slugify(new_title);
+    let tx = conn.unchecked_transaction()?;
+    repo::chapters::set_title(&tx, id, new_title)?;
+    repo::chapters::set_tree(&tx, &order)?;
+    let done = renumber_manuscript(&tx, &s.root, ch.book_id, Some((id, &part)))?;
+    if let Err(e) = tx.commit() {
+        revert_moves(&done);
+        return Err(e.into());
     }
-    if let Some(p) = old_abs.parent() {
-        std::fs::create_dir_all(p)?;
-    }
-    std::fs::rename(&old_abs, &new_abs)?;
-    lock(s).and_then(|conn| repo::chapters::rename(&*conn, id, new_title, &new_rel))
+    repo::chapters::get(&*conn, id)
 }
 
-/// 删除章 = 软删：md 移入 {book}/.trash/，行标 deleted_at（M2-T6）
+// 删除章 = 软删：md 移入 {book}/.trash/，行标 deleted_at（M2-T6）
 pub fn delete_chapter_inner(s: &AppState, id: i64) -> AppResult<()> {
     trash::soft_delete_chapter_inner(s, id)
 }
 
+/// 正文所在文件：章 = file_path；卷 = 卷目录内的卷首语 `_index.md`（可不存在）
+pub(crate) fn body_rel(ch: &ChapterMeta) -> String {
+    if ch.kind == "folder" {
+        format!("{}/{}", ch.file_path, fs_service::VOLUME_BODY)
+    } else {
+        ch.file_path.clone()
+    }
+}
+
 pub fn read_chapter_inner(s: &AppState, id: i64) -> AppResult<ChapterContent> {
-    let meta = {
-        let conn = lock(s)?;
-        repo::chapters::get(&*conn, id)?
+    // 持锁读：重排 / 改名会挪动文件，路径解析与读取之间不能插进改名
+    let conn = lock(s)?;
+    let meta = repo::chapters::get(&*conn, id)?;
+    let rel = body_rel(&meta);
+    let content = if meta.kind == "folder" && !s.root.join(&rel).exists() {
+        String::new()
+    } else {
+        fs_service::read_chapter(&s.root, &rel)?
     };
-    let content = fs_service::read_chapter(&s.root, &meta.file_path)?;
     Ok(ChapterContent { meta, content })
 }
 
 pub fn write_chapter_inner(s: &AppState, id: i64, content: &str) -> AppResult<ChapterMeta> {
-    let ctx = history_ctx(s, id)?;
+    // 全程持锁（阶段 3A）：重排会改文件序号，路径解析与落盘之间若插进改名，
+    // 正文会写到旧路径另起一个文件——持锁把两者串行化
+    let conn = lock(s)?;
+    let ctx = history_ctx_in(&conn, id)?;
     fs_service::write_chapter(&s.root, &ctx.rel, content)?;
+    s.note_app_write(&ctx.rel, content);
     let wc = count_words(content);
     // M2-T7 快照钩子：落盘成功后记录本版本（空内容/无实质改动/同一时段内则内部跳过）。
     // snapshot 吞掉 IO 错误并返回 bool——历史写入失败绝不阻断正文保存。
@@ -151,42 +548,127 @@ pub fn write_chapter_inner(s: &AppState, id: i64, content: &str) -> AppResult<Ch
         &ctx.ts,
         history::SnapshotMode::Auto,
     );
-    lock(s).and_then(|conn| repo::chapters::touch_content(&*conn, id, wc))
+    repo::chapters::touch_content(&*conn, id, wc)
 }
 
-/// 从磁盘 md 文件重建索引：书按 slug 复用 id，已存在的 file_path 跳过。返回扫描到的章节数。
+/// 强制给当前磁盘正文落一版快照（拆分 / 合并前的保险，可在历史里找回）
+fn snapshot_force(s: &AppState, id: i64) -> AppResult<()> {
+    let conn = lock(s)?;
+    let ctx = history_ctx_in(&conn, id)?;
+    let current = fs_service::read_chapter(&s.root, &ctx.rel).unwrap_or_default();
+    history::snapshot(&s.root.join(&ctx.book_slug), &ctx.slug, &ctx.title, &current, &ctx.ts, history::SnapshotMode::Force);
+    Ok(())
+}
+
+/// 光标处拆分（阶段 3B）：原章保留前半，后半成为紧随其后的同级新章；拆分前全文先强制快照。返回新章。
+pub fn chapter_split_inner(s: &AppState, id: i64, head: &str, tail: &str, new_title: &str) -> AppResult<ChapterMeta> {
+    let ch = lock(s).and_then(|c| repo::chapters::get(&*c, id))?;
+    if ch.kind != "text" || ch.deleted_at.is_some() {
+        return Err(AppError::Invalid("只能拆分正文章".into()));
+    }
+    snapshot_force(s, id)?;
+    write_chapter_inner(s, id, head)?;
+    let created = create_chapter_at_inner(s, ch.book_id, new_title, Some(id), None)?;
+    write_chapter_inner(s, created.id, tail)
+}
+
+/// 合并（阶段 3B）：同一卷内、全书先序相邻的多章并入第一章（正文以空行相接），其余移入回收站；
+/// 第一章原文先强制快照。返回撤销所需的原文与被并入的章。
+pub fn chapter_merge_inner(s: &AppState, ids: &[i64]) -> AppResult<MergeResult> {
+    if ids.len() < 2 {
+        return Err(AppError::Invalid("至少选两章才能合并".into()));
+    }
+    let in_order: Vec<i64> = {
+        let conn = lock(s)?;
+        let book_id = repo::chapters::get(&*conn, ids[0])?.book_id;
+        let nodes = repo::chapters::list_nodes(&*conn, book_id)?;
+        if nodes.iter().any(|n| n.kind == "folder" && ids.contains(&n.id)) {
+            return Err(AppError::Invalid("卷不能参与合并".into()));
+        }
+        let order = normalized_order(&nodes);
+        let mut pos = Vec::with_capacity(ids.len());
+        for id in ids {
+            pos.push(
+                order
+                    .iter()
+                    .position(|x| x.0 == *id)
+                    .ok_or_else(|| AppError::Invalid("合并清单含已删除或其他书的章".into()))?,
+            );
+        }
+        pos.sort_unstable();
+        pos.dedup();
+        if pos.len() != ids.len() || pos.windows(2).any(|w| w[1] != w[0] + 1) {
+            return Err(AppError::Invalid("只能合并相邻的章".into()));
+        }
+        let parent = order[pos[0]].1;
+        if pos.iter().any(|&i| order[i].1 != parent) {
+            return Err(AppError::Invalid("只能合并同一卷内的章".into()));
+        }
+        pos.iter().map(|&i| order[i].0).collect()
+    };
+    let first = in_order[0];
+    let original = read_chapter_inner(s, first)?.content;
+    let mut parts = vec![original.trim_end().to_string()];
+    for id in &in_order[1..] {
+        parts.push(read_chapter_inner(s, *id)?.content.trim().to_string());
+    }
+    let merged_text = parts.into_iter().filter(|p| !p.is_empty()).collect::<Vec<_>>().join("\n\n");
+    snapshot_force(s, first)?;
+    let merged = write_chapter_inner(s, first, &merged_text)?;
+    for id in &in_order[1..] {
+        trash::soft_delete_chapter_inner(s, *id)?;
+    }
+    Ok(MergeResult { merged, original, removed: in_order[1..].to_vec() })
+}
+
+/// 节点标题：文件 / 目录名去序号（`0001-yi.md` → `yi`、`0002-第一卷-风雪` → `第一卷-风雪`）；无序号取全名
+fn title_from_rel(rel: &str) -> String {
+    let (stem, _, part) = split_stem(rel);
+    if part.is_empty() { stem.to_string() } else { part.to_string() }
+}
+
+/// 从磁盘重建索引（阶段 3B 起含卷）：书按 slug 复用 id；节点按 file_path 对上已有行，缺的新建
+/// （卷 = manuscript/ 下子目录）。磁盘是真源：全部在世节点的顺序与所属卷按磁盘先序重算；
+/// 库里有、磁盘上找不到的节点保留在末尾（不删行，留给用户处理）。返回扫描到的正文章数。
 pub fn rescan_library_inner(s: &AppState) -> AppResult<i64> {
     let scanned = fs_service::scan_library(&s.root)?;
     let mut total: i64 = 0;
     for b in scanned {
-        let book = {
-            let conn = lock(s)?;
-            match repo::books::get_by_slug(&conn, &b.slug)? {
-                Some(existing) => existing,
-                None => repo::books::create(&*conn, &b.title, &b.slug)?,
-            }
+        let conn = lock(s)?;
+        let book = match repo::books::get_by_slug(&conn, &b.slug)? {
+            Some(existing) => existing,
+            None => repo::books::create(&*conn, &b.title, &b.slug)?,
         };
-        for rel in b.files {
-            // 标题取文件名去序号与扩展名：`0001-yi.md` → `yi`；无连字符取全名
-            let file_name = rel.rsplit('/').next().unwrap();
-            let base = file_name.strip_suffix(".md").unwrap_or(file_name);
-            let title = match base.split_once('-') {
-                Some((_, t)) => t.to_string(),
-                None => base.to_string(),
+        let existing = repo::chapters::list_nodes(&*conn, book.id)?;
+        let by_path: HashMap<&str, i64> = existing.iter().map(|c| (c.file_path.as_str(), c.id)).collect();
+        let mut folder_ids: HashMap<&str, i64> = HashMap::new();
+        let mut order: Vec<(i64, Option<i64>)> = Vec::new();
+        for n in &b.nodes {
+            let id = match by_path.get(n.rel.as_str()) {
+                Some(&id) => id,
+                None if n.folder => repo::chapters::create_folder(&*conn, book.id, &n.rel, &title_from_rel(&n.rel))?.id,
+                None => {
+                    let wc = count_words(&fs_service::read_chapter(&s.root, &n.rel)?);
+                    let created = repo::chapters::create(&*conn, book.id, &n.rel, &title_from_rel(&n.rel))?;
+                    repo::chapters::touch_content(&*conn, created.id, wc)?;
+                    created.id
+                }
             };
-            let existing = {
-                let conn = lock(s)?;
-                let all = repo::chapters::list_by_book(&*conn, book.id)?;
-                all.into_iter().find(|c| c.file_path == rel)
-            };
-            if existing.is_none() {
-                let wc = count_words(&fs_service::read_chapter(&s.root, &rel)?);
-                let conn = lock(s)?;
-                let created = repo::chapters::create(&*conn, book.id, &rel, &title)?;
-                repo::chapters::touch_content(&*conn, created.id, wc)?;
+            if n.folder {
+                folder_ids.insert(n.rel.as_str(), id);
+            } else {
+                total += 1;
             }
-            total += 1;
+            let parent = n.parent.as_deref().and_then(|p| folder_ids.get(p).copied());
+            order.push((id, parent));
         }
+        let seen: HashSet<i64> = order.iter().map(|x| x.0).collect();
+        for c in &existing {
+            if !seen.contains(&c.id) {
+                order.push((c.id, None));
+            }
+        }
+        repo::chapters::set_tree(&*conn, &order)?;
     }
     Ok(total)
 }
@@ -208,6 +690,11 @@ pub fn delete_book(s: State<AppState>, id: i64) -> AppResult<()> {
 }
 
 #[tauri::command]
+pub fn rename_book(s: State<AppState>, id: i64, title: String) -> AppResult<Book> {
+    rename_book_inner(&s, id, &title)
+}
+
+#[tauri::command]
 pub fn list_chapters(s: State<AppState>, book_id: i64) -> AppResult<Vec<ChapterMeta>> {
     list_chapters_inner(&s, book_id)
 }
@@ -215,6 +702,52 @@ pub fn list_chapters(s: State<AppState>, book_id: i64) -> AppResult<Vec<ChapterM
 #[tauri::command]
 pub fn create_chapter(s: State<AppState>, book_id: i64, title: String) -> AppResult<ChapterMeta> {
     create_chapter_inner(&s, book_id, &title)
+}
+
+pub fn list_nodes_inner(s: &AppState, book_id: i64) -> AppResult<Vec<ChapterMeta>> {
+    repo::chapters::list_nodes(&*lock(s)?, book_id)
+}
+
+#[tauri::command]
+pub fn list_nodes(s: State<AppState>, book_id: i64) -> AppResult<Vec<ChapterMeta>> {
+    list_nodes_inner(&s, book_id)
+}
+
+#[tauri::command]
+pub fn tree_apply(s: State<AppState>, book_id: i64, items: Vec<TreeItem>) -> AppResult<()> {
+    tree_apply_inner(&s, book_id, &items)
+}
+
+#[tauri::command]
+pub fn chapter_create_at(
+    s: State<AppState>,
+    book_id: i64,
+    title: String,
+    after_id: Option<i64>,
+    parent_id: Option<i64>,
+) -> AppResult<ChapterMeta> {
+    create_chapter_at_inner(&s, book_id, &title, after_id, parent_id)
+}
+
+#[tauri::command]
+pub fn volume_create(
+    s: State<AppState>,
+    book_id: i64,
+    title: String,
+    after_id: Option<i64>,
+    child_ids: Vec<i64>,
+) -> AppResult<ChapterMeta> {
+    volume_create_inner(&s, book_id, &title, after_id, &child_ids)
+}
+
+#[tauri::command]
+pub fn chapter_split(s: State<AppState>, id: i64, head: String, tail: String, new_title: String) -> AppResult<ChapterMeta> {
+    chapter_split_inner(&s, id, &head, &tail, &new_title)
+}
+
+#[tauri::command]
+pub fn chapter_merge(s: State<AppState>, ids: Vec<i64>) -> AppResult<MergeResult> {
+    chapter_merge_inner(&s, &ids)
 }
 
 #[tauri::command]
@@ -477,17 +1010,21 @@ struct HistoryCtx {
 }
 
 fn history_ctx(s: &AppState, id: i64) -> AppResult<HistoryCtx> {
-    let conn = lock(s)?;
-    let ch = repo::chapters::get(&*conn, id)?;
-    let book = repo::books::get(&*conn, ch.book_id)?;
+    history_ctx_in(&*lock(s)?, id)
+}
+
+fn history_ctx_in(conn: &Connection, id: i64) -> AppResult<HistoryCtx> {
+    let ch = repo::chapters::get(conn, id)?;
+    let book = repo::books::get(conn, ch.book_id)?;
+    // 快照按主干存放：章 = md 文件名主干；卷 = 卷目录名（卷首语）。全书序号使主干全书唯一
     let file_name = ch.file_path.rsplit('/').next().unwrap_or(&ch.file_path);
     let slug = file_name.strip_suffix(".md").unwrap_or(file_name).to_string();
     Ok(HistoryCtx {
-        rel: ch.file_path.clone(),
+        rel: body_rel(&ch),
         book_slug: book.slug,
         slug,
         title: ch.title,
-        ts: history::local_now(&*conn)?,
+        ts: history::local_now(conn)?,
     })
 }
 
@@ -983,6 +1520,11 @@ pub fn setting_set_inner(s: &AppState, key: &str, value: &str) -> AppResult<()> 
     repo::settings::set(&*lock(s)?, key, value)
 }
 
+/// 阶段 2B：删掉一个设置键（不存在则无操作）
+pub fn setting_remove_inner(s: &AppState, key: &str) -> AppResult<()> {
+    repo::settings::remove(&*lock(s)?, key)
+}
+
 pub fn books_set_target_inner(s: &AppState, book_id: i64, target_words: Option<i64>) -> AppResult<Book> {
     repo::books::set_target(&*lock(s)?, book_id, target_words)
 }
@@ -1074,6 +1616,11 @@ pub fn setting_get(s: State<AppState>, key: String) -> AppResult<Option<String>>
 #[tauri::command]
 pub fn setting_set(s: State<AppState>, key: String, value: String) -> AppResult<()> {
     setting_set_inner(&s, &key, &value)
+}
+
+#[tauri::command]
+pub fn setting_remove(s: State<AppState>, key: String) -> AppResult<()> {
+    setting_remove_inner(&s, &key)
 }
 
 #[tauri::command]

@@ -47,7 +47,7 @@ export function RefDockPanel() {
           value={selected ?? ""}
           onChange={(e) => setSelected(e.target.value === "" ? null : Number(e.target.value))}
           data-testid="ref-chapter-select"
-          className="min-w-0 flex-1 rounded-md border border-[color:var(--border-subtle)] bg-transparent px-1.5 py-1 text-xs text-[color:var(--text-primary)] outline-none focus:border-[color:var(--accent)]"
+          className="min-w-0 flex-1 rounded-md border border-[color:var(--hairline)] bg-transparent px-1.5 py-1 text-xs text-[color:var(--text-primary)] outline-none focus:border-[color:var(--accent)]"
         >
           <option value="">选择要参考的章…</option>
           {chapters.map((c) => (
@@ -61,13 +61,13 @@ export function RefDockPanel() {
           disabled={selected == null}
           title="弹出为独立浮窗（可拖到屏幕任意角落对照）"
           data-testid="ref-popout"
-          className="shrink-0 rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)] disabled:opacity-40"
+          className="shrink-0 rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-secondary)] disabled:opacity-40"
         >
           <ExternalLink size={12} />
         </button>
       </div>
       {selected != null && meta && (
-        <div className="mb-1 shrink-0 text-[10px] text-[color:var(--text-faint)]">
+        <div className="mb-1 shrink-0 text-2xs text-[color:var(--text-faint)]">
           {meta.title}
           {content != null && ` · ${countWords(content).toLocaleString()} 字`}
         </div>

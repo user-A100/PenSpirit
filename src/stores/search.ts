@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { api, type SearchHit } from "../lib/tauri";
 import { useWorkspace } from "./workspace";
+import { errMsg } from "../lib/errors";
 
 // M2-T9 全书搜索状态。防抖在 SearchPanel 里做，这里只负责一次实际查询。
 // 跳转分两步：先 selectChapter（异步读正文进编辑器），再把待定位文本交给
@@ -57,7 +58,7 @@ export const useSearch = create<SearchState>((set, get) => ({
       const r = await api.searchBook(bookId, query, wholeWord, scope);
       set({ hits: r.hits, truncated: r.truncated, loading: false, error: null });
     } catch (e) {
-      set({ hits: [], truncated: false, loading: false, error: String(e) });
+      set({ hits: [], truncated: false, loading: false, error: errMsg(e) });
     }
   },
 

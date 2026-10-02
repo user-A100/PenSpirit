@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { api, StyleCard } from "../lib/tauri";
 import { useWorkspace } from "./workspace";
+import { errMsg } from "../lib/errors";
 
 /**
  * activeStyleId 用 0 表示「无文风」：后端 settings 存 `style:book:{id} = 0`，
@@ -48,7 +49,7 @@ export const useStyles = create<StylesState>((set, get) => ({
       // 归一：激活指向已删除的文风卡时按「无文风」展示（组装器同样取不到，行为一致）
       set({ styles, activeStyleId: styles.some((s) => s.id === raw) ? raw : 0, error: null });
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: errMsg(e) });
     }
   },
   save: async (id, name, promptMd, sampleMd, tags) => {

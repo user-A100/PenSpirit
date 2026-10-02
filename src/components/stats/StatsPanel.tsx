@@ -14,7 +14,7 @@ import { TrendBars } from "./TrendBars";
 
 const SECTION = "mb-1.5 text-xs font-medium text-[color:var(--text-secondary)]";
 const INPUT =
-  "w-20 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 focus:border-[color:var(--accent)]";
+  "w-20 rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[color:var(--text-primary)] outline-none transition-colors duration-150 focus:border-[color:var(--accent)]";
 
 type BookRow = Book & { current: number };
 
@@ -108,8 +108,8 @@ export function StatsPanel() {
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-2.5">
+    <div className="@container flex h-full flex-col">
+      <div className="flex flex-1 flex-col gap-5 overflow-y-auto pr-1">
         {/* 日目标 + 口径说明 */}
         <section>
           <div className="flex items-center gap-2">
@@ -132,7 +132,7 @@ export function StatsPanel() {
               <Badge tone="neutral">0 = 关闭</Badge>
             )}
           </div>
-          <p className="mt-1.5 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1.5 text-[11px] leading-relaxed text-[color:var(--text-faint)]">
+          <p className="mt-1.5 rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2 py-1.5 text-2xs leading-relaxed text-[color:var(--text-faint)]">
             实打差量：粘贴与 AI 采纳不计；时长为活跃分钟（同分钟记一次）
           </p>
         </section>
@@ -140,7 +140,7 @@ export function StatsPanel() {
         {/* 指标卡 */}
         <section>
           <div className={SECTION}>指标 · 全书聚合</div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-3 @4xl:grid-cols-5">
             <StatCard label="今日" value={fmtWords(todayWords)} icon={CalendarDays} sub={`${todayMinutes} 活跃分钟`} />
             <StatCard label="本周" value={fmtWords(week)} sub="近 7 天合计" />
             <StatCard label="30 天" value={fmtWords(month)} sub="近 30 天合计" />
@@ -154,27 +154,28 @@ export function StatsPanel() {
           </div>
         </section>
 
-        {/* 近 30 天趋势 */}
-        <section>
-          <div className={SECTION}>近 30 天趋势</div>
-          <TrendBars
-            data={lastNDays(30, today).map((d) => ({ date: d, words: byDate.get(d)?.words ?? 0 }))}
-            goal={dailyGoal}
-          />
-        </section>
+        {/* 趋势 + 热力图：宽屏并排 */}
+        <div className="grid gap-5 @4xl:grid-cols-2">
+          <section className="min-w-0">
+            <div className={SECTION}>近 30 天趋势</div>
+            <TrendBars
+              data={lastNDays(30, today).map((d) => ({ date: d, words: byDate.get(d)?.words ?? 0 }))}
+              goal={dailyGoal}
+            />
+          </section>
 
-        {/* 近半年热力图 */}
-        <section>
-          <div className={SECTION}>热力图（近半年）</div>
-          <Heatmap data={heatSlots(byDate, today)} />
-        </section>
+          <section className="min-w-0">
+            <div className={SECTION}>热力图（近半年）</div>
+            <Heatmap data={heatSlots(byDate, today)} />
+          </section>
+        </div>
 
         {/* 每书进度 */}
         <section>
           <div className={SECTION}>每书进度</div>
-          <div className="flex flex-col gap-2">
+          <div className="grid gap-2 @2xl:grid-cols-2 @4xl:grid-cols-3">
             {books.length === 0 && (
-              <div className="rounded-md border border-[color:var(--border-subtle)] px-2.5 py-3 text-center text-xs text-[color:var(--text-faint)]">
+              <div className="rounded-md border border-[color:var(--hairline)] px-2.5 py-3 text-center text-xs text-[color:var(--text-faint)]">
                 还没有书
               </div>
             )}
@@ -185,14 +186,14 @@ export function StatsPanel() {
                   : 0;
               const e = eta(b);
               return (
-                <div key={b.id} className="rounded-[var(--radius-md)] border border-[color:var(--border-subtle)] p-3">
+                <div key={b.id} className="rounded-[var(--r-control)] border border-[color:var(--hairline)] p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="min-w-0 truncate text-sm text-[color:var(--text-primary)]">{b.title}</span>
                     <span className="shrink-0 text-xs tabular-nums text-[color:var(--text-faint)]">
                       {fmtWords(b.current)} 字
                     </span>
                   </div>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--bg-hover)]">
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--fill-element)]">
                     <div
                       className="h-full rounded-full transition-[width] duration-300"
                       style={{
@@ -201,7 +202,7 @@ export function StatsPanel() {
                       }}
                     />
                   </div>
-                  <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-[color:var(--text-faint)]">
+                  <div className="mt-1.5 flex items-center justify-between gap-2 text-2xs text-[color:var(--text-faint)]">
                     {editingId === b.id ? (
                       <input
                         type="number"
@@ -221,7 +222,7 @@ export function StatsPanel() {
                       <button
                         onClick={() => startEdit(b)}
                         title="点击修改目标字数"
-                        className="rounded px-1 py-0.5 transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
+                        className="rounded px-1 py-0.5 transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-secondary)]"
                       >
                         {b.target_words != null ? `目标 ${fmtWords(b.target_words)}` : "目标：未设置"}
                       </button>

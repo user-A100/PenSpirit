@@ -16,6 +16,7 @@ describe("navRegistry", () => {
     localStorage.clear();
   });
 
+  // 首例冷加载全部视图模块（resetModules 后），慢盘上可能超过默认 5s，单独放宽
   it("内置注册 write/bump/read/styles/stats/materials/graph/structure 八个一级视图", async () => {
     const { registry, useUiNav } = await freshNav();
     const ids = registry.getViews().map((v) => v.id);
@@ -25,7 +26,9 @@ describe("navRegistry", () => {
     expect(write.label).toBe("写作");
     expect(write.icon).toBeDefined();
     expect(write.Component).toBeDefined();
-    expect(write.dockPanels.map((p) => p.label)).toEqual(["元数据", "链接", "集合", "参考", "大纲", "人物", "伏笔", "情节块", "取名"]);
+    // 阶段 3A：集合迁入 Binder 顶部标签页，不再占 dock 面板
+    expect(write.dockPanels.map((p) => p.label)).toEqual(["元数据", "链接", "参考", "人物", "伏笔", "情节块", "大纲", "取名"]);
+    expect([...new Set(write.dockPanels.map((p) => p.group))]).toEqual(["本章", "设定", "工具"]);
 
     const bump = registry.getView("bump")!;
     expect(bump.label).toBe("碰碰车");
@@ -41,7 +44,7 @@ describe("navRegistry", () => {
     expect(registry.getView("structure")!.label).toBe("结构");
     expect(registry.getView("structure")!.dockPanels).toEqual([]);
     expect(useUiNav.getState().activeView).toBe("write"); // 自愈无副作用
-  });
+  }, 30_000);
 
   it("registerView 按 id 幂等：重复注册不新增，先注册者生效", async () => {
     const { registry } = await freshNav();

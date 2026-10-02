@@ -12,6 +12,40 @@ fn file_name_of(rel: &str) -> String {
     rel.rsplit('/').next().unwrap().to_string()
 }
 
+/// 阶段 2B：彻底删除书 / 章时，挂在其 id 上的 AI 键（记忆、作者注、着色片段）一并清掉
+#[test]
+fn purge_removes_ai_keys() {
+    use bixian::commands_ai as ai;
+    let (_tmp, s) = setup();
+    let book = cmd::create_book_inner(&s, "书").unwrap();
+    let a = cmd::create_chapter_inner(&s, book.id, "一").unwrap();
+    let b = cmd::create_chapter_inner(&s, book.id, "二").unwrap();
+    let other = cmd::create_book_inner(&s, "别的书").unwrap();
+    let keep = cmd::create_chapter_inner(&s, other.id, "甲").unwrap();
+    ai::ai_memory_set_inner(&s, "book", book.id, "本书记忆").unwrap();
+    ai::ai_memory_set_inner(&s, "chapter", a.id, "作者注").unwrap();
+    ai::ai_memory_set_inner(&s, "chapter", keep.id, "别的书的作者注").unwrap();
+    for id in [a.id, b.id, keep.id] {
+        cmd::setting_set_inner(&s, &format!("ai_tint:{id}"), "[\"片段\"]").unwrap();
+    }
+    let get = |k: String| cmd::setting_get_inner(&s, &k).unwrap();
+
+    // 只删章 b：只清它自己的键
+    cmd::delete_chapter_inner(&s, b.id).unwrap();
+    trash::purge_chapter_inner(&s, b.id).unwrap();
+    assert!(get(format!("ai_tint:{}", b.id)).is_none());
+    assert!(get(format!("ai_tint:{}", a.id)).is_some());
+
+    // 删整本书：本书记忆、书内章的作者注与着色全清；别的书不受影响
+    cmd::delete_book_inner(&s, book.id).unwrap();
+    trash::purge_book_inner(&s, book.id).unwrap();
+    assert!(get(format!("memory:book:{}", book.id)).is_none());
+    assert!(get(format!("authornote:chapter:{}", a.id)).is_none());
+    assert!(get(format!("ai_tint:{}", a.id)).is_none());
+    assert_eq!(get(format!("authornote:chapter:{}", keep.id)).as_deref(), Some("别的书的作者注"));
+    assert!(get(format!("ai_tint:{}", keep.id)).is_some());
+}
+
 #[test]
 fn soft_delete_hides_chapter_and_moves_file_to_trash() {
     let (_tmp, s) = setup();

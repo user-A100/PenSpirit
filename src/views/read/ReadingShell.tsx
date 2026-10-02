@@ -178,7 +178,7 @@ export function ReadingShell(props: ReadingShellProps) {
     <button
       onClick={onClick}
       title={title}
-      className={`absolute z-10 flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-faint)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] ${corner}`}
+      className={`absolute z-10 flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-faint)] transition-colors hover:bg-[var(--fill-hover)] hover:text-[var(--text-primary)] ${corner}`}
     >
       {locked ? <Lock size={13} /> : <LockOpen size={13} />}
     </button>

@@ -9,7 +9,7 @@ import { Card } from "../ui/Card";
 // 分类是自由文本——网文素材的分类体系因人而异，不预设枚举。
 
 const INPUT =
-  "rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]";
+  "rounded-md border border-[color:var(--hairline)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-sm text-[color:var(--text-primary)] outline-none transition-colors duration-150 placeholder:text-[color:var(--text-faint)] focus:border-[color:var(--accent)]";
 
 interface FormState {
   id: number | null;
@@ -77,7 +77,7 @@ export function MaterialsWorkspace() {
         </div>
         <button
           onClick={() => setForm({ ...EMPTY })}
-          className="flex shrink-0 items-center gap-1 rounded-md border border-[color:var(--border-subtle)] px-3 text-sm text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-primary)]"
+          className="flex shrink-0 items-center gap-1 rounded-md border border-[color:var(--hairline)] px-3 text-sm text-[color:var(--text-secondary)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-primary)]"
         >
           <Plus size={14} /> 新建
         </button>
@@ -116,7 +116,7 @@ export function MaterialsWorkspace() {
             />
             <button
               onClick={() => setForm(null)}
-              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-secondary)]"
             >
               <X size={12} /> 取消
             </button>
@@ -143,8 +143,8 @@ export function MaterialsWorkspace() {
             <section key={g.category} className="mb-4">
               <div className="mb-1.5 flex items-center gap-2">
                 <span className="text-xs font-medium text-[color:var(--text-secondary)]">{g.category}</span>
-                <span className="text-[11px] text-[color:var(--text-faint)]">{g.items.length}</span>
-                <span className="h-px flex-1 bg-[color:var(--border-subtle)]" />
+                <span className="text-2xs text-[color:var(--text-faint)]">{g.items.length}</span>
+                <span className="h-px flex-1 bg-[var(--hairline)]" />
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {g.items.map((m) => (
@@ -159,7 +159,7 @@ export function MaterialsWorkspace() {
                           onClick={() =>
                             setForm({ id: m.id, title: m.title, category: m.category, content: m.content, tags: m.tags })
                           }
-                          className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--text-secondary)]"
+                          className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--text-secondary)]"
                         >
                           <Pencil size={14} />
                         </button>
@@ -177,7 +177,7 @@ export function MaterialsWorkspace() {
                           <button
                             title="删除"
                             onClick={() => setConfirmDelId(m.id)}
-                            className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[color:var(--danger)]"
+                            className="rounded p-1 text-[color:var(--text-faint)] transition-colors duration-150 hover:bg-[var(--fill-hover)] hover:text-[color:var(--danger)]"
                           >
                             <Trash2 size={14} />
                           </button>

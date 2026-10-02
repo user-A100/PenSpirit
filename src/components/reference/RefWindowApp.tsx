@@ -3,6 +3,7 @@ import { BookOpen } from "lucide-react";
 import { api, type ChapterMeta } from "../../lib/tauri";
 import { ThemeProvider } from "../../themes/ThemeProvider";
 import { countWords } from "../../lib/words";
+import { errMsg } from "../../lib/errors";
 
 // 参考浮窗（M7 批次7）：主窗 ?refwindow 检测后独立渲染的轻量应用——
 // 只有章下拉 + 只读正文，不带 Ribbon/侧栏/编辑器。书在弹出时刻固定，
@@ -24,7 +25,7 @@ export function RefWindowApp({ bookId, initialChapterId }: { bookId: number | nu
     api
       .listChapters(bookId)
       .then(setChapters)
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(errMsg(e)));
   }, [bookId]);
 
   useEffect(() => {
@@ -34,7 +35,7 @@ export function RefWindowApp({ bookId, initialChapterId }: { bookId: number | nu
     api
       .readChapter(selected)
       .then((full) => !cancelled && setContent(full.content))
-      .catch((e) => !cancelled && setError(String(e)));
+      .catch((e) => !cancelled && setError(errMsg(e)));
     return () => {
       cancelled = true;
     };
@@ -51,7 +52,7 @@ export function RefWindowApp({ bookId, initialChapterId }: { bookId: number | nu
             value={selected ?? ""}
             onChange={(e) => setSelected(e.target.value === "" ? null : Number(e.target.value))}
             data-testid="ref-window-chapter-select"
-            className="min-w-0 flex-1 rounded-md border border-[color:var(--border-subtle)] bg-transparent px-1.5 py-1 text-xs text-[color:var(--text-primary)] outline-none focus:border-[color:var(--accent)]"
+            className="min-w-0 flex-1 rounded-md border border-[color:var(--hairline)] bg-transparent px-1.5 py-1 text-xs text-[color:var(--text-primary)] outline-none focus:border-[color:var(--accent)]"
           >
             <option value="">选择要参考的章…</option>
             {chapters.map((c) => (
@@ -63,7 +64,7 @@ export function RefWindowApp({ bookId, initialChapterId }: { bookId: number | nu
         </div>
         {error && <div className="mb-2 shrink-0 text-[color:var(--accent-hover)]">{error}</div>}
         {selected != null && meta && (
-          <div className="mb-1 shrink-0 text-[10px] text-[color:var(--text-faint)]">
+          <div className="mb-1 shrink-0 text-2xs text-[color:var(--text-faint)]">
             {meta.title}
             {content != null && ` · ${countWords(content).toLocaleString()} 字`}
           </div>
