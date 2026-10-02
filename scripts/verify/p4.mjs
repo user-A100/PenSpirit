@@ -57,6 +57,12 @@ await withGuard("p4", async ({ app, makeBook }) => {
   await sleep(200);
   check("Esc 关闭速查", !(await ev(`!!document.querySelector('[data-testid="shortcut-sheet"]')`)));
 
+  // 正文编辑区（TipTap 带 tabindex="0"、可编辑元素聚焦时总是 :focus-visible）不能被全局焦点环套住
+  await app.clickEl(`document.querySelector('.ProseMirror')`);
+  await sleep(150);
+  const editorRing = await ev(`getComputedStyle(document.querySelector('.ProseMirror')).boxShadow`);
+  check("正文编辑区聚焦时不套焦点环（写作时不分心）", editorRing === "none", editorRing);
+
   // ================= 2 键盘可达与焦点环 =================
   await ev(`(() => { document.activeElement?.blur?.(); document.body.focus(); return true })()`);
   const seen = new Map();

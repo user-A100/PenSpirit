@@ -147,7 +147,9 @@ body {
     button,
     [role="button"],
     a[href],
-    [tabindex]:not([tabindex="-1"]),
+    /* 排除可编辑区：TipTap 给正文编辑器加了 tabindex="0"，可编辑元素聚焦时总是 :focus-visible，
+       不排除的话写作时正文四周会一直套着焦点环 */
+    [tabindex]:not([tabindex="-1"]):not([contenteditable="true"]),
     [role="menuitem"],
     [role="menuitemcheckbox"],
     [role="option"],

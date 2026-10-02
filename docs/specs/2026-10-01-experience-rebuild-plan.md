@@ -526,11 +526,12 @@ vitest 92 文件 / 627 用例全绿，`tsc` 无错。`node scripts/verify/p2c.mj
     - 底栏不换行，放不下时横向滚动，滚动条隐藏（`.no-scrollbar` 必须是不分层的普通类，否则压不过全局 `*` 的 `scrollbar-width`）；
     - 窄输入框（容器查询 < 30rem）收紧文字按钮内边距，< 34rem 时先让出 token 估算（超预算的红字照常显示）；
     - 上下文胶囊最多两行；消息列表裁切溢出。
+  - **阶段 4 自己引入的回归**：全局焦点环的 `[tabindex]` 一项套住了正文编辑器。TipTap 可编辑时会给编辑器加 `tabindex="0"`，而可编辑元素聚焦时总是 `:focus-visible`，结果写作时正文四周一直有一圈焦点环。p4 的 Tab 巡检把可编辑区当文本框跳过了，所以没发现，是整理 PR 截图时看出来的。已排除 `[contenteditable="true"]`，p4 增加「正文编辑区聚焦时不套焦点环」断言。
   - 枫叶主题的 `--bg-hover`（`#efece8`）与卡片色（`#efedec`）几乎相同，codemod 只改了 Tailwind 类，没覆盖 SVG 属性和 CSS 文件里的 `var(--bg-hover)`。结果在枫叶下热力图空格子、滚动条、悬浮大纲与阅读目录的悬停底色都看不见。改为从前景色派生：热力图空格用 `--fill-active`；滚动条用新增的 `--fill-thumb`（前景 16%）；两处列表悬停用 `--fill-hover`。现在源码里不再直接用 `--bg-hover`。
 
 **验收**：
 - 对比度审计 0 不合格（`npx vitest run src/themes/contrast.test.ts`）。
 - vitest 94 文件 / 632 用例全绿，新增快捷键速查、自动保存按版本号触发、卸载冲刷、对比度审计与 `:root` 同步；cargo 41 套件 / 334 用例全绿；`tsc` 无错。
-- `node scripts/verify/p4.mjs` 实机 **10/10**：速查打开 / 搜索 / 关闭、Tab 焦点、截图、三项性能基线、无原生对话框。localStorage、服务商、agent 登记、全局设置全部还原。
+- `node scripts/verify/p4.mjs` 实机 **11/11**：速查打开 / 搜索 / 关闭、正文编辑区不套焦点环、Tab 焦点、截图、三项性能基线、无原生对话框。localStorage、服务商、agent 登记、全局设置全部还原。
 - 改动编辑器的保存路径后，全部旧脚本回归：p0 16/16、p1 16/16、p2a 25/25、p3a 29/29、p3b 25/25、p2b 53/53、p2c 36/36。
 - 最终截图集：`.tmp-verify/p4/`，暗夜 / 晨光 / 枫叶 × 8 个视图 + 设置外观页 + 快捷键速查，**待你目测**。
